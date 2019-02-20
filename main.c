@@ -251,6 +251,9 @@ static void hid_process_button_event(int8_t param)
     CRITICAL_REGION_EXIT();
 }
 
+
+static uint8_t hid_out_report[REPORT_OUT_MAXSIZE];
+static bool processing_hid_out_report = false;
 /**
  * @brief Class specific event handler.
  *
@@ -264,19 +267,24 @@ static void hid_user_ev_handler(app_usbd_class_inst_t const * p_inst,
     {
         case APP_USBD_HID_USER_EVT_OUT_REPORT_READY:
         {
+            
             /* No output report defined for this example.*/
             size_t out_rep_size = REPORT_OUT_MAXSIZE;
             const uint8_t* out_rep = app_usbd_hid_generic_out_report_get(&m_app_hid_generic, &out_rep_size);
+            memcpy(&hid_out_report, out_rep, REPORT_OUT_MAXSIZE);
+            processing_hid_out_report = true;
+            break;
+
+            /*
 
             //echo back
-            static uint8_t report[REPORT_IN_MAXSIZE];
-            for (uint8_t i=1; i<out_rep_size && i<REPORT_IN_MAXSIZE; i++) {
-                report[i] = out_rep[i];
+            //static uint8_t report[REPORT_IN_MAXSIZE];
+            for (uint8_t i=1; i<out_rep_size && i<REPORT_OUT_MAXSIZE; i++) {
+                hid_out_report[i] = out_rep[i];
             }
-            report[0] = 0x40;
-            //report[0] = (uint8_t) m_state.counter & 0xff;
-            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back copy of out report as in report
             break;
+            */
         }
         case APP_USBD_HID_USER_EVT_IN_REPORT_DONE:
         {
@@ -629,6 +637,12 @@ int main(void)
             /* Nothing to do */
         }
         //hid_send_in_report_if_state_changed();
+
+        if (processing_hid_out_report) {
+            //echo back
+            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back copy of out report as in report
+            processing_hid_out_report = false;
+        }
 
         if (processing_rf_frame != 0) {
             //we check current channel here, which isn't reliable as the frame from fifo could have been received on a
