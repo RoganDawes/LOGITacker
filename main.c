@@ -131,6 +131,10 @@ enum {
     BSP_USER_EVENT_RELEASE_7,                          /**< Button 7 released */
 };
 
+
+#define HID_COMMAND_SET_RF_MODE 1
+#define HID_COMMAND_SET_CHANNEL 3
+#define HID_COMMAND_GET_CHANNEL 4
 /**
  * @brief User event handler.
  * */
@@ -627,16 +631,22 @@ int main(void)
         //hid_send_in_report_if_state_changed();
 
         if (processing_rf_frame != 0) {
+            //we check current channel here, which isn't reliable as the frame from fifo could have been received on a
+            // different one, but who cares
+            uint32_t ch = 0;
+            nrf_esb_get_rf_channel(&ch);
+
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
                 static uint8_t assumed_addrlen = 5;
                 static uint8_t report[REPORT_IN_MAXSIZE];
                 static bool crcmatch = false;
 
                 for (uint8_t i=0; i<rx_payload.length; i++) {
-                    report[i+2] = rx_payload.data[i];
+                    report[i+3] = rx_payload.data[i];
                 }
                 report[0] = rx_payload.pipe;
-                report[1] = rx_payload.length;
+                report[1] = (uint8_t) ch;
+                report[2] = rx_payload.length;
 
                 // if processing takes too long RF frames are discarded
                 // the shift value in the following for loop controls how often a received
@@ -646,28 +656,28 @@ int main(void)
                 // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
                 crcmatch = false;
                 for (uint8_t shift=0; shift<32; shift++) {
-                    if (validate_esb_frame(&report[2], assumed_addrlen)) {
+                    if (validate_esb_frame(&report[3], assumed_addrlen)) {
                         report[0] |= 0x40;
                         crcmatch = true;
                         break;
                     }
-                    array_shl(&report[2], report[1], 1);
+                    array_shl(&report[3], report[2], 1);
                 }
 
                 if (crcmatch) {
-                    uint8_t esb_len = report[2+assumed_addrlen] >> 2;
+                    uint8_t esb_len = report[3+assumed_addrlen] >> 2;
 
                     bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate frame with valid checksum
 
 
                     //correct RF frame length if CRC match
-                    report[1] = esb_len;
+                    report[2] = esb_len;
 
                     //byte allign payload (throw away no_ack bit of PCF, keep the other 8 bits)
-                    array_shl(&report[3+assumed_addrlen], esb_len, 1);
+                    array_shl(&report[3+assumed_addrlen+1], esb_len, 1);
 
                     //zero out rest of report
-                    for (uint8_t i=3+assumed_addrlen+esb_len; i<REPORT_IN_MAXSIZE; i++) {
+                    for (uint8_t i= 3 + assumed_addrlen + 1 + esb_len + 2; i<REPORT_IN_MAXSIZE; i++) {
                         report[i] = 0x00;
                     }
                 }
