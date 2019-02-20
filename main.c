@@ -84,11 +84,6 @@
  * */
 #define HID_GENERIC_EPIN       NRF_DRV_USBD_EPIN1
 
-
-/* GPIO used as LED & buttons in this example */
-#define LED_USB_START    (BSP_BOARD_LED_0)
-#define LED_HID_REP_IN   (BSP_BOARD_LED_2)
-
 #define BTN_TRIGGER_ACTION   0
 
 /**
@@ -194,7 +189,7 @@ static bool m_report_pending;
 
 
 
-static uint8_t m_esb_rx_len = 0;
+static uint8_t processing_rf_frame = 0;
 
 
 /*
@@ -283,7 +278,6 @@ static void hid_user_ev_handler(app_usbd_class_inst_t const * p_inst,
         {
             m_report_pending = false;
             //hid_send_in_report_if_state_changed();
-            bsp_board_led_invert(LED_HID_REP_IN);
             break;
         }
         case APP_USBD_HID_USER_EVT_SET_BOOT_PROTO:
@@ -324,11 +318,11 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
             break;
         case APP_USBD_EVT_DRV_RESUME:
             m_report_pending = false;
-            bsp_board_led_on(LED_USB_START);
+            bsp_board_led_on(BSP_BOARD_LED_0);
             break;
         case APP_USBD_EVT_STARTED:
             m_report_pending = false;
-            bsp_board_led_on(LED_USB_START);
+            bsp_board_led_on(BSP_BOARD_LED_0);
             break;
         case APP_USBD_EVT_STOPPED:
             app_usbd_disable();
@@ -438,19 +432,30 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
         case NRF_ESB_EVENT_RX_RECEIVED:
             NRF_LOG_DEBUG("RX RECEIVED EVENT");
 
-            while (m_esb_rx_len > 0) {
+            bsp_board_led_invert(BSP_BOARD_LED_0);
+
+            //following code disabled to avoid stalling ISR
+            // --> rx_payload gets overwritten for newly received frames, even if former one hasn't
+            // been processed
+/*
+            while (processing_rf_frame > 0) {
                 //busy wait
             }
+*/            
             
+
+            if (processing_rf_frame != 0) {
+                bsp_board_led_invert(BSP_BOARD_LED_1); //Toggle of LED 1 indicates processing of RF frames takes too long
+//                nrf_esb_flush_rx();
+                break;
+            }
+
+            processing_rf_frame = 1;
+/*
             if (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS)
             {
-                /*
-                if (rx_payload.pipe == 4 || rx_payload.pipe == 5) {
-                    m_esb_rx_len = rx_payload.length;
-                }
-                */
 
-                m_esb_rx_len = rx_payload.length;
+                processing_rf_frame = rx_payload.length;
                 
                 // Set LEDs identical to the ones on the PTX.
                 nrf_gpio_pin_write(LED_1, !(rx_payload.data[1]%8>0 && rx_payload.data[1]%8<=4));
@@ -462,7 +467,7 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
                 NRF_LOG_DEBUG("Receiving packet: %02x", rx_payload.data[1]);
             }
             //nrf_esb_flush_rx();        
-           
+*/         
             break;
     }
 }
@@ -481,13 +486,14 @@ uint32_t esb_init( void )
 //    uint8_t base_addr_1[4] = {0x55, 0x55, 0x55, 0x55};
 //    uint8_t addr_prefix[8] = {0xaa, 0xaf, 0x1f, 0x2f, 0x5f, 0xaa, 0xfa, 0x0a};
     
-    uint8_t base_addr_0[4] = {0x55, 0x55, 0x55, 0x55};
-    uint8_t base_addr_1[4] = {0xaa, 0xaa, 0xaa, 0xaa};
-    uint8_t addr_prefix[8] = {0x54, 0x1f, 0x9f, 0xa8, 0xaf, 0xa9, 0x8f, 0xaa};
+    uint8_t base_addr_0[4] = {0xa8, 0xa8, 0xa8, 0xa8}; //only one octet used in "illegal" mode
+    uint8_t base_addr_1[4] = {0xaa, 0xaa, 0xaa, 0xaa}; //only one octet used in "illegal" mode
+    uint8_t addr_prefix[8] = {0xaa, 0x1f, 0x9f, 0xa8, 0xaf, 0xa9, 0x8f, 0xaa};
     
     nrf_esb_config_t nrf_esb_config         = NRF_ESB_ILLEGAL_CONFIG;
     nrf_esb_config.event_handler            = nrf_esb_event_handler;
  
+    
  
     err_code = nrf_esb_init(&nrf_esb_config);
     VERIFY_SUCCESS(err_code);
@@ -516,72 +522,25 @@ void clocks_start( void )
     while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0);
 }
 
-bool rf_frame_check(uint8_t offset) {
-    uint8_t to_end = rx_payload.length - offset;
-    uint8_t * p_data = &rx_payload.data[offset];
-    if (to_end < 9) {
-        // 9 bytes: 5byte address, 9bit PCF, 2byte crc
-        return false;
-    }
-
-
-    uint8_t esb_len = (p_data[5] >> 2);
-
-    if (esb_len > 32) {
-        return false;
-    }
-
-    if ((esb_len + 7) > to_end) {
-        //not enough data left for given length
-        return false;
-    }
-
-    return true;
-}
-
-bool validator(uint8_t* report) {
-    uint8_t start_off = 0;
-    uint8_t j = 1;
-    //skip alternating byte
-    while(start_off < rx_payload.length) {
-        uint8_t current = rx_payload.data[start_off];
-        if (current == 0xaa  || current == 0x55) {
-            start_off++; //skip
-        } else {
-            break;
-        }
-        if ((rx_payload.length - start_off) < 5) {
-            return false;
-        }
-    }
-
-    while(start_off < rx_payload.length && !rf_frame_check(start_off)) {
-        start_off++;
-        if ((rx_payload.length - start_off) < 9) {
-            return false;
-        }
-    }
-
-    
-
-    for (int i = start_off; i < rx_payload.length; i++) {
-        report[j++] = rx_payload.data[i];
-    }
-
-    return true;
-}
-
-void array_append_crc16(uint8_t * p_array, uint8_t len) {
-    uint16_t *p_crc = (uint16_t *) &p_array[len];
-    
+bool check_crc16(uint8_t * p_array, uint8_t len) {
     //remove this hack, only for comparison
     uint16_t crc = crc16_compute(p_array, (uint32_t) len, NULL);
 
     if (crc == 0x0000) {
-        *p_crc = 0x3713;
+        return true;
     }
 
-    return;
+    return false;
+}
+
+bool validate_esb_frame(uint8_t * p_array, uint8_t addrlen) {
+    uint8_t framelen = p_array[addrlen] >> 2;
+    if (framelen > 32) {
+        return false; // early out 
+    }
+    uint8_t crclen = addrlen + 1 + framelen + 2; //+1 for PCF (we ignore one bit), +2 for crc16
+
+    return check_crc16(p_array, crclen);
 }
 
 void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
@@ -590,7 +549,7 @@ void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
         return;
     }
     
-    for (uint8_t i=0; i<len-1; i++) {
+    for (uint8_t i=0; i<(len-1); i++) {
         p_array[i] = p_array[i] << bits | p_array[i+1] >> (8-bits);
     }
     p_array[len-1] = p_array[len-1] << bits;
@@ -599,6 +558,8 @@ void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
 
 int main(void)
 {
+    bool report_frames_without_crc_match = false;
+
     ret_code_t ret;
     static const app_usbd_config_t usbd_config = {
         .ev_state_proc = usbd_user_ev_handler
@@ -665,30 +626,57 @@ int main(void)
         }
         //hid_send_in_report_if_state_changed();
 
-        if (m_esb_rx_len > 0) {
-            static uint8_t report[REPORT_IN_MAXSIZE];
-            if (validator(report)) {
+        if (processing_rf_frame != 0) {
+            while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
+                static uint8_t assumed_addrlen = 5;
+                static uint8_t report[REPORT_IN_MAXSIZE];
+                static bool crcmatch = false;
 
-                //only for testing shl till byte 1 0xbb and byte 2 0a, max 64 shifts
-                for (uint8_t i=0; i<16; i++) {
-                    if (report[1] == 0xbb && report[2] == 0x0a) {
-                        array_append_crc16(&report[1], 5+1+22+2);
-                        report[0] = 0x40 + rx_payload.pipe;
-                        //report[0] = (uint8_t) m_state.counter & 0xff;
-                         app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+                for (uint8_t i=0; i<rx_payload.length; i++) {
+                    report[i+2] = rx_payload.data[i];
+                }
+                report[0] = rx_payload.pipe;
+                report[1] = rx_payload.length;
+
+                // if processing takes too long RF frames are discarded
+                // the shift value in the following for loop controls how often a received
+                // frame is shifted for CRC check. If this value is too large, frames are dropped,
+                // if it is too low, chance for detecting valid frames decreases.
+                // The validate_esb_frame function has an early out, if determined ESB frame length
+                // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
+                crcmatch = false;
+                for (uint8_t shift=0; shift<32; shift++) {
+                    if (validate_esb_frame(&report[2], assumed_addrlen)) {
+                        report[0] |= 0x40;
+                        crcmatch = true;
                         break;
                     }
-                    array_shl(report, sizeof(report), 1);
-                    
+                    array_shl(&report[2], report[1], 1);
                 }
-                
-                /*
-                report[0] = 0x40 + rx_payload.pipe;
-                //report[0] = (uint8_t) m_state.counter & 0xff;
-                app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-                */
+
+                if (crcmatch) {
+                    uint8_t esb_len = report[2+assumed_addrlen] >> 2;
+
+                    bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate frame with valid checksum
+
+
+                    //correct RF frame length if CRC match
+                    report[1] = esb_len;
+
+                    //byte allign payload (throw away no_ack bit of PCF, keep the other 8 bits)
+                    array_shl(&report[3+assumed_addrlen], esb_len, 1);
+
+                    //zero out rest of report
+                    for (uint8_t i=3+assumed_addrlen+esb_len; i<REPORT_IN_MAXSIZE; i++) {
+                        report[i] = 0x00;
+                    }
+                }
+
+                if (report_frames_without_crc_match || crcmatch) {
+                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+                }
             }
-            m_esb_rx_len = 0; // free to receive more
+            processing_rf_frame = 0; // free to receive more
         }
 
         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
