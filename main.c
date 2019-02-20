@@ -639,8 +639,34 @@ int main(void)
         //hid_send_in_report_if_state_changed();
 
         if (processing_hid_out_report) {
-            //echo back
-            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back copy of out report as in report
+            uint8_t command = hid_out_report[1]; //preserve pos 0 for report ID
+            uint32_t ch = 0;
+            switch (command) {
+                case HID_COMMAND_GET_CHANNEL:
+                    nrf_esb_get_rf_channel(&ch);
+                    hid_out_report[2] = (uint8_t) ch;
+                    memset(&hid_out_report[3], 0, sizeof(hid_out_report)-3);
+                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 
+                    break;
+                case HID_COMMAND_SET_CHANNEL:
+                    //nrf_esb_get_rf_channel(&ch);
+                    ch = (uint32_t) hid_out_report[2];
+                    nrf_esb_stop_rx();
+                    if (nrf_esb_set_rf_channel(ch) == NRF_SUCCESS) {
+                        hid_out_report[2] = 0;
+                    } else {
+                        hid_out_report[2] = -1;
+                    }
+                    nrf_esb_start_rx();
+                    
+                    memset(&hid_out_report[3], 0, sizeof(hid_out_report)-3);
+                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 
+                    break;
+                default:
+                    //echo back
+                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back copy of out report as in report
+                    
+            }
             processing_hid_out_report = false;
         }
 
@@ -691,9 +717,12 @@ int main(void)
                     array_shl(&report[3+assumed_addrlen+1], esb_len, 1);
 
                     //zero out rest of report
+                    memset(&report[3 + assumed_addrlen + 1 + esb_len + 2], 0, REPORT_IN_MAXSIZE-(3 + assumed_addrlen + 1 + esb_len + 2));
+                    /*
                     for (uint8_t i= 3 + assumed_addrlen + 1 + esb_len + 2; i<REPORT_IN_MAXSIZE; i++) {
                         report[i] = 0x00;
                     }
+                    */
                 }
 
                 if (report_frames_without_crc_match || crcmatch) {
