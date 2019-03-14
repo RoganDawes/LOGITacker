@@ -66,6 +66,15 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+//Flash FDS
+#include <string.h>
+//#include "nordic_common.h"
+#include "fds.h"
+//#include "nrf_cli.h"
+//#include "fds_example.h"
+
+
+
 
 /**
  * @brief Enable USB power detection
@@ -568,6 +577,78 @@ void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
     return;
 }
 
+/* FDS */
+
+// Flag to check fds initialization.
+static bool volatile m_fds_initialized;
+
+// Keep track of the progress of a delete_all operation. 
+static struct
+{
+    bool delete_next;   //!< Delete next record.
+    bool pending;       //!< Waiting for an fds FDS_EVT_DEL_RECORD event, to delete the next record.
+} m_delete_all;
+
+
+// Sleep until an event is received.
+static void power_manage(void)
+{
+    __WFE();
+}
+
+
+static void wait_for_fds_ready(void)
+{
+    while (!m_fds_initialized)
+    {
+        power_manage();
+    }
+}
+
+static void fds_evt_handler(fds_evt_t const * p_evt)
+{
+    /*
+    NRF_LOG_GREEN("Event: %s received (%s)",
+                  fds_evt_str[p_evt->id],
+                  fds_err_str[p_evt->result]);
+    */
+
+    switch (p_evt->id)
+    {
+        case FDS_EVT_INIT:
+            if (p_evt->result == FDS_SUCCESS)
+            {
+                m_fds_initialized = true;
+            }
+            break;
+
+        case FDS_EVT_WRITE:
+        {
+            if (p_evt->result == FDS_SUCCESS)
+            {
+                NRF_LOG_INFO("Record ID:\t0x%04x",  p_evt->write.record_id);
+                NRF_LOG_INFO("File ID:\t0x%04x",    p_evt->write.file_id);
+                NRF_LOG_INFO("Record key:\t0x%04x", p_evt->write.record_key);
+            }
+        } break;
+
+        case FDS_EVT_DEL_RECORD:
+        {
+            if (p_evt->result == FDS_SUCCESS)
+            {
+                NRF_LOG_INFO("Record ID:\t0x%04x",  p_evt->del.record_id);
+                NRF_LOG_INFO("File ID:\t0x%04x",    p_evt->del.file_id);
+                NRF_LOG_INFO("Record key:\t0x%04x", p_evt->del.record_key);
+            }
+            m_delete_all.pending = false;
+        } break;
+
+        default:
+            break;
+    }
+}
+
+
 int main(void)
 {
     bool report_frames_without_crc_match = false;
@@ -593,9 +674,21 @@ int main(void)
     ret = app_timer_init();
     APP_ERROR_CHECK(ret);
 
-
+    //BSP
     init_bsp();
 
+
+    //FDS
+    // Register first to receive an event when initialization is complete.
+    (void) fds_register(fds_evt_handler);
+    //init
+    ret = fds_init();
+    APP_ERROR_CHECK(ret);
+    // Wait for fds to initialize.
+    wait_for_fds_ready();
+
+
+    //USB
     ret = app_usbd_init(&usbd_config);
     APP_ERROR_CHECK(ret);
 
@@ -624,11 +717,13 @@ int main(void)
     //high frequency clock needed for ESB
     clocks_start();
 
+    //ESB
     ret = esb_init();
     APP_ERROR_CHECK(ret);
 
     ret = nrf_esb_start_rx();
     APP_ERROR_CHECK(ret);
+
 
     while (true)
     {
