@@ -68,10 +68,10 @@
 
 //Flash FDS
 #include <string.h>
-//#include "nordic_common.h"
 #include "fds.h"
-//#include "nrf_cli.h"
-//#include "fds_example.h"
+#include "flash_device_info.h"
+#include "state.h"
+#include "unifying.h"
 
 
 
@@ -144,6 +144,8 @@ enum {
 #define HID_COMMAND_SET_RF_MODE 1
 #define HID_COMMAND_SET_CHANNEL 3
 #define HID_COMMAND_GET_CHANNEL 4
+#define HID_COMMAND_SET_ADDRESS 5
+#define HID_COMMAND_GET_ADDRESS 6
 /**
  * @brief User event handler.
  * */
@@ -276,24 +278,11 @@ static void hid_user_ev_handler(app_usbd_class_inst_t const * p_inst,
     {
         case APP_USBD_HID_USER_EVT_OUT_REPORT_READY:
         {
-            
-            /* No output report defined for this example.*/
             size_t out_rep_size = REPORT_OUT_MAXSIZE;
             const uint8_t* out_rep = app_usbd_hid_generic_out_report_get(&m_app_hid_generic, &out_rep_size);
             memcpy(&hid_out_report, out_rep, REPORT_OUT_MAXSIZE);
             processing_hid_out_report = true;
             break;
-
-            /*
-
-            //echo back
-            //static uint8_t report[REPORT_IN_MAXSIZE];
-            for (uint8_t i=1; i<out_rep_size && i<REPORT_OUT_MAXSIZE; i++) {
-                hid_out_report[i] = out_rep[i];
-            }
-            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back copy of out report as in report
-            break;
-            */
         }
         case APP_USBD_HID_USER_EVT_IN_REPORT_DONE:
         {
@@ -578,6 +567,17 @@ void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
 }
 
 /* FDS */
+static dongle_state_t m_dongle_state = {
+    .boot_count = 0,
+    .device_info_count = 0,
+};
+
+
+// current device info
+static device_info_t m_current_device_info =
+{
+    .RfAddress = {0x75, 0xa5, 0xdc, 0x0a, 0xbb}, //prefix, addr3, addr2, addr1, addr0
+};
 
 // Flag to check fds initialization.
 static bool volatile m_fds_initialized;
@@ -725,6 +725,16 @@ int main(void)
     APP_ERROR_CHECK(ret);
 
 
+    //FDS
+    restoreStateFromFlash(&m_dongle_state);
+
+    //Try to load first device info record from flash, create if not existing
+    ret = restoreDeviceInfoFromFlash(0, &m_current_device_info);
+    if (ret != FDS_SUCCESS) {
+        // restore failed, update/create record on flash with current data
+        updateDeviceInfoOnFlash(0, &m_current_device_info); //ignore errors
+    } 
+
     while (true)
     {
         while (app_usbd_event_queue_process())
@@ -755,6 +765,17 @@ int main(void)
                     nrf_esb_start_rx();
                     
                     memset(&hid_out_report[3], 0, sizeof(hid_out_report)-3);
+                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 
+                    break;
+                case HID_COMMAND_GET_ADDRESS:
+                    hid_out_report[2] = m_current_device_info.RfAddress[4];
+                    hid_out_report[3] = m_current_device_info.RfAddress[3];
+                    hid_out_report[4] = m_current_device_info.RfAddress[2];
+                    hid_out_report[5] = m_current_device_info.RfAddress[1];
+                    hid_out_report[6] = m_current_device_info.RfAddress[0];
+                    memset(&hid_out_report[7], 0, sizeof(hid_out_report)-7);
+
+                    hid_out_report[8] = (uint8_t) (m_dongle_state.boot_count &0xFF);
                     app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 
                     break;
                 default:
