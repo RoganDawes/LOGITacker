@@ -134,27 +134,6 @@ static bool m_report_pending; //Mark ongoing USB transmission
 static uint8_t processing_rf_frame = 0;
 
 
-/**
- * @brief HID generic IN report send handling
- * */
-static void hid_process_button_event(int8_t param)
-{
-    CRITICAL_REGION_ENTER();
-    /*
-     * Update mouse state
-     */
-    switch (param)
-    {
-        case 1: //press
-            m_state.counter += 1;
-            break;
-        case -1: //release
-            m_state.counter += 2;
-            break;
-    }
-    CRITICAL_REGION_EXIT();
-}
-
 
 static uint8_t hid_out_report[REPORT_OUT_MAXSIZE];
 static bool processing_hid_out_report = false;
@@ -180,7 +159,6 @@ static void hid_user_ev_handler(app_usbd_class_inst_t const * p_inst,
         case APP_USBD_HID_USER_EVT_IN_REPORT_DONE:
         {
             m_report_pending = false;
-            //hid_send_in_report_if_state_changed();
             break;
         }
         case APP_USBD_HID_USER_EVT_SET_BOOT_PROTO:
@@ -217,7 +195,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
         case APP_USBD_EVT_DRV_SUSPEND:
             m_report_pending = false;
             app_usbd_suspend_req(); // Allow the library to put the peripheral into sleep mode
-            bsp_board_leds_off();
+            bsp_board_led_off(BSP_BOARD_LED_0);
             break;
         case APP_USBD_EVT_DRV_RESUME:
             m_report_pending = false;
@@ -229,7 +207,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
             break;
         case APP_USBD_EVT_STOPPED:
             app_usbd_disable();
-            bsp_board_leds_off();
+            bsp_board_led_off(BSP_BOARD_LED_0);
             break;
         case APP_USBD_EVT_POWER_DETECTED:
             NRF_LOG_INFO("USB power detected");
@@ -257,13 +235,11 @@ static void bsp_event_callback(bsp_event_t ev)
     switch ((unsigned int)ev)
     {
         case CONCAT_2(BSP_EVENT_KEY_, BTN_TRIGGER_ACTION):
-            bsp_board_led_on(1);
-            hid_process_button_event(1);
+            bsp_board_led_on(3);
             break;
 
         case CONCAT_2(BSP_USER_EVENT_RELEASE_, BTN_TRIGGER_ACTION):
-            bsp_board_led_off(1);
-            hid_process_button_event(-1);
+            bsp_board_led_off(3);
             break;
 
         default:
@@ -303,7 +279,8 @@ static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t repo
     {
         case 0:
         {
-            uint8_t report[] = {0xBE, 0xEF};
+            //uint8_t report[] = {0xBE, 0xEF};
+            uint8_t report[] = {};
             return app_usbd_hid_generic_idle_report_set(&m_app_hid_generic, report, sizeof(report));
         }
         default:
@@ -332,19 +309,11 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
         case NRF_ESB_EVENT_RX_RECEIVED:
             NRF_LOG_DEBUG("RX RECEIVED EVENT");
 
-            bsp_board_led_invert(BSP_BOARD_LED_0);
+            bsp_board_led_invert(BSP_BOARD_LED_0); //Indicate received RF frame with LED 0 (could be garbage in promiscous mode)
 
-            //following code disabled to avoid stalling ISR
-            // --> rx_payload gets overwritten for newly received frames, even if former one hasn't been processed
-/*
-            while (processing_rf_frame > 0) {
-                //busy wait
-            }
-*/            
             
             if (processing_rf_frame != 0) {
-                bsp_board_led_invert(BSP_BOARD_LED_1); //Toggle of LED 1 indicates processing of RF frames takes too long
-//                nrf_esb_flush_rx();
+                bsp_board_led_invert(BSP_BOARD_LED_1); //indicate frame arrived, while previous frames are processed with LED 1 (overload)
                 break;
             }
 
@@ -355,6 +324,7 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
 
 uint32_t esb_init( void )
 {
+
     //bb:0a:dc:a5:75
 
     uint32_t err_code;
@@ -393,6 +363,7 @@ uint32_t esb_init( void )
 
 
     return err_code;
+    
 }
 
 void clocks_start( void )
@@ -557,12 +528,34 @@ int main(void)
     clocks_start();
 
     //ESB
+    /*
     ret = esb_init();
     APP_ERROR_CHECK(ret);
 
     ret = nrf_esb_start_rx();
     APP_ERROR_CHECK(ret);
+    */
 
+    ret = radioInit(nrf_esb_event_handler);
+    APP_ERROR_CHECK(ret);
+
+    ret = radioSetMode(RADIO_MODE_PROMISCOUS);
+    APP_ERROR_CHECK(ret);
+
+    /*
+    nrf_esb_stop_rx();
+    uint8_t RfAddress[4] = {0xa5, 0xdc, 0x0a, 0xbb}; //prefix, addr3, addr2, addr1, addr0
+    radioSetBaseAddress0(RfAddress);
+    radioUpdatePrefix(0x75,0);
+    radioSetMode(RADIO_MODE_PRX_PASSIVE);
+    */
+
+/*
+    ret = nrf_esb_start_rx();
+    APP_ERROR_CHECK(ret);
+    bsp_board_led_on(BSP_BOARD_LED_3);
+ */
+    
 
     //FDS
     restoreStateFromFlash(&m_dongle_state);
@@ -580,7 +573,6 @@ int main(void)
         {
             /* Nothing to do */
         }
-        //hid_send_in_report_if_state_changed();
 
         if (processing_hid_out_report) {
             uint8_t command = hid_out_report[1]; //preserve pos 0 for report ID
@@ -633,12 +625,13 @@ int main(void)
 
             static uint8_t report[REPORT_IN_MAXSIZE];
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                if (report_frames_without_crc_match) {
-                    bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate valid ESB frame
+                if (report_frames_without_crc_match || radioGetMode() != RADIO_MODE_PROMISCOUS) {
+                    bsp_board_led_invert(BSP_BOARD_LED_3); // toggle led 3 to indicate non promiscous frames
                     memset(report,0,REPORT_IN_MAXSIZE);
                     memcpy(report, rx_payload.data, rx_payload.length);
                     app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
                 } else if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
+                    bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate valid ESB frame
                     memset(report,0,REPORT_IN_MAXSIZE);
                     memcpy(report, rx_payload.data, rx_payload.length);
                     app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
