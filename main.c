@@ -59,7 +59,6 @@
 #include "app_usbd_hid_kbd.h"
 #include "app_error.h"
 #include "bsp.h"
-#include "crc16.h"
 
 
 #include "nrf_log.h"
@@ -72,6 +71,8 @@
 #include "flash_device_info.h"
 #include "state.h"
 #include "unifying.h"
+#include "hid.h"
+#include "radio.h"
 
 
 
@@ -83,46 +84,9 @@
 #define USBD_POWER_DETECTION true
 #endif
 
-/**
- * @brief HID generic class interface number.
- * */
-#define HID_GENERIC_INTERFACE  0
-
-/**
- * @brief HID generic class endpoint number.
- * */
-#define HID_GENERIC_EPIN       NRF_DRV_USBD_EPIN1
 
 #define BTN_TRIGGER_ACTION   0
 
-/**
- * @brief Number of reports defined in report descriptor.
- */
-#define REPORT_IN_QUEUE_SIZE    1
-
-/**
- * @brief Size of maximum output report. HID generic class will reserve
- *        this buffer size + 1 memory space. 
- *
- * Maximum value of this define is 63 bytes. Library automatically adds
- * one byte for report ID. This means that output report size is limited
- * to 64 bytes.
- */
-#define REPORT_OUT_MAXSIZE  64
-#define REPORT_IN_MAXSIZE REPORT_OUT_MAXSIZE
-
-/**
- * @brief HID generic class endpoints count.
- * */
-#define HID_GENERIC_EP_COUNT  1
-
-/**
- * @brief List of HID generic class endpoints.
- * */
-#define ENDPOINT_LIST()                                      \
-(                                                            \
-        HID_GENERIC_EPIN                                     \
-)
 
 /**
  * @brief Additional key release events
@@ -141,40 +105,11 @@ enum {
 };
 
 
-#define HID_COMMAND_SET_RF_MODE 1
-#define HID_COMMAND_SET_CHANNEL 3
-#define HID_COMMAND_GET_CHANNEL 4
-#define HID_COMMAND_SET_ADDRESS 5
-#define HID_COMMAND_GET_ADDRESS 6
-/**
- * @brief User event handler.
- * */
-static void hid_user_ev_handler(app_usbd_class_inst_t const * p_inst,
-                                app_usbd_hid_user_event_t event);
-
-#define APP_USBD_HID_RAW_REPORT_DSC_SIZE(sizebytes) {                \
-0x06, 0x00, 0xFF,  /* Usage Page (Vendor Defined 0xFF00) */    \
-0x09, 0x01,        /* Usage (0x01) */    \
-0xA1, 0x01,        /* Collection (Application) */   \
-0x09, 0x01,        /* Usage (0x01) */   \
-0x15, 0x00,        /* Logical Minimum (0) */   \
-0x26, 0xFF, 0x00,  /* Logical Maximum (255) */   \
-0x75, 0x08,        /* Report Size (8)  */  \
-0x95, sizebytes,   /* Report Count (64) */   \
-0x81, 0x02,        /* Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position) */   \
-0x09, 0x02,        /* Usage (0x02) */   \
-0x15, 0x00,        /* Logical Minimum (0) */   \
-0x26, 0xFF, 0x00,  /* Logical Maximum (255) */   \
-0x75, 0x08,        /* Report Size (8) */   \
-0x95, sizebytes,   /* Report Count (64) */   \
-0x91, 0x02,        /* Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)  */  \
-0xC0,              /* End Collection */   \
-}
-
+// created HID report descriptor with vendor define output / input report of max size in raw_desc
 APP_USBD_HID_GENERIC_SUBCLASS_REPORT_DESC(raw_desc,APP_USBD_HID_RAW_REPORT_DSC_SIZE(REPORT_OUT_MAXSIZE));
-
+// add created HID report descriptor to subclass descriptor list
 static const app_usbd_hid_subclass_desc_t * reps[] = {&raw_desc};
-
+// setup generic HID interface 
 APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_generic,
                                 HID_GENERIC_INTERFACE,
                                 hid_user_ev_handler,
@@ -194,52 +129,10 @@ struct
     int16_t lastCounter;
 }m_state;
 
-/**
- * @brief Mark the ongoing transmission
- *
- * Marks that the report buffer is busy and cannot be used until transmission finishes
- * or invalidates (by USB reset or suspend event).
- */
-static bool m_report_pending;
-
-
+static bool m_report_pending; //Mark ongoing USB transmission
 
 static uint8_t processing_rf_frame = 0;
 
-
-/*
-static void hid_send_in_report_if_state_changed(void)
-{
-    if (m_report_pending)
-        return;
-
-     if (m_state.counter != m_state.lastCounter) {
-
-        ret_code_t ret;
-        static uint8_t report[REPORT_IN_MAXSIZE];
-        // We have some status changed that we need to transfer 
-
-        for (uint8_t i=0; i<REPORT_IN_MAXSIZE;i++) {
-            report[i] = i;
-        }
-        report[0] = (uint8_t) m_state.counter & 0xff;
-        
-        // Start the transfer 
-        ret = app_usbd_hid_generic_in_report_set(
-            &m_app_hid_generic,
-            report,
-            sizeof(report));
-        if (ret == NRF_SUCCESS)
-        {
-            m_report_pending = true;
-
-            CRITICAL_REGION_ENTER();
-            m_state.lastCounter = m_state.counter;
-            CRITICAL_REGION_EXIT();
-        }
-    }
-}
-*/
 
 /**
  * @brief HID generic IN report send handling
@@ -411,10 +304,7 @@ static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t repo
         case 0:
         {
             uint8_t report[] = {0xBE, 0xEF};
-            return app_usbd_hid_generic_idle_report_set(
-              &m_app_hid_generic,
-              report,
-              sizeof(report));
+            return app_usbd_hid_generic_idle_report_set(&m_app_hid_generic, report, sizeof(report));
         }
         default:
             return NRF_ERROR_NOT_SUPPORTED;
@@ -445,15 +335,13 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
             bsp_board_led_invert(BSP_BOARD_LED_0);
 
             //following code disabled to avoid stalling ISR
-            // --> rx_payload gets overwritten for newly received frames, even if former one hasn't
-            // been processed
+            // --> rx_payload gets overwritten for newly received frames, even if former one hasn't been processed
 /*
             while (processing_rf_frame > 0) {
                 //busy wait
             }
 */            
             
-
             if (processing_rf_frame != 0) {
                 bsp_board_led_invert(BSP_BOARD_LED_1); //Toggle of LED 1 indicates processing of RF frames takes too long
 //                nrf_esb_flush_rx();
@@ -461,23 +349,6 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
             }
 
             processing_rf_frame = 1;
-/*
-            if (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS)
-            {
-
-                processing_rf_frame = rx_payload.length;
-                
-                // Set LEDs identical to the ones on the PTX.
-                nrf_gpio_pin_write(LED_1, !(rx_payload.data[1]%8>0 && rx_payload.data[1]%8<=4));
-                nrf_gpio_pin_write(LED_2, !(rx_payload.data[1]%8>1 && rx_payload.data[1]%8<=5));
-                nrf_gpio_pin_write(LED_3, !(rx_payload.data[1]%8>2 && rx_payload.data[1]%8<=6));
-#ifndef BOARD_CUSTOM                
-                nrf_gpio_pin_write(LED_4, !(rx_payload.data[1]%8>3));
-#endif
-                NRF_LOG_DEBUG("Receiving packet: %02x", rx_payload.data[1]);
-            }
-            //nrf_esb_flush_rx();        
-*/         
             break;
     }
 }
@@ -532,39 +403,7 @@ void clocks_start( void )
     while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0);
 }
 
-bool check_crc16(uint8_t * p_array, uint8_t len) {
-    //remove this hack, only for comparison
-    uint16_t crc = crc16_compute(p_array, (uint32_t) len, NULL);
 
-    if (crc == 0x0000) {
-        return true;
-    }
-
-    return false;
-}
-
-bool validate_esb_frame(uint8_t * p_array, uint8_t addrlen) {
-    uint8_t framelen = p_array[addrlen] >> 2;
-    if (framelen > 32) {
-        return false; // early out 
-    }
-    uint8_t crclen = addrlen + 1 + framelen + 2; //+1 for PCF (we ignore one bit), +2 for crc16
-
-    return check_crc16(p_array, crclen);
-}
-
-void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
-    if (len == 1) {
-        p_array[0] = p_array[0] << bits;
-        return;
-    }
-    
-    for (uint8_t i=0; i<(len-1); i++) {
-        p_array[i] = p_array[i] << bits | p_array[i+1] >> (8-bits);
-    }
-    p_array[len-1] = p_array[len-1] << bits;
-    return;
-}
 
 /* FDS */
 static dongle_state_t m_dongle_state = {
@@ -787,63 +626,23 @@ int main(void)
         }
 
         if (processing_rf_frame != 0) {
-            //we check current channel here, which isn't reliable as the frame from fifo could have been received on a
+            // we check current channel here, which isn't reliable as the frame from fifo could have been received on a
             // different one, but who cares
             uint32_t ch = 0;
             nrf_esb_get_rf_channel(&ch);
 
+            static uint8_t report[REPORT_IN_MAXSIZE];
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                static uint8_t assumed_addrlen = 5;
-                static uint8_t report[REPORT_IN_MAXSIZE];
-                static bool crcmatch = false;
-
-                for (uint8_t i=0; i<rx_payload.length; i++) {
-                    report[i+3] = rx_payload.data[i];
-                }
-                report[0] = rx_payload.pipe;
-                report[1] = (uint8_t) ch;
-                report[2] = rx_payload.length;
-
-                // if processing takes too long RF frames are discarded
-                // the shift value in the following for loop controls how often a received
-                // frame is shifted for CRC check. If this value is too large, frames are dropped,
-                // if it is too low, chance for detecting valid frames decreases.
-                // The validate_esb_frame function has an early out, if determined ESB frame length
-                // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
-                crcmatch = false;
-                for (uint8_t shift=0; shift<32; shift++) {
-                    if (validate_esb_frame(&report[3], assumed_addrlen)) {
-                        report[0] |= 0x40;
-                        crcmatch = true;
-                        break;
-                    }
-                    array_shl(&report[3], report[2], 1);
-                }
-
-                if (crcmatch) {
-                    uint8_t esb_len = report[3+assumed_addrlen] >> 2;
-
-                    bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate frame with valid checksum
-
-
-                    //correct RF frame length if CRC match
-                    report[2] = esb_len;
-
-                    //byte allign payload (throw away no_ack bit of PCF, keep the other 8 bits)
-                    array_shl(&report[3+assumed_addrlen+1], esb_len, 1);
-
-                    //zero out rest of report
-                    memset(&report[3 + assumed_addrlen + 1 + esb_len + 2], 0, REPORT_IN_MAXSIZE-(3 + assumed_addrlen + 1 + esb_len + 2));
-                    /*
-                    for (uint8_t i= 3 + assumed_addrlen + 1 + esb_len + 2; i<REPORT_IN_MAXSIZE; i++) {
-                        report[i] = 0x00;
-                    }
-                    */
-                }
-
-                if (report_frames_without_crc_match || crcmatch) {
+                if (report_frames_without_crc_match) {
+                    bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate valid ESB frame
+                    memset(report,0,REPORT_IN_MAXSIZE);
+                    memcpy(report, rx_payload.data, rx_payload.length);
                     app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-                }
+                } else if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
+                    memset(report,0,REPORT_IN_MAXSIZE);
+                    memcpy(report, rx_payload.data, rx_payload.length);
+                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+                } 
             }
             processing_rf_frame = 0; // free to receive more
         }
