@@ -310,7 +310,6 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
             NRF_LOG_DEBUG("RX RECEIVED EVENT");
 
             bsp_board_led_invert(BSP_BOARD_LED_0); //Indicate received RF frame with LED 0 (could be garbage in promiscous mode)
-
             
             if (processing_rf_frame != 0) {
                 bsp_board_led_invert(BSP_BOARD_LED_1); //indicate frame arrived, while previous frames are processed with LED 1 (overload)
@@ -539,16 +538,23 @@ int main(void)
     ret = radioInit(nrf_esb_event_handler);
     APP_ERROR_CHECK(ret);
 
-    ret = radioSetMode(RADIO_MODE_PROMISCOUS);
-    APP_ERROR_CHECK(ret);
+    //ret = radioSetMode(RADIO_MODE_PROMISCOUS);
+    //APP_ERROR_CHECK(ret);
 
-    /*
+    //e2c794f200
     nrf_esb_stop_rx();
+
     uint8_t RfAddress[4] = {0xa5, 0xdc, 0x0a, 0xbb}; //prefix, addr3, addr2, addr1, addr0
+    uint8_t RfAddress1[4] = {0xf2, 0x94, 0xc7, 0xe2}; //prefix, addr3, addr2, addr1, addr0
     radioSetBaseAddress0(RfAddress);
-    radioUpdatePrefix(0x75,0);
+    radioSetBaseAddress1(RfAddress1);
+    radioUpdatePrefix(0, 0x75);
+    radioUpdatePrefix(1, 0x00);
     radioSetMode(RADIO_MODE_PRX_PASSIVE);
-    */
+
+    //ret = nrf_esb_start_rx();
+    if (ret == NRF_SUCCESS) bsp_board_led_on(BSP_BOARD_LED_3);
+    
 
 /*
     ret = nrf_esb_start_rx();

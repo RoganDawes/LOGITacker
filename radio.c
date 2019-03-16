@@ -149,8 +149,19 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler) {
     //VERIFY_SUCCESS(err_code);
     m_local_config.initialized = true;
     m_local_config.mode = RADIO_MODE_DISABLED;
-
+    m_local_config.addr_length = 5;
+    m_local_config.num_pipes = 8;
+    m_local_config.rx_pipes_enabled = 0xFF;
     
+
+    uint8_t base_addr_0[4] = { 0xE7, 0xE7, 0xE7, 0xE7 }; //only one octet used, as address length will be illegal
+    uint8_t base_addr_1[4] = { 0xC2, 0xC2, 0xC2, 0xC2 }; //only one octet used, as address length will be illegal
+    uint8_t addr_prefix[8] = { 0xE7, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8 }; //prefix for pipe 0..7                                                               
+
+    memcpy(m_local_config.base_addr_p0, base_addr_0, 4);
+    memcpy(m_local_config.base_addr_p1, base_addr_1, 4);
+    memcpy(m_local_config.pipe_prefixes, addr_prefix, 8);
+    m_local_config.rf_channel = 5;
 
     return NRF_SUCCESS;
     //return err_code;
@@ -181,6 +192,9 @@ uint32_t radioInitPromiscuousMode() {
     VERIFY_SUCCESS(err_code);
 
     err_code = nrf_esb_set_prefixes(addr_prefix, 8);
+    VERIFY_SUCCESS(err_code);
+
+    err_code = nrf_esb_enable_pipes(0xFF);
     VERIFY_SUCCESS(err_code);
 
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
@@ -220,32 +234,17 @@ uint32_t radioInitPRXPassiveMode() {
     esb_config.event_handler    = m_local_config.event_handler;
     
     
- 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
     m_local_esb_config = esb_config;
+ 
 
     err_code = restoreRfSettings();
-    VERIFY_SUCCESS(err_code);
-
-
-/*
-    err_code = nrf_esb_set_base_address_0(m_local_config.base_addr_p0);
-    VERIFY_SUCCESS(err_code);
-
-    err_code = nrf_esb_set_base_address_1(m_local_config.base_addr_p1);
-    VERIFY_SUCCESS(err_code);
-
-    err_code = nrf_esb_set_prefixes(m_local_config.pipe_prefixes, m_local_config.num_pipes);
     VERIFY_SUCCESS(err_code);
 
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
     VERIFY_SUCCESS(err_code);
 
-    err_code = nrf_esb_enable_pipes(m_local_config.rx_pipes_enabled);
-    VERIFY_SUCCESS(err_code);
-*/
-    
     err_code = nrf_esb_start_rx();
     VERIFY_SUCCESS(err_code);
     
