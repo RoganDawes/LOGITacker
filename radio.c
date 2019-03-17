@@ -52,6 +52,7 @@ bool check_crc16(uint8_t * p_array, uint8_t len) {
 bool validate_esb_frame(uint8_t * p_array, uint8_t addrlen) {
     uint8_t framelen = p_array[addrlen] >> 2;
     if (framelen > 32) {
+    //if (framelen != 22 && framelen != 0 && framelen != 10 && framelen != 5) { // logitech
         return false; // early out if ESB frame has a length > 32, this only accounts for "old style" ESB which is bound to 32 byte max payload length
     }
     uint8_t crclen = addrlen + 1 + framelen + 2; //+1 for PCF (we ignore one bit), +2 for crc16
@@ -90,7 +91,7 @@ uint32_t validate_esb_payload(nrf_esb_payload_t * p_payload) {
     // The validate_esb_frame function has an early out, if determined ESB frame length
     // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
     crcmatch = false;
-    for (uint8_t shift=0; shift<32; shift++) {
+    for (uint8_t shift=0; shift<40; shift++) {
         if (validate_esb_frame(tmpData, assumed_addrlen)) {
             crcmatch = true;
             break;

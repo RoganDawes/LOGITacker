@@ -77,8 +77,8 @@
 
 // channel hop timer
 APP_TIMER_DEF(m_timer_channel_hop);
-
-
+static bool m_channel_hop_data_received = false;
+uint32_t m_channel_hop_delay_ms = 300;
 /**
  * @brief Enable USB power detection
  */
@@ -243,7 +243,10 @@ static void bsp_event_callback(bsp_event_t ev)
 
         case CONCAT_2(BSP_USER_EVENT_RELEASE_, BTN_TRIGGER_ACTION):
             nrf_esb_stop_rx();
-            radioSetMode(RADIO_MODE_PROMISCOUS);
+            radioSetMode(RADIO_MODE_PROMISCOUS); //set back to promiscous
+
+            m_channel_hop_data_received = false;
+            app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop); //restart channel hopping timer
             nrf_esb_start_rx();
 
             bsp_board_led_off(3);
@@ -469,11 +472,23 @@ static void fds_evt_handler(fds_evt_t const * p_evt)
 void timer_channel_hop_event_handler(void* p_context)
 {
     app_timer_id_t timer = (app_timer_id_t)p_context;
-    uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(1000), p_context);
-    APP_ERROR_CHECK(err_code);
 
-    bsp_board_led_invert(BSP_BOARD_LED_1);
+    if (!m_channel_hop_data_received) {
+        //If in promiscuous mode we flush RX to get rid of unprocessed data before channel ho
+        //nrf_esb_flush_rx();
 
+        uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(m_channel_hop_delay_ms), p_context); //restart timer
+        APP_ERROR_CHECK(err_code);
+
+
+        uint32_t currentChannel;
+        radioGetRfChannel(&currentChannel);
+        currentChannel += 3;
+        if (currentChannel > 74) currentChannel = 5;
+        radioSetRfChannel(currentChannel);
+        bsp_board_led_invert(BSP_BOARD_LED_3);
+    }   
+    //m_channel_hop_data_received = false;
 }
 
 
@@ -583,7 +598,7 @@ int main(void)
     } 
 
     app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler);
-    app_timer_start(m_timer_channel_hop, 500, m_timer_channel_hop);
+    app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
 
     while (true)
     {
@@ -659,11 +674,16 @@ int main(void)
 
                             // assign discovered address to pipe 1 and switch over to passive sniffing (doesn't send ACK payloads)
                             if (switch_from_promiscous_to_sniff_on_discovered_address) {
+                                //m_channel_hop_data_received = true; //don't restart channel hop timer when called ...
+                                app_timer_stop(m_timer_channel_hop); // stop channel hop timer
+                                app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(1000), m_timer_channel_hop); //... and restart in 1000ms if no further data received
+
                                 nrf_esb_stop_rx();
                                 uint8_t RfAddress1[4] = {rx_payload.data[5], rx_payload.data[4], rx_payload.data[3], rx_payload.data[2]}; //prefix, addr3, addr2, addr1, addr0
                                 radioSetMode(RADIO_MODE_PRX_PASSIVE);
                                 radioSetBaseAddress1(RfAddress1);
                                 radioUpdatePrefix(1, rx_payload.data[6]);   
+                                //radioUpdatePrefix(1, 0x4c);   
                                 nrf_esb_start_rx();
                                 break; //exit while loop
                             }
@@ -673,6 +693,8 @@ int main(void)
                 case RADIO_MODE_PRX_PASSIVE:
                     // pull RX payload from fifo, till no more left
                     while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
+                        m_channel_hop_data_received = true; //don't restart channel hop timer
+
                         // hid report:
                         // byte 0:    rx pipe
                         // byte 1:    ESB payload length
