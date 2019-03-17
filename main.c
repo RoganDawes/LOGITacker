@@ -75,6 +75,8 @@
 #include "radio.h"
 
 
+// channel hop timer
+APP_TIMER_DEF(m_timer_channel_hop);
 
 
 /**
@@ -463,6 +465,18 @@ static void fds_evt_handler(fds_evt_t const * p_evt)
 }
 
 
+// channel hop timer
+void timer_channel_hop_event_handler(void* p_context)
+{
+    app_timer_id_t timer = (app_timer_id_t)p_context;
+    uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(1000), p_context);
+    APP_ERROR_CHECK(err_code);
+
+    bsp_board_led_invert(BSP_BOARD_LED_1);
+
+}
+
+
 int main(void)
 {
     bool report_frames_without_crc_match = false;
@@ -488,6 +502,7 @@ int main(void)
 
     ret = app_timer_init();
     APP_ERROR_CHECK(ret);
+
 
     //BSP
     init_bsp();
@@ -566,6 +581,9 @@ int main(void)
         // restore failed, update/create record on flash with current data
         updateDeviceInfoOnFlash(0, &m_current_device_info); //ignore errors
     } 
+
+    app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler);
+    app_timer_start(m_timer_channel_hop, 500, m_timer_channel_hop);
 
     while (true)
     {
