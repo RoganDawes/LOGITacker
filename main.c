@@ -78,7 +78,7 @@
 // channel hop timer
 APP_TIMER_DEF(m_timer_channel_hop);
 static bool m_channel_hop_data_received = false;
-uint32_t m_channel_hop_delay_ms = 300;
+uint32_t m_channel_hop_delay_ms = 500;
 /**
  * @brief Enable USB power detection
  */
