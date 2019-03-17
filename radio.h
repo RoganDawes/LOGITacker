@@ -38,6 +38,8 @@ uint32_t radioEnablePipes(uint8_t enable_mask);
 uint32_t radioUpdatePrefix(uint8_t pipe, uint8_t prefix);
 uint32_t radioSetRfChannel(uint32_t channel);
 uint32_t radioGetRfChannel(uint32_t * p_channel);
+
+uint32_t radioPipeNumToRFAddress(uint8_t pipeNum, uint8_t *p_dst);
 /*
 uint32_t radioSetTxPower(nrf_esb_tx_power_t tx_output_power);
 uint32_t nrf_esb_set_retransmit_delay(uint16_t delay);

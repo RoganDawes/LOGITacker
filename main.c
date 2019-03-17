@@ -235,10 +235,15 @@ static void bsp_event_callback(bsp_event_t ev)
     switch ((unsigned int)ev)
     {
         case CONCAT_2(BSP_EVENT_KEY_, BTN_TRIGGER_ACTION):
+            //Toggle radio back to promiscous mode
             bsp_board_led_on(3);
             break;
 
         case CONCAT_2(BSP_USER_EVENT_RELEASE_, BTN_TRIGGER_ACTION):
+            nrf_esb_stop_rx();
+            radioSetMode(RADIO_MODE_PROMISCOUS);
+            nrf_esb_start_rx();
+
             bsp_board_led_off(3);
             break;
 
@@ -461,6 +466,7 @@ static void fds_evt_handler(fds_evt_t const * p_evt)
 int main(void)
 {
     bool report_frames_without_crc_match = false;
+    bool switch_from_promiscous_to_sniff_on_discovered_address = true;
 
     ret_code_t ret;
     static const app_usbd_config_t usbd_config = {
@@ -527,41 +533,29 @@ int main(void)
     clocks_start();
 
     //ESB
-    /*
-    ret = esb_init();
-    APP_ERROR_CHECK(ret);
-
-    ret = nrf_esb_start_rx();
-    APP_ERROR_CHECK(ret);
-    */
-
     ret = radioInit(nrf_esb_event_handler);
     APP_ERROR_CHECK(ret);
-
-    //ret = radioSetMode(RADIO_MODE_PROMISCOUS);
-    //APP_ERROR_CHECK(ret);
-
-    //e2c794f200
-    nrf_esb_stop_rx();
-
-    uint8_t RfAddress[4] = {0xa5, 0xdc, 0x0a, 0xbb}; //prefix, addr3, addr2, addr1, addr0
-    uint8_t RfAddress1[4] = {0xf2, 0x94, 0xc7, 0xe2}; //prefix, addr3, addr2, addr1, addr0
-    radioSetBaseAddress0(RfAddress);
-    radioSetBaseAddress1(RfAddress1);
-    radioUpdatePrefix(0, 0x75);
-    radioUpdatePrefix(1, 0x00);
+   
+    ret = radioSetMode(RADIO_MODE_PROMISCOUS);
+    APP_ERROR_CHECK(ret);
+    nrf_esb_start_rx();
+    //nrf_esb_stop_rx();
+    
+    /*
     radioSetMode(RADIO_MODE_PRX_PASSIVE);
+//    uint8_t RfAddress[4] = {0xa5, 0xdc, 0x0a, 0xbb}; //prefix, addr3, addr2, addr1, addr0
+    uint8_t RfAddress1[4] = {0xf2, 0x94, 0xc7, 0xe2}; //prefix, addr3, addr2, addr1, addr0
+ //   radioSetBaseAddress0(RfAddress);
+    radioSetBaseAddress1(RfAddress1);
+ //   radioUpdatePrefix(0, 0x75);
+    radioUpdatePrefix(1, 0x00);
+    
+    nrf_esb_start_rx();
+    */
 
     //ret = nrf_esb_start_rx();
-    if (ret == NRF_SUCCESS) bsp_board_led_on(BSP_BOARD_LED_3);
-    
-
-/*
-    ret = nrf_esb_start_rx();
-    APP_ERROR_CHECK(ret);
-    bsp_board_led_on(BSP_BOARD_LED_3);
- */
-    
+    //if (ret == NRF_SUCCESS) bsp_board_led_on(BSP_BOARD_LED_3);
+        
 
     //FDS
     restoreStateFromFlash(&m_dongle_state);
@@ -630,19 +624,57 @@ int main(void)
             nrf_esb_get_rf_channel(&ch);
 
             static uint8_t report[REPORT_IN_MAXSIZE];
-            while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                if (report_frames_without_crc_match || radioGetMode() != RADIO_MODE_PROMISCOUS) {
-                    bsp_board_led_invert(BSP_BOARD_LED_3); // toggle led 3 to indicate non promiscous frames
-                    memset(report,0,REPORT_IN_MAXSIZE);
-                    memcpy(report, rx_payload.data, rx_payload.length);
-                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-                } else if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
-                    bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate valid ESB frame
-                    memset(report,0,REPORT_IN_MAXSIZE);
-                    memcpy(report, rx_payload.data, rx_payload.length);
-                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-                } 
+            switch (radioGetMode()) {
+                case RADIO_MODE_PROMISCOUS:
+                    // pull RX payload from fifo, till no more left
+                    while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
+                        
+                        if (report_frames_without_crc_match) {
+                            memset(report,0,REPORT_IN_MAXSIZE);
+                            memcpy(report, rx_payload.data, rx_payload.length);
+                            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+                        } else if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
+                            bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate valid ESB frame in promiscous mode
+                            memset(report,0,REPORT_IN_MAXSIZE);
+                            memcpy(report, rx_payload.data, rx_payload.length);
+                            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+
+                            // assign discovered address to pipe 1 and switch over to passive sniffing (doesn't send ACK payloads)
+                            if (switch_from_promiscous_to_sniff_on_discovered_address) {
+                                nrf_esb_stop_rx();
+                                uint8_t RfAddress1[4] = {rx_payload.data[5], rx_payload.data[4], rx_payload.data[3], rx_payload.data[2]}; //prefix, addr3, addr2, addr1, addr0
+                                radioSetMode(RADIO_MODE_PRX_PASSIVE);
+                                radioSetBaseAddress1(RfAddress1);
+                                radioUpdatePrefix(1, rx_payload.data[6]);   
+                                nrf_esb_start_rx();
+                                break; //exit while loop
+                            }
+                        } 
+                    }
+                    break;
+                case RADIO_MODE_PRX_PASSIVE:
+                    // pull RX payload from fifo, till no more left
+                    while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
+                        // hid report:
+                        // byte 0:    rx pipe
+                        // byte 1:    ESB payload length
+                        // byte 2..6: RF address on pipe (account for addr_len when copying over)
+                        // byte 7:    reserved, would be part of PCF in promiscuous mode (set to 0x00 here)
+                        // byte 8..:  ESB payload
+
+                        bsp_board_led_invert(BSP_BOARD_LED_3); // toggle led 3 to indicate non promiscous frames
+                        memset(report,0,REPORT_IN_MAXSIZE);
+                        report[0] = rx_payload.pipe;
+                        report[1] = rx_payload.length;
+                        radioPipeNumToRFAddress(rx_payload.pipe, &report[2]);
+                        memcpy(&report[8], rx_payload.data, rx_payload.length);
+                        app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+                    }
+                    break;
+                default:
+                    break;
             }
+
             processing_rf_frame = 0; // free to receive more
         }
 

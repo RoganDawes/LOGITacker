@@ -154,9 +154,9 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler) {
     m_local_config.rx_pipes_enabled = 0xFF;
     
 
-    uint8_t base_addr_0[4] = { 0xE7, 0xE7, 0xE7, 0xE7 }; //only one octet used, as address length will be illegal
-    uint8_t base_addr_1[4] = { 0xC2, 0xC2, 0xC2, 0xC2 }; //only one octet used, as address length will be illegal
-    uint8_t addr_prefix[8] = { 0xE7, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8 }; //prefix for pipe 0..7                                                               
+    uint8_t base_addr_0[4] = {0xa5, 0xdc, 0x0a, 0xbb}; //Unifying pairing address for pipe 0
+    uint8_t base_addr_1[4] = { 0xC2, 0xC2, 0xC2, 0xC2 }; 
+    uint8_t addr_prefix[8] = { 0x75, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8 }; //prefix for pipe 0..7 (pipe 0 prefix for unifying pairing addr)
 
     memcpy(m_local_config.base_addr_p0, base_addr_0, 4);
     memcpy(m_local_config.base_addr_p1, base_addr_1, 4);
@@ -200,9 +200,13 @@ uint32_t radioInitPromiscuousMode() {
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
     VERIFY_SUCCESS(err_code);
 
+    nrf_esb_flush_rx(); //assure we have no frames pending, which have been captured in non-PRX_PASSIVE mode and could get mis-interpreted
+    //Note: start_rx here would hinder changing RF address after calling radioSetMode() unless stop_rx is called upfront
+    /*
     err_code = nrf_esb_start_rx();
     VERIFY_SUCCESS(err_code);
-   
+    */
+
     return NRF_SUCCESS;
 }
 
@@ -245,9 +249,13 @@ uint32_t radioInitPRXPassiveMode() {
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
     VERIFY_SUCCESS(err_code);
 
+    nrf_esb_flush_rx(); //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+
+    //Note: start_rx here would hinder changing RF address after calling radioSetMode() unless stop_rx is called upfront
+    /*
     err_code = nrf_esb_start_rx();
     VERIFY_SUCCESS(err_code);
-    
+    */
    
     return NRF_SUCCESS;
 }
@@ -271,20 +279,23 @@ uint32_t radioSetMode(radio_rf_mode_t mode) {
         case RADIO_MODE_PRX_ACTIVE:
             break;
         case RADIO_MODE_PRX_PASSIVE:
+            /*
             //bring radio to IDLE state, depends on current mode
             if (m_local_config.mode == RADIO_MODE_PROMISCOUS) {
                 nrf_esb_stop_rx();
             }
+            */
             err_code = radioInitPRXPassiveMode();
             VERIFY_SUCCESS(err_code);
             m_local_config.mode = mode; //update current mode
             break;
         case RADIO_MODE_PROMISCOUS:
+            /*
             //bring radio to IDLE state, depends on current mode
             if (m_local_config.mode == RADIO_MODE_PRX_PASSIVE) {
                 nrf_esb_stop_rx();
             }
-
+            */
             // promiscous mode always needs (re)init, as Packer Format is changed
             err_code = radioInitPromiscuousMode();
             VERIFY_SUCCESS(err_code);
@@ -369,3 +380,25 @@ uint32_t radioGetRfChannel(uint32_t * p_channel) {
     return nrf_esb_get_rf_channel(p_channel);
 }
 
+uint32_t radioPipeNumToRFAddress(uint8_t pipeNum, uint8_t *p_dst) {
+    if (pipeNum > 8) return NRF_ERROR_INVALID_PARAM;
+    if (p_dst == NULL) return NRF_ERROR_INVALID_PARAM;
+
+    //ToDo: account for address length, currently length 5 is assumed
+
+    if (pipeNum == 0) {
+        p_dst[0] = m_local_config.base_addr_p0[3];
+        p_dst[1] = m_local_config.base_addr_p0[2];
+        p_dst[2] = m_local_config.base_addr_p0[1];
+        p_dst[3] = m_local_config.base_addr_p0[0];
+    } else {
+        p_dst[0] = m_local_config.base_addr_p1[3];
+        p_dst[1] = m_local_config.base_addr_p1[2];
+        p_dst[2] = m_local_config.base_addr_p1[1];
+        p_dst[3] = m_local_config.base_addr_p1[0];
+    }
+
+    p_dst[4] = m_local_config.pipe_prefixes[pipeNum];
+
+    return NRF_SUCCESS;
+}
