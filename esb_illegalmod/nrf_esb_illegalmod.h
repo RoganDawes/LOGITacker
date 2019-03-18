@@ -190,7 +190,7 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .event_irq_priority     = 2,                                \
                                 .payload_length         = 60,                               \
                                 .selective_auto_ack     = true,                             \
-                                .disallow_auto_ack     = true                             \
+                                .disallow_auto_ack      = true                              \
 }
 
 

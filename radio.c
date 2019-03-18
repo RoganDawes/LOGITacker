@@ -27,7 +27,7 @@ typedef struct
     uint8_t rx_pipes_enabled;       /**< Bitfield for enabled pipes. */    
 } radio_config_t;
 
-static nrf_esb_config_t m_local_esb_config = NRF_ESB_DEFAULT_CONFIG;
+//static nrf_esb_config_t m_local_esb_config = NRF_ESB_DEFAULT_CONFIG;
 
 static radio_config_t m_local_config = {
     .mode = RADIO_MODE_DISABLED,
@@ -88,6 +88,9 @@ uint32_t validate_esb_payload(nrf_esb_payload_t * p_payload) {
     for (uint8_t i=0; i< tmpDataLen; i++) {
         tmpData[i] = p_payload -> data[i];
     }
+
+    //Skip 7 bit if first 8 are alternating
+    if (p_payload -> data[0] == 0xaa) array_shl(tmpData, tmpDataLen, 7);
   
     // if processing takes too long RF frames are discarded
     // the shift value in the following for loop controls how often a received
@@ -183,14 +186,15 @@ uint32_t radioInitPromiscuousMode() {
     uint8_t addr_prefix[8] = {0xaa, 0x1f, 0x9f, 0xa8, 0xaf, 0xa9, 0x8f, 0xaa}; //prefix for pipe 0..7                                                               
     
     nrf_esb_config_t esb_config = NRF_ESB_ILLEGAL_CONFIG;
-    esb_config.event_handler            = m_local_config.event_handler;
+    esb_config.selective_auto_ack = true; //Don't send ack if received frame has 'no ack' set
     esb_config.disallow_auto_ack = true; //never send back acks
- 
-    
- 
+    esb_config.event_handler    = m_local_config.event_handler;
+
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
-    m_local_esb_config = esb_config;
+    //m_local_esb_config = esb_config;
+
+    while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PRX_PASSIVE mode and could get mis-interpreted
 
     err_code = nrf_esb_set_base_address_0(base_addr_0);
     VERIFY_SUCCESS(err_code);
@@ -207,30 +211,11 @@ uint32_t radioInitPromiscuousMode() {
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
     VERIFY_SUCCESS(err_code);
 
-    nrf_esb_flush_rx(); //assure we have no frames pending, which have been captured in non-PRX_PASSIVE mode and could get mis-interpreted
+    
+
     //Note: start_rx here would hinder changing RF address after calling radioSetMode() unless stop_rx is called upfront
-    /*
-    err_code = nrf_esb_start_rx();
-    VERIFY_SUCCESS(err_code);
-    */
 
     return NRF_SUCCESS;
-}
-
-uint32_t radioDeinitPromiscuousMode() {
-    if (!m_local_config.initialized) return NRF_ERROR_INVALID_STATE;
-    if (m_local_config.mode != RADIO_MODE_PROMISCOUS) return NRF_ERROR_INVALID_STATE;
-
-    uint32_t err_code;
-    
-    err_code = nrf_esb_stop_rx();
-    VERIFY_SUCCESS(err_code);
-
-    err_code = restoreRfSettings();
-    VERIFY_SUCCESS(err_code);
-
-    m_local_config.mode = RADIO_MODE_DISABLED;
-    return err_code;
 }
 
 uint32_t radioInitPRXPassiveMode() {
@@ -238,18 +223,21 @@ uint32_t radioInitPRXPassiveMode() {
 
     uint32_t err_code;
     
-    
     nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
     esb_config.mode = NRF_ESB_MODE_PRX;
     esb_config.selective_auto_ack = true; //Don't send ack if received frame has 'no ack' set
     esb_config.disallow_auto_ack = true; //never send back acks
     esb_config.event_handler    = m_local_config.event_handler;
     
-    
+
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
-    m_local_esb_config = esb_config;
- 
+
+    
+    //m_local_esb_config = esb_config;
+
+    while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+
 
     err_code = restoreRfSettings();
     VERIFY_SUCCESS(err_code);
@@ -257,14 +245,10 @@ uint32_t radioInitPRXPassiveMode() {
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
     VERIFY_SUCCESS(err_code);
 
-    nrf_esb_flush_rx(); //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+    
 
     //Note: start_rx here would hinder changing RF address after calling radioSetMode() unless stop_rx is called upfront
-    /*
-    err_code = nrf_esb_start_rx();
-    VERIFY_SUCCESS(err_code);
-    */
-   
+
     return NRF_SUCCESS;
 }
 

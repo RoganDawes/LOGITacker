@@ -56,6 +56,9 @@
 #include "app_util.h"
 #include "nrf_delay.h"
 
+#include "bsp.h"
+
+
 #define BIT_MASK_UINT_8(x) (0xFF >> (8 - (x)))
 
 // Constant parameters
@@ -914,12 +917,15 @@ static void clear_events_restart_rx(void)
 
 static void on_radio_disabled_rx(void)
 {
+
+
+
     bool            ack                = false;
     bool            retransmit_payload = false;
     bool            send_rx_event      = true;
     pipe_info_t *   p_pipe_info;
 
-    if (NRF_RADIO->CRCSTATUS == 0)
+    if (NRF_RADIO->CRCSTATUS == 0 && !m_config_local.disallow_auto_ack)
     {
         clear_events_restart_rx();
         return;
@@ -931,15 +937,14 @@ static void on_radio_disabled_rx(void)
         return;
     }
 
+
     p_pipe_info = &m_rx_pipe_info[NRF_RADIO->RXMATCH];
-    if (!m_config_local.disallow_auto_ack) {
-        if (NRF_RADIO->RXCRC             == p_pipe_info->crc &&
-            (m_rx_payload_buffer[1] >> 1) == p_pipe_info->pid
-        )
-        {
-            retransmit_payload = true;
-            send_rx_event = false; // if  we are in passive rx mode, with auto ack, we fire a receive event, even on pipe mismatch (to collect ACK payloads from real PRX)
-        }
+    if (NRF_RADIO->RXCRC             == p_pipe_info->crc &&
+        (m_rx_payload_buffer[1] >> 1) == p_pipe_info->pid
+    )
+    {
+        retransmit_payload = true;
+        send_rx_event = false; // if  we are in passive rx mode, with auto ack, we fire a receive event, even on pipe mismatch (to collect ACK payloads from real PRX)
     }
 
     p_pipe_info->pid = m_rx_payload_buffer[1] >> 1;
@@ -952,7 +957,7 @@ static void on_radio_disabled_rx(void)
 
     if (m_config_local.disallow_auto_ack) {
         ack = false; //override auto ack setting if  disallowed (stay pas)
-        NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_DISABLED_RXEN_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
+        NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
     } 
 
     if (ack)
@@ -1050,7 +1055,13 @@ static void on_radio_disabled_rx(void)
 
 static void on_radio_disabled_rx_ack(void)
 {
-    NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
+    //NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
+    if (m_config_local.disallow_auto_ack) {
+        NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
+    } else {
+        NRF_RADIO->SHORTS      = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
+    } 
+
     update_rf_payload_format(m_config_local.payload_length);
 
     NRF_RADIO->PACKETPTR = (uint32_t)m_rx_payload_buffer;
@@ -1129,6 +1140,7 @@ uint32_t nrf_esb_init(nrf_esb_config_t const * p_config)
 
     VERIFY_PARAM_NOT_NULL(p_config);
 
+
     if (m_esb_initialized)
     {
         err_code = nrf_esb_disable();
@@ -1138,10 +1150,14 @@ uint32_t nrf_esb_init(nrf_esb_config_t const * p_config)
         }
     }
 
+
+
+
     m_event_handler = p_config->event_handler;
 
     memcpy(&m_config_local, p_config, sizeof(nrf_esb_config_t));
-    
+
+
     m_interrupt_flags    = 0;
 
     memset(m_rx_pipe_info, 0, sizeof(m_rx_pipe_info));
@@ -1350,7 +1366,12 @@ uint32_t nrf_esb_start_rx(void)
     NRF_RADIO->EVENTS_DISABLED = 0;
     on_radio_disabled = on_radio_disabled_rx;
 
-    NRF_RADIO->SHORTS      = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
+    if (m_config_local.disallow_auto_ack) {
+        NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
+    } else {
+        NRF_RADIO->SHORTS      = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
+    } 
+
     NRF_RADIO->INTENSET    = RADIO_INTENSET_DISABLED_Msk;
     m_nrf_esb_mainstate    = NRF_ESB_STATE_PRX;
 
@@ -1383,6 +1404,7 @@ uint32_t nrf_esb_stop_rx(void)
         while (NRF_RADIO->EVENTS_DISABLED == 0);
         m_nrf_esb_mainstate = NRF_ESB_STATE_IDLE;
 
+        //m_config_local.disallow_auto_ack = false; //no special functionality for radio_on_disable_rx
         return NRF_SUCCESS;
     }
 
