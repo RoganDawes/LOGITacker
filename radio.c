@@ -9,6 +9,8 @@
 
 #include "sdk_macros.h"
 
+#define LOGITECH_FILTER //validates promiscous mode packets based on common length of logitech RF frames, if defined (early out)
+
 #define BIT_MASK_UINT_8(x) (0xFF >> (8 - (x)))
 
 typedef struct
@@ -51,8 +53,11 @@ bool check_crc16(uint8_t * p_array, uint8_t len) {
 
 bool validate_esb_frame(uint8_t * p_array, uint8_t addrlen) {
     uint8_t framelen = p_array[addrlen] >> 2;
+#ifndef LOGITECH_FILTER    
     if (framelen > 32) {
-    //if (framelen != 22 && framelen != 0 && framelen != 10 && framelen != 5) { // logitech
+#else        
+    if (framelen != 22 && framelen != 0 && framelen != 10 && framelen != 5) { // logitech
+#endif    
         return false; // early out if ESB frame has a length > 32, this only accounts for "old style" ESB which is bound to 32 byte max payload length
     }
     uint8_t crclen = addrlen + 1 + framelen + 2; //+1 for PCF (we ignore one bit), +2 for crc16
@@ -91,7 +96,7 @@ uint32_t validate_esb_payload(nrf_esb_payload_t * p_payload) {
     // The validate_esb_frame function has an early out, if determined ESB frame length
     // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
     crcmatch = false;
-    for (uint8_t shift=0; shift<40; shift++) {
+    for (uint8_t shift=0; shift<32; shift++) {
         if (validate_esb_frame(tmpData, assumed_addrlen)) {
             crcmatch = true;
             break;
@@ -179,6 +184,7 @@ uint32_t radioInitPromiscuousMode() {
     
     nrf_esb_config_t esb_config = NRF_ESB_ILLEGAL_CONFIG;
     esb_config.event_handler            = m_local_config.event_handler;
+    esb_config.disallow_auto_ack = true; //never send back acks
  
     
  
@@ -235,7 +241,8 @@ uint32_t radioInitPRXPassiveMode() {
     
     nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
     esb_config.mode = NRF_ESB_MODE_PRX;
-    esb_config.selective_auto_ack = true; //Don't send ack without permission
+    esb_config.selective_auto_ack = true; //Don't send ack if received frame has 'no ack' set
+    esb_config.disallow_auto_ack = true; //never send back acks
     esb_config.event_handler    = m_local_config.event_handler;
     
     

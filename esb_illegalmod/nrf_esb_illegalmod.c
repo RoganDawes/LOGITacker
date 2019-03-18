@@ -627,16 +627,30 @@ static bool rx_fifo_push_rfbuf(uint8_t pipe, uint8_t pid)
 
         if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_ILLEGAL) {
             //skip bytes with alternating bits (stop if rx_len is at 32)
+
+/*
             uint8_t len = 60;
+
             while (len > 31) {
                 if (m_rx_payload_buffer[60-len] == 0xaa) {
                     len--;
                 } else {
+                    len--; //store two aa bytes
                     break;
                 }
             }
-            m_rx_fifo.p_payload[m_rx_fifo.entry_point]->length = len;
-            memcpy(m_rx_fifo.p_payload[m_rx_fifo.entry_point]->data, &m_rx_payload_buffer[60-len],
+ */
+            uint8_t skip = 0;
+            while ((60-skip) > 32) {
+                if (m_rx_payload_buffer[skip] == 0xaa && m_rx_payload_buffer[skip+1] == 0xaa) {
+                    skip++; //keep the first 0xaa byte, as it could contain the first address bit
+                } else {
+                    break;
+                }
+            }
+
+            m_rx_fifo.p_payload[m_rx_fifo.entry_point]->length = 60-skip;
+            memcpy(m_rx_fifo.p_payload[m_rx_fifo.entry_point]->data, &m_rx_payload_buffer[skip],
                    m_rx_fifo.p_payload[m_rx_fifo.entry_point]->length);
 
         } else {
@@ -918,12 +932,14 @@ static void on_radio_disabled_rx(void)
     }
 
     p_pipe_info = &m_rx_pipe_info[NRF_RADIO->RXMATCH];
-    if (NRF_RADIO->RXCRC             == p_pipe_info->crc &&
-        (m_rx_payload_buffer[1] >> 1) == p_pipe_info->pid
-       )
-    {
-        retransmit_payload = true;
-        send_rx_event = false;
+    if (!m_config_local.disallow_auto_ack) {
+        if (NRF_RADIO->RXCRC             == p_pipe_info->crc &&
+            (m_rx_payload_buffer[1] >> 1) == p_pipe_info->pid
+        )
+        {
+            retransmit_payload = true;
+            send_rx_event = false; // if  we are in passive rx mode, with auto ack, we fire a receive event, even on pipe mismatch (to collect ACK payloads from real PRX)
+        }
     }
 
     p_pipe_info->pid = m_rx_payload_buffer[1] >> 1;
@@ -933,6 +949,8 @@ static void on_radio_disabled_rx(void)
     {
         ack = true;
     }
+
+    if (m_config_local.disallow_auto_ack) ack = false; //override auto ack setting if  disallowed (stay pas)
 
     if (ack)
     {
@@ -990,6 +1008,7 @@ static void on_radio_disabled_rx(void)
                     m_tx_payload_buffer[1] = 0;
                 }
                 break;
+            // should never happen, we don't send ACKs in promiscuous mode               
             case NRF_ESB_PROTOCOL_ESB_ILLEGAL:
                 {
                     update_rf_payload_format(0);

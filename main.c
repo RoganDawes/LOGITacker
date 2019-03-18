@@ -78,7 +78,7 @@
 // channel hop timer
 APP_TIMER_DEF(m_timer_channel_hop);
 static bool m_channel_hop_data_received = false;
-uint32_t m_channel_hop_delay_ms = 500;
+uint32_t m_channel_hop_delay_ms = 20;
 /**
  * @brief Enable USB power detection
  */
@@ -247,7 +247,7 @@ static void bsp_event_callback(bsp_event_t ev)
 
             m_channel_hop_data_received = false;
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop); //restart channel hopping timer
-            nrf_esb_start_rx();
+            while (nrf_esb_start_rx() != NRF_SUCCESS) {};
 
             bsp_board_led_off(3);
             break;
@@ -626,7 +626,7 @@ int main(void)
                     } else {
                         hid_out_report[2] = -1;
                     }
-                    nrf_esb_start_rx();
+                    while (nrf_esb_start_rx() != NRF_SUCCESS) {};
                     
                     memset(&hid_out_report[3], 0, sizeof(hid_out_report)-3);
                     app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 
@@ -664,7 +664,8 @@ int main(void)
                         
                         if (report_frames_without_crc_match) {
                             memset(report,0,REPORT_IN_MAXSIZE);
-                            memcpy(report, rx_payload.data, rx_payload.length);
+                            report[0] = rx_payload.pipe;
+                            memcpy(&report[2], rx_payload.data, rx_payload.length);
                             app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
                         } else if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
                             bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate valid ESB frame in promiscous mode
@@ -684,7 +685,7 @@ int main(void)
                                 radioSetBaseAddress1(RfAddress1);
                                 radioUpdatePrefix(1, rx_payload.data[6]);   
                                 //radioUpdatePrefix(1, 0x4c);   
-                                nrf_esb_start_rx();
+                                while (nrf_esb_start_rx() != NRF_SUCCESS) {};
                                 break; //exit while loop
                             }
                         } 

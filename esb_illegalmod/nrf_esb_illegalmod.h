@@ -93,7 +93,7 @@ extern "C" {
 #endif
 
 #define     NRF_ESB_TX_FIFO_SIZE                8                   //!< The size of the transmission first-in, first-out buffer.
-#define     NRF_ESB_RX_FIFO_SIZE                8                   //!< The size of the reception first-in, first-out buffer.
+#define     NRF_ESB_RX_FIFO_SIZE                16                   //!< The size of the reception first-in, first-out buffer.
 
 // 252 is the largest possible payload size according to the nRF5 architecture.
 STATIC_ASSERT(NRF_ESB_MAX_PAYLOAD_LENGTH <= 252);
@@ -171,7 +171,8 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .radio_irq_priority     = 1,                                \
                                 .event_irq_priority     = 2,                                \
                                 .payload_length         = 32,                               \
-                                .selective_auto_ack     = false                             \
+                                .selective_auto_ack     = false,                            \
+                                .disallow_auto_ack      = false                             \
 }
 
 /** @brief Default radio parameters. 
@@ -188,7 +189,8 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .radio_irq_priority     = 1,                                \
                                 .event_irq_priority     = 2,                                \
                                 .payload_length         = 60,                               \
-                                .selective_auto_ack     = true                             \
+                                .selective_auto_ack     = true,                             \
+                                .disallow_auto_ack     = true                             \
 }
 
 
@@ -205,7 +207,8 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .radio_irq_priority     = 1,                                \
                                 .event_irq_priority     = 2,                                \
                                 .payload_length         = 32,                               \
-                                .selective_auto_ack     = false                             \
+                                .selective_auto_ack     = false,                            \
+                                .disallow_auto_ack      = false                             \
 }
 
 
@@ -348,6 +351,7 @@ typedef struct
     uint8_t                 payload_length;         //!< Length of the payload (maximum length depends on the platforms that are used on each side).
 
     bool                    selective_auto_ack;     //!< Enable or disable selective auto acknowledgement. When this feature is disabled, all packets will be acknowledged ignoring the noack field.
+    bool                    disallow_auto_ack;      //!< If enabled nor ack is sent back in PRX mode, even if the noack field of received frame was not set.
 } nrf_esb_config_t;
 
 
