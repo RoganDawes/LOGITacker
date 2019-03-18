@@ -950,7 +950,10 @@ static void on_radio_disabled_rx(void)
         ack = true;
     }
 
-    if (m_config_local.disallow_auto_ack) ack = false; //override auto ack setting if  disallowed (stay pas)
+    if (m_config_local.disallow_auto_ack) {
+        ack = false; //override auto ack setting if  disallowed (stay pas)
+        NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_DISABLED_RXEN_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
+    } 
 
     if (ack)
     {
@@ -1025,7 +1028,11 @@ static void on_radio_disabled_rx(void)
     }
     else
     {
-        clear_events_restart_rx();
+        if (!m_config_local.disallow_auto_ack) {
+            clear_events_restart_rx();
+        } 
+
+        
     }
 
     if (send_rx_event)
