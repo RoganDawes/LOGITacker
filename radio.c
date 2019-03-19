@@ -5,11 +5,11 @@
 #include "crc16.h"
 #include "nrf_error.h"
 #include "nrf_esb_illegalmod.h"
-
+#include "unifying.h"
 
 #include "sdk_macros.h"
 
-#define LOGITECH_FILTER //validates promiscous mode packets based on common length of logitech RF frames, if defined (early out)
+#define LOGITECH_FILTER //validates promiscous mode packets based on common length of logitech RF frames and based on 8bit logitech payload checksum 
 
 #define BIT_MASK_UINT_8(x) (0xFF >> (8 - (x)))
 
@@ -118,6 +118,12 @@ uint32_t validate_esb_payload(nrf_esb_payload_t * p_payload) {
 
         //byte allign payload (throw away no_ack bit of PCF, keep the other 8 bits)
         array_shl(&tmpData[assumed_addrlen+1], esb_len, 1); //shift left all bytes behind the PCF field by one bit (we loose the lowest PCF bit, which is "no ack", and thus not of interest)
+
+#ifndef LOGITECH_FILTER    
+        // additional check of 8 bit unifying payload CRC (not CRC16 of ESB frame)
+        if (!unifying_validate_payload(&tmpData[assumed_addrlen+1], esb_len)) return NRF_ERROR_INVALID_DATA;
+#endif    
+
 
         /*
         //zero out rest of report

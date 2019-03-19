@@ -75,10 +75,14 @@
 #include "radio.h"
 
 
+#define CHANNEL_HOP_INTERVAL 20
+#define CHANNEL_HOP_RESTART_DELAY 1200
+
+
 // channel hop timer
 APP_TIMER_DEF(m_timer_channel_hop);
 static bool m_channel_hop_data_received = false;
-uint32_t m_channel_hop_delay_ms = 60;
+uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
 /**
  * @brief Enable USB power detection
  */
@@ -234,7 +238,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
 // handle event (press of physical dongle button)
 static void bsp_event_callback(bsp_event_t ev)
 {
-    uint32_t ret;
+    //uint32_t ret;
     switch ((unsigned int)ev)
     {
         case CONCAT_2(BSP_EVENT_KEY_, BTN_TRIGGER_ACTION):
@@ -245,14 +249,11 @@ static void bsp_event_callback(bsp_event_t ev)
         case CONCAT_2(BSP_USER_EVENT_RELEASE_, BTN_TRIGGER_ACTION):
             while (nrf_esb_stop_rx() != NRF_SUCCESS) {};
 
-            if (radioGetMode() == RADIO_MODE_PRX_PASSIVE) {
-ret = radioSetMode(RADIO_MODE_PROMISCOUS); //set back to promiscous
-            } else {
-                ret = radioSetMode(RADIO_MODE_PRX_PASSIVE); //set back to promiscous
-            }          
-            if (ret != NRF_SUCCESS) return; //abort without timer restart
+            radioSetMode(RADIO_MODE_PROMISCOUS); //set back to promiscous
 
+            m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL; // set timey delay to channel hop interval
             m_channel_hop_data_received = false;
+
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop); //restart channel hopping timer
             nrf_esb_start_rx();
 
@@ -435,12 +436,11 @@ void timer_channel_hop_event_handler(void* p_context)
     app_timer_id_t timer = (app_timer_id_t)p_context;
 
     if (!m_channel_hop_data_received) {
-        //If in promiscuous mode we flush RX to get rid of unprocessed data before channel ho
-        //nrf_esb_flush_rx();
 
+        /*
         uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(m_channel_hop_delay_ms), p_context); //restart timer
         APP_ERROR_CHECK(err_code);
-
+        */
 
         uint32_t currentChannel;
         radioGetRfChannel(&currentChannel);
@@ -450,16 +450,19 @@ void timer_channel_hop_event_handler(void* p_context)
             bsp_board_led_invert(BSP_BOARD_LED_3); // tOGGLE led 3 everytime we jumped through all channels
         }
         radioSetRfChannel(currentChannel);
-        
+        m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
     }   
-    //m_channel_hop_data_received = false;
+    m_channel_hop_data_received = false;
+    uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(m_channel_hop_delay_ms), p_context); //restart timer
+    APP_ERROR_CHECK(err_code);
+
 }
 
 
 int main(void)
 {
-    bool report_frames_without_crc_match = true;
-    bool switch_from_promiscous_to_sniff_on_discovered_address = true;
+    bool report_frames_without_crc_match = false; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
+    bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
 
     ret_code_t ret;
     static const app_usbd_config_t usbd_config = {
@@ -657,6 +660,10 @@ int main(void)
                 case RADIO_MODE_PRX_PASSIVE:
                     // pull RX payload from fifo, till no more left
                     while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
+                        if (rx_payload.length == 0) bsp_board_led_invert(BSP_BOARD_LED_0); //disable LED 0 again, to avoid fast on/off toggle for empty payloads (ack frames after tx frames)
+
+
+                        m_channel_hop_delay_ms = CHANNEL_HOP_RESTART_DELAY; // set restart timer interval (will start channel hopping, if no data received after this timeout)
                         m_channel_hop_data_received = true; //don't restart channel hop timer
 
                         // hid report:

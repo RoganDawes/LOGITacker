@@ -106,3 +106,33 @@ uint32_t updateDeviceWhitenedReportsOnFlash(uint16_t deviceRecordIndex, whitened
         return fds_record_write(&desc, &flash_record);
     }
 }
+
+uint8_t unifying_calculate_checksum(uint8_t * p_array, uint8_t paylen) {
+/*
+	chksum := byte(0xff)
+	for i := 0; i < len(payload)-1; i++ {
+		chksum = (chksum - payload[i]) & 0xff
+	}
+	chksum = (chksum + 1) & 0xff
+
+	payload[len(payload)-1] = chksum
+
+*/
+
+    uint8_t checksum = 0x00;
+    for (int i = 0; i < paylen; i++) {
+        checksum -= p_array[i];
+    }
+    //checksum++;
+
+    return checksum;
+}
+
+bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen) {
+    if (paylen < 1) return false;
+    uint8_t chksum = unifying_calculate_checksum(p_array, paylen);
+    p_array[0] = chksum;
+
+    return true;
+}
+
