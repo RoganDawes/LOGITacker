@@ -1,6 +1,8 @@
 #ifndef LED_RGB_H__
 #define LED_RGB_H__
 
+#include "bsp.h"
+
 #ifdef NRF52840_MDK_DONGLE
 //makerdiary nRF52840 MDK USB dongle
 #define LED_R       BSP_BOARD_LED_1

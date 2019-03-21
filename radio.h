@@ -50,7 +50,7 @@ uint32_t nrf_esb_reuse_pid(uint8_t pipe);
 
 
 
-uint32_t radioTransmit(uint8_t pipe, uint8_t payload_length, uint8_t *p_payload);
+bool radioTransmit(nrf_esb_payload_t *p_tx_payload);
 
 uint32_t validate_esb_payload(nrf_esb_payload_t * p_payload);
 

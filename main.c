@@ -139,7 +139,7 @@ struct
 
 static bool m_report_pending; //Mark ongoing USB transmission
 
-static uint8_t processing_rf_frame = 0;
+static uint8_t processing_rx_frame = 0;
 
 
 
@@ -335,12 +335,17 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
 
             //bsp_board_led_invert(LED_B); //Indicate received RF frame with LED 0 (could be garbage in promiscous mode)
             
-            if (processing_rf_frame != 0) {
+            CRITICAL_REGION_ENTER();
+            bool pendingRX = processing_rx_frame != 0;
+            CRITICAL_REGION_EXIT();
+            if (pendingRX) {
                 bsp_board_led_invert(LED_R); //indicate frame arrived, while previous frames are processed with LED 1 (overload)
-                break;
+                return;
             }
 
-            processing_rf_frame = 1;
+            CRITICAL_REGION_ENTER();
+            processing_rx_frame = 1;
+            CRITICAL_REGION_EXIT();
             break;
     }
 }
@@ -635,7 +640,10 @@ int main(void)
             processing_hid_out_report = false;
         }
 
-        if (processing_rf_frame != 0) {
+        CRITICAL_REGION_ENTER();
+        bool hasRX = processing_rx_frame != 0;
+        CRITICAL_REGION_EXIT();
+        if (hasRX) {
             // we check current channel here, which isn't reliable as the frame from fifo could have been received on a
             // different one, but who cares
             uint32_t ch = 0;
@@ -688,32 +696,19 @@ int main(void)
                         if (rx_payload.length == 0) bsp_board_led_invert(LED_G); // toggle green led to indicate non-empty frame sniffed
                         
                         if (test_replay_rx) {
-                            ret = nrf_esb_stop_rx();
-                            if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error STOP RX: %d", ret);
-                            ret = radioSetMode(RADIO_MODE_PTX);
-                            if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error set radio mode PTX: %d", ret);
                             static nrf_esb_payload_t tx_payload; // = NRF_ESB_CREATE_PAYLOAD(0, 0x01, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00);
                             memcpy(tx_payload.data, rx_payload.data, rx_payload.length);
-                            //tx_payload.data[2] = rx_payload.rssi;
-                            //tx_payload.length = 1;
-                            //tx_payload.length = rx_payload.length;
                             //unifying_payload_update_checksum(tx_payload.data, tx_payload.length);
                             
                             tx_payload.length = rx_payload.length;
                             tx_payload.pipe = rx_payload.pipe;
                             tx_payload.noack = false;
-                            
-                            nrf_delay_ms(2);
-                            ret = nrf_esb_write_payload(&tx_payload);
-                            if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error write payload: %d", ret);
-                            nrf_delay_ms(2);
 
-                            //ret = nrf_esb_start_tx();
-                            //if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error start tx: %d", ret);
-                            radioSetMode(RADIO_MODE_PRX_PASSIVE);
-                            
-                            nrf_esb_start_rx();
-
+                            if (radioTransmit(&tx_payload)) {
+                                NRF_LOG_INFO("TX success");
+                            } else {
+                                NRF_LOG_INFO("TX fail");
+                            }
                         }
                         
 
@@ -741,7 +736,9 @@ int main(void)
                     break;
             }
 
-            processing_rf_frame = 0; // free to receive more
+            CRITICAL_REGION_ENTER();
+            processing_rx_frame = 0; // free to receive more
+            CRITICAL_REGION_EXIT();
         }
 
         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());

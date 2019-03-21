@@ -8,6 +8,9 @@
 #include "unifying.h"
 
 #include "sdk_macros.h"
+#include "nrf_delay.h"
+#include "nrf_log.h"
+#include "led_rgb.h"
 
 #define LOGITECH_FILTER //validates promiscous mode packets based on common length of logitech RF frames and based on 8bit logitech payload checksum 
 
@@ -157,6 +160,66 @@ uint32_t restoreRfSettings() {
     return err_code;
 }
 
+static nrf_esb_evt_t *m_last_tx_event;
+void radio_esb_event_handler(nrf_esb_evt_t const * p_event)
+{
+    switch (p_event->evt_id)
+    {
+        case NRF_ESB_EVENT_TX_SUCCESS:
+        case NRF_ESB_EVENT_TX_FAILED:
+            CRITICAL_REGION_ENTER();
+            m_last_tx_event = (nrf_esb_evt_t*) p_event;
+            CRITICAL_REGION_EXIT();
+            break;
+        default:
+            break;
+    }
+    
+    if (m_local_config.event_handler != NULL) m_local_config.event_handler(p_event);
+}
+
+bool radioTransmit(nrf_esb_payload_t *p_tx_payload) {
+    uint32_t ret;
+
+    // if mode isn't PTX, switch over to ptx
+    radio_rf_mode_t oldMode = m_local_config.mode;
+    if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+        nrf_esb_stop_rx();
+    }
+
+    radioSetMode(RADIO_MODE_PTX);
+    ret = nrf_esb_write_payload(p_tx_payload);
+    if(ret != NRF_SUCCESS) {
+        NRF_LOG_WARNING("Error write payload: %d", ret);
+    }
+
+    bool tx_done = false;
+    bool tx_success = false;
+    while (!tx_done) {
+        CRITICAL_REGION_ENTER();
+        if (m_last_tx_event != NULL) {
+            tx_done = true;
+            if (m_last_tx_event->evt_id == NRF_ESB_EVENT_TX_SUCCESS) tx_success = true;
+        }
+        CRITICAL_REGION_EXIT();
+        __WFE();
+    }
+    CRITICAL_REGION_ENTER();
+    m_last_tx_event = NULL;
+    CRITICAL_REGION_EXIT();
+
+    nrf_delay_ms(2);
+
+    if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+        radioSetMode(oldMode);
+        nrf_esb_start_rx();
+    }
+
+    return tx_success;
+    
+}
+
+
 uint32_t radioInit(nrf_esb_event_handler_t event_handler) {
     //uint32_t err_code;
     m_local_config.event_handler            = event_handler;
@@ -194,7 +257,8 @@ uint32_t radioInitPromiscuousMode() {
     nrf_esb_config_t esb_config = NRF_ESB_ILLEGAL_CONFIG;
     esb_config.selective_auto_ack = true; //Don't send ack if received frame has 'no ack' set
     esb_config.disallow_auto_ack = true; //never send back acks
-    esb_config.event_handler    = m_local_config.event_handler;
+    //esb_config.event_handler    = m_local_config.event_handler;
+    esb_config.event_handler = radio_esb_event_handler;
 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
@@ -233,8 +297,8 @@ uint32_t radioInitPRXPassiveMode() {
     esb_config.mode = NRF_ESB_MODE_PRX;
     esb_config.selective_auto_ack = true; //Don't send ack if received frame has 'no ack' set
     esb_config.disallow_auto_ack = true; //never send back acks
-    esb_config.event_handler    = m_local_config.event_handler;
-    
+    //esb_config.event_handler    = m_local_config.event_handler;
+    esb_config.event_handler = radio_esb_event_handler;
 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
@@ -267,8 +331,9 @@ uint32_t radioInitPTXMode() {
     //esb_config.mode = NRF_ESB_MODE_PRX;
     //esb_config.selective_auto_ack = true; //Don't send ack if received frame has 'no ack' set
     //esb_config.disallow_auto_ack = true; //never send back acks
-    esb_config.event_handler    = m_local_config.event_handler;
-    esb_config.crc = NRF_ESB_CRC_16BIT;
+    
+    //esb_config.event_handler    = m_local_config.event_handler;
+    esb_config.event_handler = radio_esb_event_handler;    esb_config.crc = NRF_ESB_CRC_16BIT;
 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
