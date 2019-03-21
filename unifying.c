@@ -136,3 +136,11 @@ bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen) {
     return true;
 }
 
+bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen) {
+    if (paylen < 1) return false;
+    uint8_t chksum = unifying_calculate_checksum(p_array, paylen-1);
+    p_array[paylen-1] = chksum;
+
+    return true;
+}
+

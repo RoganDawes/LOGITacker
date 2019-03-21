@@ -730,10 +730,13 @@ static void start_tx_transaction()
             break;
 
         case NRF_ESB_PROTOCOL_ESB_DPL:
+        
             ack = !mp_current_payload->noack || !m_config_local.selective_auto_ack;
             m_tx_payload_buffer[0] = mp_current_payload->length;
             m_tx_payload_buffer[1] = mp_current_payload->pid << 1;
-            m_tx_payload_buffer[1] |= mp_current_payload->noack ? 0x00 : 0x01;
+            // note: noack shouldn't be negated
+            //m_tx_payload_buffer[1] |= mp_current_payload->noack ? 0x00 : 0x01;
+            m_tx_payload_buffer[1] |= mp_current_payload->noack ? 0x01 : 0x00;
             memcpy(&m_tx_payload_buffer[2], mp_current_payload->data, mp_current_payload->length);
 
             // Handling ack if noack is set to false or if selective auto ack is turned off
@@ -949,7 +952,6 @@ static void on_radio_disabled_rx(void)
 
     p_pipe_info->pid = m_rx_payload_buffer[1] >> 1;
     p_pipe_info->crc = NRF_RADIO->RXCRC;
-
     if ((m_config_local.selective_auto_ack == false) || ((m_rx_payload_buffer[1] & 0x01) == 1))
     {
         ack = true;

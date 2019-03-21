@@ -258,6 +258,40 @@ uint32_t radioInitPRXPassiveMode() {
     return NRF_SUCCESS;
 }
 
+uint32_t radioInitPTXMode() {
+    if (!m_local_config.initialized) return NRF_ERROR_INVALID_STATE;
+
+    uint32_t err_code;
+    
+    nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
+    //esb_config.mode = NRF_ESB_MODE_PRX;
+    //esb_config.selective_auto_ack = true; //Don't send ack if received frame has 'no ack' set
+    //esb_config.disallow_auto_ack = true; //never send back acks
+    esb_config.event_handler    = m_local_config.event_handler;
+    esb_config.crc = NRF_ESB_CRC_16BIT;
+
+    err_code = nrf_esb_init(&esb_config);
+    VERIFY_SUCCESS(err_code);
+
+    
+    //m_local_esb_config = esb_config;
+
+    while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+
+
+    err_code = restoreRfSettings();
+    VERIFY_SUCCESS(err_code);
+
+    err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
+    VERIFY_SUCCESS(err_code);
+
+    
+
+    //Note: start_rx here would hinder changing RF address after calling radioSetMode() unless stop_rx is called upfront
+
+    return NRF_SUCCESS;
+}
+
 radio_rf_mode_t radioGetMode() {
     return m_local_config.mode;
 }
@@ -273,6 +307,9 @@ uint32_t radioSetMode(radio_rf_mode_t mode) {
         case RADIO_MODE_DISABLED:
             break;
         case RADIO_MODE_PTX:
+            err_code = radioInitPTXMode();
+            VERIFY_SUCCESS(err_code);
+            m_local_config.mode = mode; //update current mode
             break;
         case RADIO_MODE_PRX_ACTIVE:
             break;

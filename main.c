@@ -75,7 +75,7 @@
 #include "radio.h"
 
 
-#define CHANNEL_HOP_INTERVAL 20
+#define CHANNEL_HOP_INTERVAL 50
 #define CHANNEL_HOP_RESTART_DELAY 1200
 
 
@@ -243,7 +243,7 @@ static void bsp_event_callback(bsp_event_t ev)
     {
         case CONCAT_2(BSP_EVENT_KEY_, BTN_TRIGGER_ACTION):
             //Toggle radio back to promiscous mode
-            bsp_board_led_on(3);
+            bsp_board_led_on(BSP_BOARD_LED_2);
             break;
 
         case CONCAT_2(BSP_USER_EVENT_RELEASE_, BTN_TRIGGER_ACTION):
@@ -257,7 +257,7 @@ static void bsp_event_callback(bsp_event_t ev)
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop); //restart channel hopping timer
             nrf_esb_start_rx();
 
-            bsp_board_led_off(3);
+            bsp_board_led_off(BSP_BOARD_LED_2);
             break;
 
         default:
@@ -319,10 +319,15 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
     switch (p_event->evt_id)
     {
         case NRF_ESB_EVENT_TX_SUCCESS:
-            NRF_LOG_DEBUG("TX SUCCESS EVENT");
+            NRF_LOG_INFO("TX SUCCESS EVENT");
+                bsp_board_led_invert(BSP_BOARD_LED_2);
             break;
         case NRF_ESB_EVENT_TX_FAILED:
-            NRF_LOG_DEBUG("TX FAILED EVENT");
+            NRF_LOG_INFO("TX FAILED EVENT");
+            (void) nrf_esb_flush_tx();
+            (void) nrf_esb_start_tx();
+
+            bsp_board_led_invert(BSP_BOARD_LED_1);
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
             NRF_LOG_DEBUG("RX RECEIVED EVENT");
@@ -447,7 +452,7 @@ void timer_channel_hop_event_handler(void* p_context)
         currentChannel += 3;
         if (currentChannel > 74) {
             currentChannel = 5;
-            bsp_board_led_invert(BSP_BOARD_LED_3); // tOGGLE led 3 everytime we jumped through all channels
+            //bsp_board_led_invert(BSP_BOARD_LED_3); // tOGGLE led 3 everytime we jumped through all channels
         }
         radioSetRfChannel(currentChannel);
         m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
@@ -463,6 +468,8 @@ int main(void)
 {
     bool report_frames_without_crc_match = false; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
     bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
+    bool test_replay_rx = true;
+    bool with_log = true;
 
     ret_code_t ret;
     static const app_usbd_config_t usbd_config = {
@@ -471,6 +478,11 @@ int main(void)
 
     ret = NRF_LOG_INIT(NULL);
     APP_ERROR_CHECK(ret);
+
+    if (with_log) {
+        NRF_LOG_DEFAULT_BACKENDS_INIT();
+        NRF_LOG_INFO("Boot...");
+    }
 
     ret = nrf_drv_clock_init();
     APP_ERROR_CHECK(ret);
@@ -639,6 +651,7 @@ int main(void)
                             memcpy(report, rx_payload.data, rx_payload.length);
                             app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
 
+
                             // assign discovered address to pipe 1 and switch over to passive sniffing (doesn't send ACK payloads)
                             if (switch_from_promiscous_to_sniff_on_discovered_address) {
                                 //m_channel_hop_data_received = true; //don't restart channel hop timer when called ...
@@ -658,10 +671,46 @@ int main(void)
                     }
                     break;
                 case RADIO_MODE_PRX_PASSIVE:
+
                     // pull RX payload from fifo, till no more left
                     while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
                         if (rx_payload.length == 0) bsp_board_led_invert(BSP_BOARD_LED_0); //disable LED 0 again, to avoid fast on/off toggle for empty payloads (ack frames after tx frames)
 
+
+                        //NRF_LOG_INFO("rx %d", rx_payload.length);
+                        
+                        if (test_replay_rx) {
+                            ret = nrf_esb_stop_rx();
+                            if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error STOP RX: %d", ret);
+                            ret = radioSetMode(RADIO_MODE_PTX);
+                            if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error set radio mode PTX: %d", ret);
+                            static nrf_esb_payload_t tx_payload; // = NRF_ESB_CREATE_PAYLOAD(0, 0x01, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00);
+                            memcpy(tx_payload.data, rx_payload.data, rx_payload.length);
+                            //tx_payload.data[2] = rx_payload.rssi;
+                            //tx_payload.length = 1;
+                            //tx_payload.length = rx_payload.length;
+                            //unifying_payload_update_checksum(tx_payload.data, tx_payload.length);
+                            
+                            tx_payload.length = rx_payload.length;
+                            tx_payload.pipe = rx_payload.pipe;
+                            tx_payload.noack = false;
+                            
+                            for (int i=0; i< 4; i++) {
+    nrf_delay_ms(8);
+                                ret = nrf_esb_write_payload(&tx_payload);
+                                if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error write payload: %d", ret);
+
+                            }
+    nrf_delay_ms(2);
+
+                            //ret = nrf_esb_start_tx();
+                            //if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error start tx: %d", ret);
+                            radioSetMode(RADIO_MODE_PRX_PASSIVE);
+                            
+                            nrf_esb_start_rx();
+
+                        }
+                        
 
                         m_channel_hop_delay_ms = CHANNEL_HOP_RESTART_DELAY; // set restart timer interval (will start channel hopping, if no data received after this timeout)
                         m_channel_hop_data_received = true; //don't restart channel hop timer
@@ -679,6 +728,7 @@ int main(void)
                         report[1] = rx_payload.length;
                         radioPipeNumToRFAddress(rx_payload.pipe, &report[2]);
                         memcpy(&report[8], rx_payload.data, rx_payload.length);
+                        
                         app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
                     }
                     break;
