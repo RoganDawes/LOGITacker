@@ -734,7 +734,7 @@ static void start_tx_transaction()
             ack = !mp_current_payload->noack || !m_config_local.selective_auto_ack;
             m_tx_payload_buffer[0] = mp_current_payload->length;
             m_tx_payload_buffer[1] = mp_current_payload->pid << 1;
-            // note: noack shouldn't be negated
+            // note: noack shouldn't be negated befor OR'ing onto S1 field
             //m_tx_payload_buffer[1] |= mp_current_payload->noack ? 0x00 : 0x01;
             m_tx_payload_buffer[1] |= mp_current_payload->noack ? 0x01 : 0x00;
             memcpy(&m_tx_payload_buffer[2], mp_current_payload->data, mp_current_payload->length);

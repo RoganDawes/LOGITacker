@@ -74,6 +74,8 @@
 #include "hid.h"
 #include "radio.h"
 
+#include "led_rgb.h"
+
 
 #define CHANNEL_HOP_INTERVAL 50
 #define CHANNEL_HOP_RESTART_DELAY 1200
@@ -201,19 +203,19 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
         case APP_USBD_EVT_DRV_SUSPEND:
             m_report_pending = false;
             app_usbd_suspend_req(); // Allow the library to put the peripheral into sleep mode
-            bsp_board_led_off(BSP_BOARD_LED_0);
+            bsp_board_led_off(LED_G);
             break;
         case APP_USBD_EVT_DRV_RESUME:
             m_report_pending = false;
-            bsp_board_led_on(BSP_BOARD_LED_0);
+            bsp_board_led_on(LED_G);
             break;
         case APP_USBD_EVT_STARTED:
             m_report_pending = false;
-            bsp_board_led_on(BSP_BOARD_LED_0);
+            bsp_board_led_on(LED_G);
             break;
         case APP_USBD_EVT_STOPPED:
             app_usbd_disable();
-            bsp_board_led_off(BSP_BOARD_LED_0);
+            bsp_board_led_off(LED_G);
             break;
         case APP_USBD_EVT_POWER_DETECTED:
             NRF_LOG_INFO("USB power detected");
@@ -243,7 +245,7 @@ static void bsp_event_callback(bsp_event_t ev)
     {
         case CONCAT_2(BSP_EVENT_KEY_, BTN_TRIGGER_ACTION):
             //Toggle radio back to promiscous mode
-            bsp_board_led_on(BSP_BOARD_LED_2);
+            bsp_board_led_on(LED_B);
             break;
 
         case CONCAT_2(BSP_USER_EVENT_RELEASE_, BTN_TRIGGER_ACTION):
@@ -257,7 +259,7 @@ static void bsp_event_callback(bsp_event_t ev)
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop); //restart channel hopping timer
             nrf_esb_start_rx();
 
-            bsp_board_led_off(BSP_BOARD_LED_2);
+            bsp_board_led_off(LED_B);
             break;
 
         default:
@@ -320,22 +322,21 @@ void nrf_esb_event_handler(nrf_esb_evt_t const * p_event)
     {
         case NRF_ESB_EVENT_TX_SUCCESS:
             NRF_LOG_INFO("TX SUCCESS EVENT");
-                bsp_board_led_invert(BSP_BOARD_LED_2);
             break;
         case NRF_ESB_EVENT_TX_FAILED:
             NRF_LOG_INFO("TX FAILED EVENT");
             (void) nrf_esb_flush_tx();
             (void) nrf_esb_start_tx();
 
-            bsp_board_led_invert(BSP_BOARD_LED_1);
+            
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
             NRF_LOG_DEBUG("RX RECEIVED EVENT");
 
-            bsp_board_led_invert(BSP_BOARD_LED_0); //Indicate received RF frame with LED 0 (could be garbage in promiscous mode)
+            //bsp_board_led_invert(LED_B); //Indicate received RF frame with LED 0 (could be garbage in promiscous mode)
             
             if (processing_rf_frame != 0) {
-                bsp_board_led_invert(BSP_BOARD_LED_1); //indicate frame arrived, while previous frames are processed with LED 1 (overload)
+                bsp_board_led_invert(LED_R); //indicate frame arrived, while previous frames are processed with LED 1 (overload)
                 break;
             }
 
@@ -452,7 +453,7 @@ void timer_channel_hop_event_handler(void* p_context)
         currentChannel += 3;
         if (currentChannel > 74) {
             currentChannel = 5;
-            //bsp_board_led_invert(BSP_BOARD_LED_3); // tOGGLE led 3 everytime we jumped through all channels
+            bsp_board_led_invert(LED_B); // toggle blue LED everytime we jumped through all channels (only noticable if no RX frames, as LED is toggled on received RF frame, too)
         }
         radioSetRfChannel(currentChannel);
         m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
@@ -466,10 +467,18 @@ void timer_channel_hop_event_handler(void* p_context)
 
 int main(void)
 {
+    // Note: For Makerdiary MDK dongle the button isn't working in event driven fashion (only BSP SIMPLE seems to be 
+    // supported). Thus this code won't support button interaction on MDK dongle.
+
     bool report_frames_without_crc_match = false; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
     bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
+#ifdef NRF52840_MDK
     bool test_replay_rx = true;
     bool with_log = true;
+#else
+    bool test_replay_rx = false;
+    bool with_log = false;
+#endif
 
     ret_code_t ret;
     static const app_usbd_config_t usbd_config = {
@@ -643,10 +652,11 @@ int main(void)
                             report[0] = rx_payload.pipe;
                             memcpy(&report[2], rx_payload.data, rx_payload.length);
                             app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-//                        } else if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
+                            bsp_board_led_invert(LED_G); // toggle green to indicate received RF data from promiscuous sniffing
                         }
+
                         if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
-                            //bsp_board_led_invert(BSP_BOARD_LED_2); // toggle led 2 to indicate valid ESB frame in promiscous mode
+                            bsp_board_led_invert(LED_G); // toggle green to indicate valid ESB frame in promiscous mode
                             memset(report,0,REPORT_IN_MAXSIZE);
                             memcpy(report, rx_payload.data, rx_payload.length);
                             app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
@@ -654,6 +664,7 @@ int main(void)
 
                             // assign discovered address to pipe 1 and switch over to passive sniffing (doesn't send ACK payloads)
                             if (switch_from_promiscous_to_sniff_on_discovered_address) {
+                                bsp_board_leds_off();
                                 //m_channel_hop_data_received = true; //don't restart channel hop timer when called ...
                                 app_timer_stop(m_timer_channel_hop); // stop channel hop timer
                                 app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(1000), m_timer_channel_hop); //... and restart in 1000ms if no further data received
@@ -674,10 +685,7 @@ int main(void)
 
                     // pull RX payload from fifo, till no more left
                     while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                        if (rx_payload.length == 0) bsp_board_led_invert(BSP_BOARD_LED_0); //disable LED 0 again, to avoid fast on/off toggle for empty payloads (ack frames after tx frames)
-
-
-                        //NRF_LOG_INFO("rx %d", rx_payload.length);
+                        if (rx_payload.length == 0) bsp_board_led_invert(LED_G); // toggle green led to indicate non-empty frame sniffed
                         
                         if (test_replay_rx) {
                             ret = nrf_esb_stop_rx();
@@ -695,13 +703,10 @@ int main(void)
                             tx_payload.pipe = rx_payload.pipe;
                             tx_payload.noack = false;
                             
-                            for (int i=0; i< 4; i++) {
-    nrf_delay_ms(8);
-                                ret = nrf_esb_write_payload(&tx_payload);
-                                if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error write payload: %d", ret);
-
-                            }
-    nrf_delay_ms(2);
+                            nrf_delay_ms(2);
+                            ret = nrf_esb_write_payload(&tx_payload);
+                            if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error write payload: %d", ret);
+                            nrf_delay_ms(2);
 
                             //ret = nrf_esb_start_tx();
                             //if (ret != NRF_SUCCESS) NRF_LOG_WARNING("Error start tx: %d", ret);
@@ -714,6 +719,7 @@ int main(void)
 
                         m_channel_hop_delay_ms = CHANNEL_HOP_RESTART_DELAY; // set restart timer interval (will start channel hopping, if no data received after this timeout)
                         m_channel_hop_data_received = true; //don't restart channel hop timer
+                        bsp_board_led_off(LED_B); //assure LED indicating channel hops is disabled
 
                         // hid report:
                         // byte 0:    rx pipe
@@ -722,7 +728,6 @@ int main(void)
                         // byte 7:    reserved, would be part of PCF in promiscuous mode (set to 0x00 here)
                         // byte 8..:  ESB payload
 
-                        //bsp_board_led_invert(BSP_BOARD_LED_3); // toggle led 3 to indicate non promiscous frames
                         memset(report,0,REPORT_IN_MAXSIZE);
                         report[0] = rx_payload.pipe;
                         report[1] = rx_payload.length;
