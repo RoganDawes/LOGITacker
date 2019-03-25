@@ -2,6 +2,20 @@
 #define UNIFYING_H__
 
 #include <stdint.h>
+#include "nrf_esb_illegalmod.h"
+
+#define UNIFYING_RF_REPORT_TYPE_MSK             0x1f
+
+#define UNIFYING_RF_REPORT_PLAIN_KEYBOARD       0x01
+#define UNIFYING_RF_REPORT_PLAIN_MOUSE          0x02
+#define UNIFYING_RF_REPORT_PLAIN_MULTIMEDIA     0x03
+#define UNIFYING_RF_REPORT_PLAIN_SYSTEM_CTL     0x04
+#define UNIFYING_RF_REPORT_LED                  0x0e
+#define UNIFYING_RF_REPORT_SET_KEEP_ALIVE       0x0f
+#define UNIFYING_RF_REPORT_HIDPP                0x11
+#define UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD   0x13
+#define UNIFYING_RF_REPORT_PAIRING              0x1f
+
 
 typedef struct
 {
@@ -38,5 +52,6 @@ uint32_t updateDeviceInfoOnFlash(uint16_t deviceRecordIndex, device_info_t *devi
 uint32_t updateDeviceWhitenedReportsOnFlash(uint16_t deviceRecordIndex, whitened_replay_frames_t *reports);
 bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen);
 bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen);
+void unifying_frame_classify(nrf_esb_payload_t frame);
 
 #endif

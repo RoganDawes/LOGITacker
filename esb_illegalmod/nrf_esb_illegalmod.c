@@ -928,7 +928,8 @@ static void on_radio_disabled_rx(void)
     bool            send_rx_event      = true;
     pipe_info_t *   p_pipe_info;
 
-    if (NRF_RADIO->CRCSTATUS == 0 && !m_config_local.disallow_auto_ack)
+    //if (NRF_RADIO->CRCSTATUS == 0 && !m_config_local.disallow_auto_ack) //consume frames with invalid CRC
+    if (NRF_RADIO->CRCSTATUS == 0)
     {
         clear_events_restart_rx();
         return;

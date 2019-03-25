@@ -3,6 +3,9 @@
 #include "flash_device_info.h"
 #include "fds.h"
 #include "unifying.h"
+#include "nrf_esb_illegalmod.h"
+#include "nrf_log.h"
+
 
 uint32_t restoreDeviceInfoFromFlash(uint16_t deviceRecordIndex, device_info_t *deviceInfo) {
     ret_code_t ret;
@@ -143,4 +146,81 @@ bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen) {
 
     return true;
 }
+
+typedef struct {
+    uint8_t reportType;
+    uint8_t length;
+    uint8_t data[32];
+} unifying_rf_record_t;
+
+#define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 22
+static unifying_rf_record_t pipe_record_buf[NRF_ESB_PIPE_COUNT][UNIFYING_MAX_STORED_REPORTS_PER_PIPE];
+static uint8_t pipe_record_buf_pos[NRF_ESB_PIPE_COUNT];
+
+void addRecord(nrf_esb_payload_t frame) {
+    if (frame.length < 5) return; //ToDo: with error
+    
+    uint8_t pos = pipe_record_buf_pos[frame.pipe];
+    unifying_rf_record_t* p_record = &pipe_record_buf[frame.pipe][pos];
+    
+    p_record->length = frame.length;
+    p_record->reportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
+    memcpy(p_record->data, frame.data, frame.length);
+
+    pos++;
+    pos %= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+    pipe_record_buf_pos[frame.pipe] = pos;
+}
+
+void unifying_frame_classify(nrf_esb_payload_t frame) { 
+    bool logKeepAliveEmpty = false;
+
+    //filter out frames < 5 byte length (likely ACKs)
+    if (frame.length < 5) return;
+
+    uint8_t reportType = frame.data[1]; // byte 1 is rf report type, byte 0 is device prefix
+    bool keepAliveSet = (reportType & 0x40) != 0;
+    reportType &= UNIFYING_RF_REPORT_TYPE_MSK; //mask report type
+    uint32_t counter;
+
+    //filter out Unifying keep alive
+    switch (reportType) {
+        case UNIFYING_RF_REPORT_PLAIN_KEYBOARD:
+            NRF_LOG_INFO("Unencrypted keyboard");
+            return;
+        case UNIFYING_RF_REPORT_PLAIN_MOUSE:
+            NRF_LOG_INFO("Unencrypted mouse");
+            return;
+        case UNIFYING_RF_REPORT_PLAIN_MULTIMEDIA:
+            NRF_LOG_INFO("Unencrypted multimedia key");
+            return;
+        case UNIFYING_RF_REPORT_PLAIN_SYSTEM_CTL:
+            NRF_LOG_INFO("Unencrypted system control key");
+            return;
+        case UNIFYING_RF_REPORT_LED:
+            NRF_LOG_INFO("LED (outbound)");
+            return;
+        case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
+            NRF_LOG_INFO("Set keep-alive");
+            return;
+        case UNIFYING_RF_REPORT_HIDPP:
+            NRF_LOG_INFO("HID++");
+            return;
+        case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
+            counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
+
+            NRF_LOG_INFO("Encrypted keyboard, counter %08x", counter);
+            return;
+        case UNIFYING_RF_REPORT_PAIRING:
+            NRF_LOG_INFO("Pairing");
+            return;
+        case 0x00:
+            if (keepAliveSet && logKeepAliveEmpty) NRF_LOG_INFO("Empty keep alive");
+            return;
+        default:
+            NRF_LOG_INFO("Unknown frame type %02x, keep alive %s", frame.data[1], keepAliveSet ? "set" : "not set");
+            return;
+    }
+}
+
 

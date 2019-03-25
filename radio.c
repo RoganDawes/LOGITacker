@@ -102,7 +102,7 @@ uint32_t validate_esb_payload(nrf_esb_payload_t * p_payload) {
     // The validate_esb_frame function has an early out, if determined ESB frame length
     // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
     crcmatch = false;
-    for (uint8_t shift=0; shift<32; shift++) {
+    for (uint8_t shift=0; shift<40; shift++) {
         if (validate_esb_frame(tmpData, assumed_addrlen)) {
             crcmatch = true;
             break;
