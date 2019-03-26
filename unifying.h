@@ -63,7 +63,7 @@ typedef struct {
     uint8_t data[32];
 } unifying_rf_record_t;
 
-#define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 32
+#define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 26
 
 
 #endif

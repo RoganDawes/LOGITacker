@@ -929,7 +929,7 @@ static void on_radio_disabled_rx(void)
     pipe_info_t *   p_pipe_info;
 
     //if (NRF_RADIO->CRCSTATUS == 0 && !m_config_local.disallow_auto_ack) //consume frames with invalid CRC
-    if (NRF_RADIO->CRCSTATUS == 0)
+    if (NRF_RADIO->CRCSTATUS == 0 && m_config_local.protocol != NRF_ESB_PROTOCOL_ESB_ILLEGAL)
     {
         clear_events_restart_rx();
         return;

@@ -80,13 +80,13 @@
 
 #include "timestamp.h"
 
-#define CHANNEL_HOP_INTERVAL 60
+#define CHANNEL_HOP_INTERVAL 30
 #define CHANNEL_HOP_RESTART_DELAY 1200
 
 // Scheduler settings
-#define SCHED_MAX_EVENT_DATA_SIZE   MAX(sizeof(nrf_esb_evt_t), APP_TIMER_SCHED_EVENT_DATA_SIZE)
+#define SCHED_MAX_EVENT_DATA_SIZE   MAX(MAX(sizeof(nrf_esb_evt_t), APP_TIMER_SCHED_EVENT_DATA_SIZE), sizeof(nrf_esb_payload_t))
 //#define SCHED_MAX_EVENT_DATA_SIZE   APP_TIMER_SCHED_EVENT_DATA_SIZE
-#define SCHED_QUEUE_SIZE            10
+#define SCHED_QUEUE_SIZE            32
 
 // channel hop timer
 APP_TIMER_DEF(m_timer_channel_hop);
@@ -412,7 +412,7 @@ void nrf_esb_process_rx() {
                     tx_payload.pipe = rx_payload.pipe;
                     tx_payload.noack = false;
 
-                    if (radioTransmit(&tx_payload)) {
+                    if (radioTransmit(&tx_payload, true)) {
                         //NRF_LOG_INFO("TX success");
                     } else {
                         // NRF_LOG_INFO("TX fail");
@@ -453,8 +453,10 @@ void nrf_esb_event_handler(nrf_esb_evt_t *p_event)
     switch (p_event->evt_id)
     {
         case NRF_ESB_EVENT_TX_SUCCESS:
+            NRF_LOG_INFO("nrf_esb_event_handler TX_SUCCESS");
             break;
         case NRF_ESB_EVENT_TX_FAILED:
+            NRF_LOG_INFO("nrf_esb_event_handler TX_FAILED");
             //(void) nrf_esb_flush_tx();
             //(void) nrf_esb_start_tx();            
             break;

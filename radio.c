@@ -11,6 +11,11 @@
 #include "nrf_delay.h"
 #include "nrf_log.h"
 #include "led_rgb.h"
+#include "app_timer.h"
+#include "app_scheduler.h"
+
+APP_TIMER_DEF(m_timer_delayed_tx_frame);
+
 
 #define LOGITECH_FILTER //validates promiscous mode packets based on common length of logitech RF frames and based on 8bit logitech payload checksum 
 
@@ -178,12 +183,13 @@ void radio_esb_event_handler(nrf_esb_evt_t const * p_event)
     if (m_local_config.event_handler != NULL) m_local_config.event_handler(p_event);
 }
 
-bool radioTransmit(nrf_esb_payload_t *p_tx_payload) {
+bool radioTransmit(nrf_esb_payload_t *p_tx_payload, bool blockTillResult) {
     uint32_t ret;
 
     // if mode isn't PTX, switch over to ptx
     radio_rf_mode_t oldMode = m_local_config.mode;
     if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+        NRF_LOG_INFO("Want to TX but mode is PRX_PASSIVE, stop RX ...")
         nrf_esb_stop_rx();
     }
 
@@ -191,6 +197,14 @@ bool radioTransmit(nrf_esb_payload_t *p_tx_payload) {
     ret = nrf_esb_write_payload(p_tx_payload);
     if(ret != NRF_SUCCESS) {
         NRF_LOG_WARNING("Error write payload: %d", ret);
+    }
+    if (!blockTillResult) {
+        if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+            NRF_LOG_INFO("switching back to passive PRX after TX...")
+            radioSetMode(oldMode);
+            nrf_esb_start_rx();
+        }
+        return true;
     }
 
     bool tx_done = false;
@@ -202,15 +216,14 @@ bool radioTransmit(nrf_esb_payload_t *p_tx_payload) {
             if (m_last_tx_event->evt_id == NRF_ESB_EVENT_TX_SUCCESS) tx_success = true;
         }
         CRITICAL_REGION_EXIT();
-        __WFE();
+        __WFI();
     }
     CRITICAL_REGION_ENTER();
     m_last_tx_event = NULL;
     CRITICAL_REGION_EXIT();
 
-    nrf_delay_ms(2);
-
     if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+        NRF_LOG_INFO("switching back to passive PRX after TX...")
         radioSetMode(oldMode);
         nrf_esb_start_rx();
     }
@@ -220,7 +233,27 @@ bool radioTransmit(nrf_esb_payload_t *p_tx_payload) {
 }
 
 
+void timer_tx_frame_from_scheduler(void *p_event_data, uint16_t event_size) {
+    // process scheduled event for this handler in main loop during scheduler processing
+    nrf_esb_payload_t *p_tx_payload = (nrf_esb_payload_t *) p_event_data;
+    radioTransmit(p_tx_payload, true);
+}
+
+void timer_tx_frame_to_scheduler(void* p_context) {
+    // schedule as event to main  (not isr) instead of executing directly
+    app_sched_event_put(p_context, sizeof(app_timer_id_t), timer_tx_frame_from_scheduler);
+}
+
+void radioTransmitDelayed(nrf_esb_payload_t *p_tx_payload, uint32_t delay_ms) {
+    // starts the single shot timer, which calls back to timer_tx_frame_to_scheduler
+    app_timer_start(m_timer_delayed_tx_frame, APP_TIMER_TICKS(delay_ms), p_tx_payload);
+}
+
 uint32_t radioInit(nrf_esb_event_handler_t event_handler) {
+    app_timer_create(&m_timer_delayed_tx_frame, APP_TIMER_MODE_SINGLE_SHOT, timer_tx_frame_to_scheduler);
+    
+
+
     //uint32_t err_code;
     m_local_config.event_handler            = event_handler;
     //err_code = nrf_esb_init(&m_local_esb_config);
