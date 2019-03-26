@@ -12,7 +12,8 @@
 #define UNIFYING_RF_REPORT_PLAIN_SYSTEM_CTL     0x04
 #define UNIFYING_RF_REPORT_LED                  0x0e
 #define UNIFYING_RF_REPORT_SET_KEEP_ALIVE       0x0f
-#define UNIFYING_RF_REPORT_HIDPP                0x11
+#define UNIFYING_RF_REPORT_HIDPP_SHORT          0x10
+#define UNIFYING_RF_REPORT_HIDPP_LONG           0x11
 #define UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD   0x13
 #define UNIFYING_RF_REPORT_PAIRING              0x1f
 
@@ -53,5 +54,16 @@ uint32_t updateDeviceWhitenedReportsOnFlash(uint16_t deviceRecordIndex, whitened
 bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen);
 bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen);
 void unifying_frame_classify(nrf_esb_payload_t frame);
+void unifying_replay_records(uint8_t pipe_num);
+
+typedef struct {
+    uint32_t pre_delay_ms; //delay in millisecond to sleep before TX of this frame during replay
+    uint8_t reportType;
+    uint8_t length;
+    uint8_t data[32];
+} unifying_rf_record_t;
+
+#define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 32
+
 
 #endif

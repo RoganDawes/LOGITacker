@@ -78,6 +78,7 @@
 
 #include "led_rgb.h"
 
+#include "timestamp.h"
 
 #define CHANNEL_HOP_INTERVAL 60
 #define CHANNEL_HOP_RESTART_DELAY 1200
@@ -91,6 +92,8 @@
 APP_TIMER_DEF(m_timer_channel_hop);
 static bool m_channel_hop_data_received = false;
 uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
+
+
 /**
  * @brief Enable USB power detection
  */
@@ -102,7 +105,7 @@ uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
 #define BTN_TRIGGER_ACTION   0
 
     bool report_frames_without_crc_match = false; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
-    bool switch_from_promiscous_to_sniff_on_discovered_address = false; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
+    bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
 #ifdef NRF52840_MDK
     bool test_replay_rx = false;
     bool with_log = true;
@@ -136,7 +139,7 @@ static const app_usbd_hid_subclass_desc_t * reps[] = {&raw_desc};
 // setup generic HID interface 
 APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_generic,
                                 HID_GENERIC_INTERFACE,
-                                hid_user_ev_handler,
+                                usbd_hid_event_handler,
                                 ENDPOINT_LIST(),
                                 reps,
                                 REPORT_IN_QUEUE_SIZE,
@@ -155,8 +158,6 @@ struct
 
 static bool m_report_pending; //Mark ongoing USB transmission
 
-static uint8_t processing_rx_frame = 0;
-
 
 void logPriority(char* source) {
     if (current_int_priority_get() == APP_IRQ_PRIORITY_THREAD) {
@@ -174,10 +175,10 @@ static bool processing_hid_out_report = false;
  * @param p_inst    Class instance.
  * @param event     Class specific event.
  * */
-static void hid_user_ev_handler(app_usbd_class_inst_t const * p_inst,
+static void usbd_hid_event_handler(app_usbd_class_inst_t const * p_inst,
                                 app_usbd_hid_user_event_t event)
 {
-    logPriority("hid_user_ev_handler");
+    //logPriority("usbd_hid_event_handler");
     switch (event)
     {
         case APP_USBD_HID_USER_EVT_OUT_REPORT_READY:
@@ -459,24 +460,7 @@ void nrf_esb_event_handler(nrf_esb_evt_t *p_event)
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
             NRF_LOG_DEBUG("RX RECEIVED EVENT");
-
-           /*
-            //bsp_board_led_invert(LED_B); //Indicate received RF frame with LED 0 (could be garbage in promiscous mode)
-            
-            CRITICAL_REGION_ENTER();
-            bool pendingRX = processing_rx_frame != 0;
-            CRITICAL_REGION_EXIT();
-            if (pendingRX) {
-                
-                return;
-            }
-
-            CRITICAL_REGION_ENTER();
-            processing_rx_frame = 1;
-            CRITICAL_REGION_EXIT();
-            break;
-            */
-           nrf_esb_process_rx();
+            nrf_esb_process_rx();
     }
 }
 
@@ -491,10 +475,11 @@ void nrf_esb_event_handler_to_scheduler(nrf_esb_evt_t const *p_event) {
     CRITICAL_REGION_EXIT();
 
     if (queue_space <= 1) {
-        NRF_LOG_INFO("event scheduler nearly queue full, dropping rx frame");
-        bsp_board_led_invert(LED_R); //indicate frame arrived, while scheduler is full with red LED (overload)
+        NRF_LOG_INFO("only one event schedule slot left, dropping rx frame");
+        bsp_board_led_on(LED_R); //indicate frame arrived, while scheduler is full with red LED (overload)
         return; //drop frame, don't schedule event
     }
+    bsp_board_led_off(LED_R);
 
     //NRF_LOG_INFO("Sched queue space %d", queue_space);
     app_sched_event_put(p_event, sizeof(*p_event), nrf_esb_event_handler_from_scheduler);
@@ -600,7 +585,7 @@ void timer_channel_hop_event_handler(void* p_context)
 {
     //runs in interrupt mode
     //logPriority("timer_channel_hop_event_handler");
-    app_timer_id_t timer = (app_timer_id_t)p_context;
+//    app_timer_id_t timer = (app_timer_id_t)p_context;
 
     if (!m_channel_hop_data_received) {
 
@@ -620,10 +605,23 @@ void timer_channel_hop_event_handler(void* p_context)
         m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
     }   
     m_channel_hop_data_received = false;
-    uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(m_channel_hop_delay_ms), p_context); //restart timer
+    //uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(m_channel_hop_delay_ms), p_context); //restart timer
+    uint32_t err_code = app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), NULL); //restart timer
     APP_ERROR_CHECK(err_code);
-
 }
+
+//Note: app_timer isn't configured to use scheduler, as we have timers which should run in interrupt mode,
+// For channel hop, we manually make the timer use the scheduler, to avoid channel hopping during ESB frame processing.
+// This works, as ESB frame processing is handled by the scheduler, too.
+void timer_channel_hop_event_handler_from_scheduler(void *p_event_data, uint16_t event_size) {
+    timer_channel_hop_event_handler((void*) p_event_data);
+}
+
+void timer_channel_hop_event_handler_to_scheduler(void* p_context) {
+    app_sched_event_put(p_context, sizeof(app_timer_id_t), timer_channel_hop_event_handler_from_scheduler);
+}
+
+
 
 
 
@@ -724,8 +722,11 @@ int main(void)
         updateDeviceInfoOnFlash(0, &m_current_device_info); //ignore errors
     } 
 
-    app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler);
+    //app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler);
+    app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler_to_scheduler);
     app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
+
+    timestamp_init();
 
     while (true)
     {
@@ -776,111 +777,6 @@ int main(void)
                     
             }
             processing_hid_out_report = false;
-        }
-
-        CRITICAL_REGION_ENTER();
-        bool hasRX = processing_rx_frame != 0;
-        CRITICAL_REGION_EXIT();
-        if (hasRX) {
-/*
-            // we check current channel here, which isn't reliable as the frame from fifo could have been received on a
-            // different one, but who cares
-            uint32_t ch = 0;
-            nrf_esb_get_rf_channel(&ch);
-
-            static uint8_t report[REPORT_IN_MAXSIZE];
-            switch (radioGetMode()) {
-                case RADIO_MODE_PROMISCOUS:
-                    // pull RX payload from fifo, till no more left
-                    while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                        
-                        if (report_frames_without_crc_match) {
-                            memset(report,0,REPORT_IN_MAXSIZE);
-                            report[0] = rx_payload.pipe;
-                            memcpy(&report[2], rx_payload.data, rx_payload.length);
-                            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-                            bsp_board_led_invert(LED_G); // toggle green to indicate received RF data from promiscuous sniffing
-                        }
-
-                        if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
-                            bsp_board_led_invert(LED_G); // toggle green to indicate valid ESB frame in promiscous mode
-                            memset(report,0,REPORT_IN_MAXSIZE);
-                            memcpy(report, rx_payload.data, rx_payload.length);
-                            app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-
-
-                            // assign discovered address to pipe 1 and switch over to passive sniffing (doesn't send ACK payloads)
-                            if (switch_from_promiscous_to_sniff_on_discovered_address) {
-                                uint8_t RfAddress1[4] = {rx_payload.data[5], rx_payload.data[4], rx_payload.data[3], rx_payload.data[2]}; //prefix, addr3, addr2, addr1, addr0
-                                NRF_LOG_INFO("Received valid frame from %02x:%02x:%02x:%02x:%02x, sniffing this address", RfAddress1[3], RfAddress1[2], RfAddress1[1], RfAddress1[0], rx_payload.data[6])
-
-                                bsp_board_leds_off();
-                                //m_channel_hop_data_received = true; //don't restart channel hop timer when called ...
-                                app_timer_stop(m_timer_channel_hop); // stop channel hop timer
-                                app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(1000), m_timer_channel_hop); //... and restart in 1000ms if no further data received
-
-                                nrf_esb_stop_rx();
-                                
-                                radioSetMode(RADIO_MODE_PRX_PASSIVE);
-                                radioSetBaseAddress1(RfAddress1);
-                                radioUpdatePrefix(1, rx_payload.data[6]);   
-                                //radioUpdatePrefix(1, 0x4c);   
-                                while (nrf_esb_start_rx() != NRF_SUCCESS) {};
-                                break; //exit while loop
-                            }
-                        } 
-                    }
-                    break;
-                case RADIO_MODE_PRX_PASSIVE:
-
-                    // pull RX payload from fifo, till no more left
-                    while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                        if (rx_payload.length == 0) bsp_board_led_invert(LED_G); // toggle green led to indicate non-empty frame sniffed
-                        else if (test_replay_rx) {
-                            static nrf_esb_payload_t tx_payload; // = NRF_ESB_CREATE_PAYLOAD(0, 0x01, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00);
-                            memcpy(tx_payload.data, rx_payload.data, rx_payload.length);
-                            //unifying_payload_update_checksum(tx_payload.data, tx_payload.length);
-                            
-                            tx_payload.length = rx_payload.length;
-                            tx_payload.pipe = rx_payload.pipe;
-                            tx_payload.noack = false;
-
-                            if (radioTransmit(&tx_payload)) {
-                                //NRF_LOG_INFO("TX success");
-                            } else {
-                               // NRF_LOG_INFO("TX fail");
-                            }
-                        }
-                        
-                        unifying_frame_classify(rx_payload);
-
-                        m_channel_hop_delay_ms = CHANNEL_HOP_RESTART_DELAY; // set restart timer interval (will start channel hopping, if no data received after this timeout)
-                        m_channel_hop_data_received = true; //don't restart channel hop timer
-                        bsp_board_led_off(LED_B); //assure LED indicating channel hops is disabled
-
-                        // hid report:
-                        // byte 0:    rx pipe
-                        // byte 1:    ESB payload length
-                        // byte 2..6: RF address on pipe (account for addr_len when copying over)
-                        // byte 7:    reserved, would be part of PCF in promiscuous mode (set to 0x00 here)
-                        // byte 8..:  ESB payload
-
-                        memset(report,0,REPORT_IN_MAXSIZE);
-                        report[0] = rx_payload.pipe;
-                        report[1] = rx_payload.length;
-                        radioPipeNumToRFAddress(rx_payload.pipe, &report[2]);
-                        memcpy(&report[8], rx_payload.data, rx_payload.length);
-                        
-                        app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-                    }
-                    break;
-                default:
-                    break;
-            }
-*/
-            CRITICAL_REGION_ENTER();
-            processing_rx_frame = 0; // free to receive more
-            CRITICAL_REGION_EXIT();
         }
 
         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
