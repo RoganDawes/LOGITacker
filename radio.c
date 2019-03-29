@@ -189,7 +189,7 @@ bool radioTransmit(nrf_esb_payload_t *p_tx_payload, bool blockTillResult) {
     // if mode isn't PTX, switch over to ptx
     radio_rf_mode_t oldMode = m_local_config.mode;
     if (oldMode == RADIO_MODE_PRX_PASSIVE) {
-        NRF_LOG_INFO("Want to TX but mode is PRX_PASSIVE, stop RX ...")
+        NRF_LOG_DEBUG("Want to TX but mode is PRX_PASSIVE, stop RX ...")
         nrf_esb_stop_rx();
     }
 
@@ -200,7 +200,7 @@ bool radioTransmit(nrf_esb_payload_t *p_tx_payload, bool blockTillResult) {
     }
     if (!blockTillResult) {
         if (oldMode == RADIO_MODE_PRX_PASSIVE) {
-            NRF_LOG_INFO("switching back to passive PRX after TX...")
+            NRF_LOG_DEBUG("switching back to passive PRX after TX...")
             radioSetMode(oldMode);
             nrf_esb_start_rx();
         }
@@ -223,7 +223,7 @@ bool radioTransmit(nrf_esb_payload_t *p_tx_payload, bool blockTillResult) {
     CRITICAL_REGION_EXIT();
 
     if (oldMode == RADIO_MODE_PRX_PASSIVE) {
-        NRF_LOG_INFO("switching back to passive PRX after TX...")
+        NRF_LOG_DEBUG("switching back to passive PRX after TX...")
         radioSetMode(oldMode);
         nrf_esb_start_rx();
     }
@@ -367,6 +367,8 @@ uint32_t radioInitPTXMode() {
     
     //esb_config.event_handler    = m_local_config.event_handler;
     esb_config.event_handler = radio_esb_event_handler;    esb_config.crc = NRF_ESB_CRC_16BIT;
+    esb_config.retransmit_count = 15;
+    esb_config.retransmit_delay = 1000;
 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);

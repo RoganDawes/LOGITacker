@@ -11,6 +11,11 @@
 #include "timestamp.h"
 #include "app_scheduler.h"
 
+
+APP_TIMER_DEF(m_timer_tx_record);
+static unifying_rf_record_set_t m_record_sets[NRF_ESB_PIPE_COUNT];
+static unifying_rf_record_t m_records_from_sets[NRF_ESB_PIPE_COUNT][UNIFYING_MAX_STORED_REPORTS_PER_PIPE];
+
 uint32_t restoreDeviceInfoFromFlash(uint16_t deviceRecordIndex, device_info_t *deviceInfo) {
     ret_code_t ret;
     uint16_t recordIdx = FLASH_RECORD_PREFIX_DEVICES_DEVICE_INFO | deviceRecordIndex;
@@ -151,20 +156,31 @@ bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen) {
     return true;
 }
 
+uint32_t unifyingExtractCounterFromEncKbdFrame(nrf_esb_payload_t frame, uint32_t *p_counter) {
+    // assure frame is encrypted keyboard
+    if (frame.length != 22) return NRF_ERROR_INVALID_LENGTH;
+    if ((frame.data[1] & 0x1f) != UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) return NRF_ERROR_INVALID_DATA;
+    *p_counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
+    return NRF_SUCCESS;
+}
 
 uint32_t timestamp_last = 0;
 uint32_t timestamp = 0;
 uint32_t timestamp_delta = 0;
-static unifying_rf_record_t pipe_record_buf[NRF_ESB_PIPE_COUNT][UNIFYING_MAX_STORED_REPORTS_PER_PIPE];
-static uint8_t pipe_record_buf_pos[NRF_ESB_PIPE_COUNT];
-
-bool addRecord(nrf_esb_payload_t frame) {
+// ToDo: fix .. timestamp_delta doesn't account for changing pipes between successive method calls
+bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
     NRF_LOG_INFO("addRecord");
     bool result = false;
     if (frame.length < 5) return false; //ToDo: with error
     
-    uint8_t pos = pipe_record_buf_pos[frame.pipe];
-    unifying_rf_record_t* p_record = &pipe_record_buf[frame.pipe][pos];
+    unifying_rf_record_set_t *p_rs = &m_record_sets[frame.pipe];
+
+    if (p_rs->disallowWrite) {
+        return false;
+    }
+
+    uint8_t pos = p_rs->write_pos;
+    unifying_rf_record_t* p_record = &p_rs->records[pos];
     
     p_record->length = frame.length;
     p_record->reportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
@@ -184,26 +200,45 @@ NRF_LOG_INFO("Report stored at timer count %d, last %d, diff %d", timestamp, tim
     if (pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) {
         result = true;
         pos = 0;
+        // ToDo: change start and end to real window used for replay
+        p_rs->first_pos = 0;
+        p_rs->last_pos = UNIFYING_MAX_STORED_REPORTS_PER_PIPE - 1;
+        p_rs->read_pos = p_rs->first_pos;
     }
-    pipe_record_buf_pos[frame.pipe] = pos;
+    p_rs->write_pos = pos;
 
     return result;
 }
 
-void unifying_replay_records_scheduler_handler(void *p_event_data, uint16_t event_size) {
-    unifying_replay_records(*((uint8_t*) p_event_data));
+void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType, bool *p_outHasKeepAliveSet) { 
+    //filter out frames < 5 byte length (likely ACKs)
+    if (frame.length < 5) {
+        p_outRFReportType = UNIFYING_RF_REPORT_INVALID;
+        p_outHasKeepAliveSet = false;
+        return;
+    }
+
+    *p_outRFReportType = frame.data[1]; // byte 1 is rf report type, byte 0 is device prefix
+    *p_outHasKeepAliveSet = (frame.data[1] & 0x40) != 0;
+    *p_outRFReportType &= UNIFYING_RF_REPORT_TYPE_MSK; //mask report type
+    return;
 }
 
-void unifying_frame_classify(nrf_esb_payload_t frame) { 
+void unifying_frame_classify_log(nrf_esb_payload_t frame) {     
     bool logKeepAliveEmpty = false;
 
     //filter out frames < 5 byte length (likely ACKs)
-    if (frame.length < 5) return;
+    if (frame.length < 5) {
+        NRF_LOG_DEBUG("Invalid Unifying RF frame (wrong length or empty ack)");
+        return;
+    }
 
     uint8_t reportType = frame.data[1]; // byte 1 is rf report type, byte 0 is device prefix
     bool keepAliveSet = (reportType & 0x40) != 0;
     reportType &= UNIFYING_RF_REPORT_TYPE_MSK; //mask report type
     uint32_t counter;
+
+    
 
     //filter out Unifying keep alive
     switch (reportType) {
@@ -232,15 +267,13 @@ void unifying_frame_classify(nrf_esb_payload_t frame) {
             NRF_LOG_INFO("HID++ long");
             return;
         case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
-            counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
+            //counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
+            counter = 0;
+            if (unifyingExtractCounterFromEncKbdFrame(frame, &counter) == NRF_SUCCESS) {
+                NRF_LOG_INFO("Encrypted keyboard, counter %08x", counter);
 
-            NRF_LOG_INFO("Encrypted keyboard, counter %08x", counter);
-            bool full_capture = addRecord(frame);
-            if (full_capture) {
-                NRF_LOG_INFO("scheduling replay");
-                app_sched_event_put(&frame.pipe, sizeof(frame.pipe), unifying_replay_records_scheduler_handler);
-                //unifying_replay_records(frame.pipe);
             }
+
             return;
         case UNIFYING_RF_REPORT_PAIRING:
             NRF_LOG_INFO("Pairing");
@@ -254,53 +287,72 @@ void unifying_frame_classify(nrf_esb_payload_t frame) {
     }
 }
 
+void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
+    NRF_LOG_INFO("!!!!!!!!!!!!!!!REPLAY HANDLER")
 
-void unifying_replay_records(uint8_t pipe_num) {
-    NRF_LOG_INFO("Replaying %d frames", UNIFYING_MAX_STORED_REPORTS_PER_PIPE);
-    static nrf_esb_payload_t tx_payload;
-    uint8_t current_pos = pipe_record_buf_pos[pipe_num];
+    // process scheduled event for this handler in main loop during scheduler processing
+    static nrf_esb_payload_t tx_payload; 
+    unifying_rf_record_set_t* p_rs = (unifying_rf_record_set_t*) p_event_data;
+    uint8_t current_record_pos = p_rs->read_pos;
+    unifying_rf_record_t current_record = p_rs->records[current_record_pos];
 
-    
-    unifying_rf_record_t* p_record = &pipe_record_buf[pipe_num][current_pos];
-p_record->pre_delay_ms = 5000;
-    NRF_LOG_INFO("... frame %d in %d ms", current_pos, p_record->pre_delay_ms);
-    memcpy(tx_payload.data, p_record->data, p_record->length);
-    tx_payload.length = p_record->length;
-    tx_payload.pipe = pipe_num;
+    //transmit RF frame
+    NRF_LOG_INFO("Replaying frame %d", current_record_pos);
+    memcpy(tx_payload.data, current_record.data, current_record.length);
+    tx_payload.length = current_record.length;
+    tx_payload.pipe = p_rs->pipe_num;
     tx_payload.noack = false;
-            
-    //unifying_payload_update_checksum(tx_payload.data, tx_payload.length); 
 
-    radioTransmitDelayed(&tx_payload, 5000);
-
+    if (radioTransmit(&tx_payload, true)) {
+        //NRF_LOG_INFO("TX succeeded")
+    } else {
+        //NRF_LOG_INFO("TX failed")
+    }
     
-}
+    
+    //check if follow up record has to be scheduled
+    if (current_record_pos != p_rs->last_pos) {
+        // advance read_pos to next record
+        p_rs->read_pos = current_record_pos+1; 
+        if (p_rs->read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) p_rs->read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
 
-/*
-void unifying_replay_records(uint8_t pipe_num) {
-    NRF_LOG_INFO("Replaying %d frames", UNIFYING_MAX_STORED_REPORTS_PER_PIPE);
-    static nrf_esb_payload_t tx_payload; // = NRF_ESB_CREATE_PAYLOAD(0, 0x01, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00);
+        uint32_t next_record_pre_delay_ms = p_rs->records[p_rs->read_pos].pre_delay_ms;
+        if (next_record_pre_delay_ms == 0) next_record_pre_delay_ms++; //zero delay wouldn't triger timer at all
 
-    uint8_t start_pos = pipe_record_buf_pos[pipe_num];
+next_record_pre_delay_ms = 8;
 
-    for (uint8_t pos=start_pos; pos < (start_pos+UNIFYING_MAX_STORED_REPORTS_PER_PIPE); pos++) {
-        uint8_t current_pos = pos < UNIFYING_MAX_STORED_REPORTS_PER_PIPE ? pos : pos - UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
-        unifying_rf_record_t* p_record = &pipe_record_buf[pipe_num][current_pos];
-        NRF_LOG_INFO("... frame %d in %d ms", current_pos, p_record->pre_delay_ms);
-        memcpy(tx_payload.data, p_record->data, p_record->length);
-        tx_payload.length = p_record->length;
-        tx_payload.pipe = pipe_num;
-        tx_payload.noack = false;
-        
-        nrf_delay_ms(p_record->pre_delay_ms); //ToDo: MIN delay is 8 ms
-        //unifying_payload_update_checksum(tx_payload.data, tx_payload.length); 
-        if (radioTransmit(&tx_payload, true)) {
-            //NRF_LOG_INFO("TX success");
-        } else {
-            //NRF_LOG_INFO("TX fail");
-        }
-
+        NRF_LOG_INFO("Next replay frame %d schedule for TX in %d ms", p_rs->read_pos, next_record_pre_delay_ms);
+        app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(next_record_pre_delay_ms), p_rs);
+    } else {
+        NRF_LOG_INFO("Replay finished");
+        //p_rs->disallowWrite = false; //that's a copy
+        m_record_sets[p_rs->pipe_num].disallowWrite = false;
         
     }
 }
-*/
+
+void timer_tx_record_to_scheduler(void* p_context) {
+    //NRF_LOG_INFO("Forward replay timer event to scheduler");
+    // schedule as event to main  (not isr) instead of executing directly
+    app_sched_event_put(p_context, sizeof(unifying_rf_record_set_t), timer_tx_record_from_scheduler);
+}
+
+void unifying_transmit_records(uint8_t pipe_num) {
+    unifying_rf_record_set_t* p_rs = &m_record_sets[pipe_num];
+    uint8_t current_record = p_rs->first_pos;
+    
+    p_rs->disallowWrite = true;
+
+    uint32_t delay_ms = p_rs->records[current_record].pre_delay_ms;
+    if (delay_ms == 0) delay_ms++; //zero delay wouldn't triger timer at all
+    app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(delay_ms), p_rs);
+    NRF_LOG_INFO("Replay timer started");
+}
+
+void unifying_init() {
+    app_timer_create(&m_timer_tx_record, APP_TIMER_MODE_SINGLE_SHOT, timer_tx_record_to_scheduler);
+    for (int i=0; i<NRF_ESB_PIPE_COUNT; i++) {
+        m_record_sets[i].pipe_num = i;
+        m_record_sets[i].records = m_records_from_sets[i];
+    }
+}
