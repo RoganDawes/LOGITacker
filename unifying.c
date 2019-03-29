@@ -164,12 +164,76 @@ uint32_t unifyingExtractCounterFromEncKbdFrame(nrf_esb_payload_t frame, uint32_t
     return NRF_SUCCESS;
 }
 
+#define UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE 26
+
+bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
+    unifying_rf_record_set_t *p_rs = &m_record_sets[pipe];
+    // walk buffer backwards starting at last recorded frame
+    int end_pos = (int) p_rs->write_pos - 1;
+    if (end_pos < 0) end_pos += UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+    NRF_LOG_INFO("end_pos %d", end_pos);
+    int check_pos = end_pos;
+    bool wantKeyRelease = true;
+    uint32_t wantedCounter = p_rs->records[check_pos].counter; 
+    unifying_rf_record_t* p_current_record;
+    int valid_count = 0;
+    for (int i=0; i<UNIFYING_MAX_STORED_REPORTS_PER_PIPE; i++) {
+        check_pos = end_pos - i;
+        if (check_pos < 0) check_pos += UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+        
+        p_current_record = &p_rs->records[check_pos];
+
+        //check if encrypted keyboard frame, skip otherwise
+        if (p_current_record->reportType != UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) continue;
+        NRF_LOG_DEBUG("frame at pos %d has valid report type", check_pos);
+
+        //check if key up/release in alternating order
+        if (p_current_record->isEncrytedKeyRelease != wantKeyRelease) break;
+        // toggle key release check for next iteration
+        wantKeyRelease = !wantKeyRelease;
+        NRF_LOG_DEBUG("frame at pos %d has valid key down/release type (key release %d)", check_pos, wantKeyRelease);
+
+        //check counter
+        if (p_current_record->counter != wantedCounter) break;
+        NRF_LOG_DEBUG("frame at pos %d has valid counter %08x", check_pos, wantedCounter);
+        // decrement counter for next iteration
+        if (wantedCounter == 0) return false; //<--- should barely happen
+        wantedCounter--;
+
+        //if here, the recorded frame is valid
+        valid_count = i;
+
+        //success condition
+        if (valid_count >= UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE) {
+            int start_pos = end_pos - valid_count;
+            if (start_pos < 0) start_pos += UNIFYING_MAX_STORED_REPORTS_PER_PIPE; //account for ring buffer style of record buffer
+
+            // update record set
+            p_rs->first_pos = (uint8_t) start_pos;
+            p_rs->last_pos = (uint8_t) end_pos;
+            p_rs->read_pos = p_rs->first_pos;
+            NRF_LOG_INFO("found enough (%d) valid frames, start %d end %d", valid_count, start_pos, end_pos);
+            return true;
+        }
+    }
+
+    NRF_LOG_INFO("found %d valid key down/up frames, starting from buffer end at %d", valid_count, end_pos);
+
+    return false;
+}
+
+
 uint32_t timestamp_last = 0;
 uint32_t timestamp = 0;
 uint32_t timestamp_delta = 0;
+// Purpose of the method is to store captured RF frames and return true, once enough frames for
+// replay are recorded
+// The method needs to keep track of frame sequences, to different distinguish record types
+// (f.e. a encrypted key-release frame is succeeded by set-keep-alive frames, while a key down frame
+// isn't)
+
 // ToDo: fix .. timestamp_delta doesn't account for changing pipes between successive method calls
 bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
-    NRF_LOG_INFO("addRecord");
     bool result = false;
     if (frame.length < 5) return false; //ToDo: with error
     
@@ -179,33 +243,68 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
         return false;
     }
 
-    uint8_t pos = p_rs->write_pos;
-    unifying_rf_record_t* p_record = &p_rs->records[pos];
+
+
+    uint8_t frameType;
+    bool isKeepAlive;
+    unifying_frame_classify(frame, &frameType, &isKeepAlive);
     
-    p_record->length = frame.length;
-    p_record->reportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
-    memcpy(p_record->data, frame.data, frame.length);
-
-
-    timestamp_last = timestamp;
-    timestamp = timestamp_get();
-    timestamp_delta = timestamp - timestamp_last;
-    p_record->pre_delay_ms = timestamp_delta;
-    if (pos == 0) p_record->pre_delay_ms = 0; //no delay for first record
-
-NRF_LOG_INFO("Report stored at timer count %d, last %d, diff %d", timestamp, timestamp_last, timestamp_delta);
-
-
-    pos++;
-    if (pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) {
-        result = true;
-        pos = 0;
-        // ToDo: change start and end to real window used for replay
-        p_rs->first_pos = 0;
-        p_rs->last_pos = UNIFYING_MAX_STORED_REPORTS_PER_PIPE - 1;
-        p_rs->read_pos = p_rs->first_pos;
+    // ignore successive SetKeepAlive frames
+    if (frameType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE && m_record_sets[p_rs->pipe_num].lastRecordedReportType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE) return false;
+    
+    bool storeFrame = false;
+    // in case the RF frame is of set-keep-alive type, we don't store the report, but mark a possible successive
+    // encrypted keyboard report as "key release" frame
+    switch (frameType) {
+        case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
+        {
+            // we have a set keep alive frame, if previous RF frame was an encrypted keyboard report, mark as key release
+            uint8_t previous_pos = p_rs->write_pos == 0 ? UNIFYING_MAX_STORED_REPORTS_PER_PIPE-1 : p_rs->write_pos - 1;
+            unifying_rf_record_t* p_previous_record = &p_rs->records[previous_pos];
+            if (!p_previous_record->isEncrytedKeyRelease && p_previous_record->reportType == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
+                p_previous_record->isEncrytedKeyRelease = true;
+                NRF_LOG_INFO("last recorded encrypted keyboard frame marked as key release frame")
+            } 
+            
+            break;
+        }
+        
+        case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
+        {
+            storeFrame = true;
+            break;
+        }
+        default:
+            return false; //ignore frame
     }
-    p_rs->write_pos = pos;
+
+    m_record_sets[p_rs->pipe_num].lastRecordedReportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
+
+    if (storeFrame) {
+        uint8_t pos = p_rs->write_pos;
+        unifying_rf_record_t* p_record = &p_rs->records[pos];
+        p_record->length = frame.length;
+        p_record->reportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
+        memcpy(p_record->data, frame.data, frame.length);
+        if (p_record->reportType == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
+            unifyingExtractCounterFromEncKbdFrame(frame, &p_record->counter);
+        }
+
+        timestamp_last = timestamp;
+        timestamp = timestamp_get();
+        timestamp_delta = timestamp - timestamp_last;
+        p_record->pre_delay_ms = timestamp_delta;
+        if (pos == 0) p_record->pre_delay_ms = 0; //no delay for first record
+
+        NRF_LOG_INFO("Frame recorded stored at timer count %d, last %d, diff %d", timestamp, timestamp_last, timestamp_delta);
+
+        pos++;
+        if (pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) pos = 0;
+        p_rs->write_pos = pos;
+    }
+
+    
+    result = validate_record_buf_successive_keydown_keyrelease(frame.pipe);
 
     return result;
 }
@@ -221,6 +320,7 @@ void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType
     *p_outRFReportType = frame.data[1]; // byte 1 is rf report type, byte 0 is device prefix
     *p_outHasKeepAliveSet = (frame.data[1] & 0x40) != 0;
     *p_outRFReportType &= UNIFYING_RF_REPORT_TYPE_MSK; //mask report type
+
     return;
 }
 

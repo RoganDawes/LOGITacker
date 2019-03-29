@@ -70,6 +70,9 @@ typedef struct {
     uint8_t length;
     //uint16_t dummy; //assure 32bit alignment to avoid hard fault when used with app_timer
     uint8_t data[32];
+    bool isEncrytedKeyRelease; //true if encrypted keyboard report is assumed to be a key release frame
+    uint32_t counter; //counter, in case this is a encrypted keyboard report
+    bool counterValid;
 } unifying_rf_record_t;
 
 typedef struct {
@@ -81,6 +84,7 @@ typedef struct {
 
     uint8_t pipe_num;
 
+    uint8_t lastRecordedReportType;
     bool disallowWrite;
     //uint8_t dummy[3]; //assure 32bit alignment to avoid hard fault when used with app_timer
 } unifying_rf_record_set_t;

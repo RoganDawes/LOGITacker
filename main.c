@@ -424,8 +424,8 @@ void nrf_esb_process_rx() {
                 bool rfReportIsKeepAlive;
                 unifying_frame_classify_log(rx_payload);
                 unifying_frame_classify(rx_payload, &rfReportType, &rfReportIsKeepAlive);
-
                 switch (rfReportType) {
+                    case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
                     case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
                     {
                         bool full_capture = unifying_record_rf_frame(rx_payload);
@@ -435,6 +435,7 @@ void nrf_esb_process_rx() {
                         }
                         break;
                     }
+                    
                     default:
                         break;
                 }
