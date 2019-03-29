@@ -72,7 +72,6 @@ typedef struct {
     uint8_t data[32];
     bool isEncrytedKeyRelease; //true if encrypted keyboard report is assumed to be a key release frame
     uint32_t counter; //counter, in case this is a encrypted keyboard report
-    bool counterValid;
 } unifying_rf_record_t;
 
 typedef struct {

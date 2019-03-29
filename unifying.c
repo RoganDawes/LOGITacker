@@ -249,9 +249,6 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
     bool isKeepAlive;
     unifying_frame_classify(frame, &frameType, &isKeepAlive);
     
-    // ignore successive SetKeepAlive frames
-    if (frameType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE && m_record_sets[p_rs->pipe_num].lastRecordedReportType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE) return false;
-    
     bool storeFrame = false;
     // in case the RF frame is of set-keep-alive type, we don't store the report, but mark a possible successive
     // encrypted keyboard report as "key release" frame
@@ -277,14 +274,18 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
         default:
             return false; //ignore frame
     }
+    // ignore successive SetKeepAlive frames
+    if (frameType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE && m_record_sets[p_rs->pipe_num].lastRecordedReportType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE) return false;
 
     m_record_sets[p_rs->pipe_num].lastRecordedReportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
+    
 
     if (storeFrame) {
         uint8_t pos = p_rs->write_pos;
         unifying_rf_record_t* p_record = &p_rs->records[pos];
         p_record->length = frame.length;
         p_record->reportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
+        p_record->isEncrytedKeyRelease = false;
         memcpy(p_record->data, frame.data, frame.length);
         if (p_record->reportType == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
             unifyingExtractCounterFromEncKbdFrame(frame, &p_record->counter);
