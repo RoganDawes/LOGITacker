@@ -15,6 +15,8 @@
 APP_TIMER_DEF(m_timer_tx_record);
 static unifying_rf_record_set_t m_record_sets[NRF_ESB_PIPE_COUNT];
 static unifying_rf_record_t m_records_from_sets[NRF_ESB_PIPE_COUNT][UNIFYING_MAX_STORED_REPORTS_PER_PIPE];
+static radio_rf_mode_t m_radio_mode_before_replay = RADIO_MODE_PRX_PASSIVE;
+
 
 uint32_t restoreDeviceInfoFromFlash(uint16_t deviceRecordIndex, device_info_t *deviceInfo) {
     ret_code_t ret;
@@ -205,7 +207,7 @@ bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
 
         //success condition
         if (valid_count >= UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE) {
-            int start_pos = end_pos - valid_count;
+            int start_pos = (end_pos - valid_count) + 1;
             if (start_pos < 0) start_pos += UNIFYING_MAX_STORED_REPORTS_PER_PIPE; //account for ring buffer style of record buffer
 
             // update record set
@@ -388,47 +390,75 @@ void unifying_frame_classify_log(nrf_esb_payload_t frame) {
     }
 }
 
+uint8_t keep_alive_8ms[5] = {0x00, 0x40, 0x00, 0x08, 0xb8}; 
 void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
-    NRF_LOG_INFO("!!!!!!!!!!!!!!!REPLAY HANDLER")
-
     // process scheduled event for this handler in main loop during scheduler processing
     static nrf_esb_payload_t tx_payload; 
     unifying_rf_record_set_t* p_rs = (unifying_rf_record_set_t*) p_event_data;
+    p_rs = &m_record_sets[p_rs->pipe_num]; // pointer to real record set, not copy
     uint8_t current_record_pos = p_rs->read_pos;
     unifying_rf_record_t current_record = p_rs->records[current_record_pos];
-
+    uint8_t keep_alives_needed = p_rs->keep_alives_needed;
+    bool send_keep_alive = false;
+    
     //transmit RF frame
-    NRF_LOG_INFO("Replaying frame %d", current_record_pos);
-    memcpy(tx_payload.data, current_record.data, current_record.length);
-    tx_payload.length = current_record.length;
-    tx_payload.pipe = p_rs->pipe_num;
-    tx_payload.noack = false;
+    if (keep_alives_needed == 0) {
+        NRF_LOG_INFO("Replaying frame %d", current_record_pos);
+        memcpy(tx_payload.data, current_record.data, current_record.length);
+        tx_payload.length = current_record.length;
+        tx_payload.pipe = p_rs->pipe_num;
+        tx_payload.noack = false;
+    } else {
+        NRF_LOG_INFO("Sending 8ms keep-alive frame");
+        memcpy(tx_payload.data, keep_alive_8ms, sizeof(keep_alive_8ms));
+        tx_payload.length = sizeof(keep_alive_8ms);
+        tx_payload.pipe = p_rs->pipe_num;
+        tx_payload.noack = false;
+        send_keep_alive = true;
+    }
 
     if (radioTransmit(&tx_payload, true)) {
         //NRF_LOG_INFO("TX succeeded")
+        
+        // update keep-alives which have to be sent before next record
+        if (send_keep_alive) {
+            p_rs->keep_alives_needed--;
+        } else {
+            p_rs->keep_alives_needed = p_rs->keep_alives_to_insert;
+        }
     } else {
         //NRF_LOG_INFO("TX failed")
     }
     
     
     //check if follow up record has to be scheduled
-    if (current_record_pos != p_rs->last_pos) {
-        // advance read_pos to next record
-        p_rs->read_pos = current_record_pos+1; 
-        if (p_rs->read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) p_rs->read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+    if (!send_keep_alive) {
+        if (current_record_pos != p_rs->last_pos) {
+            // advance read_pos to next record
+            p_rs->read_pos = current_record_pos+1; 
+            if (p_rs->read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) p_rs->read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
 
-        uint32_t next_record_pre_delay_ms = p_rs->records[p_rs->read_pos].pre_delay_ms;
-        if (next_record_pre_delay_ms == 0) next_record_pre_delay_ms++; //zero delay wouldn't triger timer at all
+            uint32_t next_record_pre_delay_ms = p_rs->records[p_rs->read_pos].pre_delay_ms;
+            if (next_record_pre_delay_ms == 0) next_record_pre_delay_ms++; //zero delay wouldn't triger timer at all
 
 next_record_pre_delay_ms = 8;
 
-        NRF_LOG_INFO("Next replay frame %d schedule for TX in %d ms", p_rs->read_pos, next_record_pre_delay_ms);
-        app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(next_record_pre_delay_ms), p_rs);
+            NRF_LOG_DEBUG("Next replay frame %d schedule for TX in %d ms", p_rs->read_pos, next_record_pre_delay_ms);
+            app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(next_record_pre_delay_ms), p_rs);
+        } else {
+            // don't restart timer
+            NRF_LOG_INFO("Replay finished");
+            p_rs->disallowWrite = false; 
+
+            // restore old radio mode if it wasn't PTX already
+            if (m_radio_mode_before_replay != RADIO_MODE_PTX) {
+                radioSetMode(m_radio_mode_before_replay);
+                nrf_esb_start_rx();
+            } 
+        }
     } else {
-        NRF_LOG_INFO("Replay finished");
-        //p_rs->disallowWrite = false; //that's a copy
-        m_record_sets[p_rs->pipe_num].disallowWrite = false;
-        
+        // restart timer to send next keep-alive
+        app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(8), p_rs);
     }
 }
 
@@ -438,11 +468,19 @@ void timer_tx_record_to_scheduler(void* p_context) {
     app_sched_event_put(p_context, sizeof(unifying_rf_record_set_t), timer_tx_record_from_scheduler);
 }
 
-void unifying_transmit_records(uint8_t pipe_num) {
+void unifying_transmit_records(uint8_t pipe_num, uint8_t keep_alives_to_insert) {
     unifying_rf_record_set_t* p_rs = &m_record_sets[pipe_num];
     uint8_t current_record = p_rs->first_pos;
-    
+    p_rs->keep_alives_to_insert = keep_alives_to_insert;
+
     p_rs->disallowWrite = true;
+
+     //store current mode and set to PTX to avoid mode toggling on every single TX (would flush RX'ed ack payloads otherwise)
+    m_radio_mode_before_replay = radioGetMode();
+    if (m_radio_mode_before_replay != RADIO_MODE_PTX) {
+        nrf_esb_stop_rx();
+        radioSetMode(RADIO_MODE_PTX);
+    }
 
     uint32_t delay_ms = p_rs->records[current_record].pre_delay_ms;
     if (delay_ms == 0) delay_ms++; //zero delay wouldn't triger timer at all

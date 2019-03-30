@@ -321,7 +321,7 @@ uint32_t radioInitPromiscuousMode() {
     return NRF_SUCCESS;
 }
 
-uint32_t radioInitPRXPassiveMode() {
+uint32_t radioInitPRXPassiveMode(bool flushrx) {
     if (!m_local_config.initialized) return NRF_ERROR_INVALID_STATE;
 
     uint32_t err_code;
@@ -338,8 +338,10 @@ uint32_t radioInitPRXPassiveMode() {
 
     
     //m_local_esb_config = esb_config;
-
-    while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+    if (flushrx) {
+        while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+    }
+    
 
 
     err_code = restoreRfSettings();
@@ -367,8 +369,8 @@ uint32_t radioInitPTXMode() {
     
     //esb_config.event_handler    = m_local_config.event_handler;
     esb_config.event_handler = radio_esb_event_handler;    esb_config.crc = NRF_ESB_CRC_16BIT;
-    esb_config.retransmit_count = 15;
-    esb_config.retransmit_delay = 1000;
+    esb_config.retransmit_count = 1;
+    esb_config.retransmit_delay = 500;
 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
@@ -376,7 +378,7 @@ uint32_t radioInitPTXMode() {
     
     //m_local_esb_config = esb_config;
 
-    while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+    //while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
 
 
     err_code = restoreRfSettings();
@@ -420,7 +422,12 @@ uint32_t radioSetMode(radio_rf_mode_t mode) {
                 nrf_esb_stop_rx();
             }
             */
-            err_code = radioInitPRXPassiveMode();
+            if (m_local_config.mode == RADIO_MODE_PROMISCOUS) {
+                err_code = radioInitPRXPassiveMode(true);
+            } else {
+                err_code = radioInitPRXPassiveMode(false); //don't flush RX if not comming from promiscuous mode
+            }
+            
             VERIFY_SUCCESS(err_code);
             m_local_config.mode = mode; //update current mode
             break;

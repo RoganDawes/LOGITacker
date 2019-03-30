@@ -57,7 +57,7 @@ bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen);
 bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen);
 void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType, bool *p_outHasKeepAliveSet);
 void unifying_frame_classify_log(nrf_esb_payload_t frame);
-void unifying_transmit_records(uint8_t pipe_num);
+void unifying_transmit_records(uint8_t pipe_num, uint8_t keep_alives_to_insert);
 bool unifying_record_rf_frame(nrf_esb_payload_t frame);
 
 // note: 26 frames are minimum to overwrite counter re-use protection, but more frames
@@ -68,7 +68,6 @@ typedef struct {
     uint32_t pre_delay_ms; //delay in millisecond to sleep before TX of this frame during replay
     uint8_t reportType;
     uint8_t length;
-    //uint16_t dummy; //assure 32bit alignment to avoid hard fault when used with app_timer
     uint8_t data[32];
     bool isEncrytedKeyRelease; //true if encrypted keyboard report is assumed to be a key release frame
     uint32_t counter; //counter, in case this is a encrypted keyboard report
@@ -85,7 +84,9 @@ typedef struct {
 
     uint8_t lastRecordedReportType;
     bool disallowWrite;
-    //uint8_t dummy[3]; //assure 32bit alignment to avoid hard fault when used with app_timer
+
+    uint8_t keep_alives_to_insert; // how many keep alives (8ms) should be inserted between replays
+    uint8_t keep_alives_needed; // how many keep alives are needed to fullfill keep_alives_to_insert before next record TX
 } unifying_rf_record_set_t;
 
 

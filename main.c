@@ -107,10 +107,8 @@ uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
     bool report_frames_without_crc_match = false; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
     bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
 #ifdef NRF52840_MDK
-    bool test_replay_rx = false;
     bool with_log = true;
 #else
-    bool test_replay_rx = false;
     bool with_log = false;
 #endif
 
@@ -347,6 +345,8 @@ static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t repo
 void nrf_esb_process_rx() {
     static nrf_esb_payload_t rx_payload;
 
+    NRF_LOG_DEBUG("process rx called");
+
     // we check current channel here, which isn't reliable as the frame from fifo could have been received on a
     // different one, but who cares
     uint32_t ch = 0;
@@ -398,27 +398,12 @@ void nrf_esb_process_rx() {
                 } 
             }
             break;
+        case RADIO_MODE_PTX: // process RX frames with ack payload in PTX mode
+            NRF_LOG_INFO("RX frame in PTX mode");
         case RADIO_MODE_PRX_PASSIVE:
-
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
                 if (rx_payload.length == 0) bsp_board_led_invert(LED_G); // toggle green led to indicate non-empty frame sniffed
-                else if (test_replay_rx) {
-                    static nrf_esb_payload_t tx_payload; // = NRF_ESB_CREATE_PAYLOAD(0, 0x01, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00);
-                    memcpy(tx_payload.data, rx_payload.data, rx_payload.length);
-                    //unifying_payload_update_checksum(tx_payload.data, tx_payload.length);
-                    
-                    tx_payload.length = rx_payload.length;
-                    tx_payload.pipe = rx_payload.pipe;
-                    tx_payload.noack = false;
-
-                    if (radioTransmit(&tx_payload, true)) {
-                        //NRF_LOG_INFO("TX success");
-                    } else {
-                        // NRF_LOG_INFO("TX fail");
-                    }
-                }
-                
                 
                 uint8_t rfReportType;
                 bool rfReportIsKeepAlive;
@@ -431,7 +416,7 @@ void nrf_esb_process_rx() {
                         bool full_capture = unifying_record_rf_frame(rx_payload);
                         if (full_capture) {
                             NRF_LOG_INFO("scheduling replay");
-                            unifying_transmit_records(rx_payload.pipe);
+                            unifying_transmit_records(rx_payload.pipe, 10);
                         }
                         break;
                     }
@@ -480,8 +465,9 @@ void nrf_esb_event_handler(nrf_esb_evt_t *p_event)
             //(void) nrf_esb_start_tx();            
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
-            NRF_LOG_DEBUG("RX RECEIVED EVENT");
+            NRF_LOG_DEBUG("nrf_esb_event_handler RX RECEIVED EVENT");
             nrf_esb_process_rx();
+            break;
     }
 }
 
