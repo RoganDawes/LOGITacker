@@ -43,12 +43,29 @@ typedef struct
 
 #define NUM_WHITENED_REPORTS 26
 
-typedef struct
-{
+// note: 26 frames are minimum to overwrite counter re-use protection, but more frames
+//       are used to overcome changing counters by real keypresses in between replayed RF frames
+#define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 40
+#define UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE 26
+
+typedef struct {
     rf_report_22_t  report[NUM_WHITENED_REPORTS];
 } whitened_replay_frames_t;
 
-void unifying_init();
+typedef enum {
+    UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES,   // event fires if an alternating sequence of encrypted key down / key release frames with successive counters has been recorded with length UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE
+    UNIFYING_EVENT_REPLAY_RECORDS_STARTED,    
+    UNIFYING_EVENT_REPLAY_RECORDS_FINISHED
+} unifying_evt_id_t;
+
+typedef struct {
+    unifying_evt_id_t   evt_id;
+    uint8_t             pipe;
+} unifying_evt_t;
+
+typedef void (* unifying_event_handler_t)(unifying_evt_t const * p_event);
+
+void unifying_init(unifying_event_handler_t event_handler);
 uint32_t restoreDeviceInfoFromFlash(uint16_t deviceRecordIndex, device_info_t *deviceInfo);
 uint32_t restoreDeviceWhitenedReportsFromFlash(uint16_t deviceRecordIndex, whitened_replay_frames_t *reports);
 uint32_t updateDeviceInfoOnFlash(uint16_t deviceRecordIndex, device_info_t *deviceInfo);
@@ -60,9 +77,6 @@ void unifying_frame_classify_log(nrf_esb_payload_t frame);
 void unifying_transmit_records(uint8_t pipe_num, uint8_t keep_alives_to_insert);
 bool unifying_record_rf_frame(nrf_esb_payload_t frame);
 
-// note: 26 frames are minimum to overwrite counter re-use protection, but more frames
-//       are used to overcome changing counters by real keypresses in between replayed RF frames
-#define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 40
 
 typedef struct {
     uint32_t pre_delay_ms; //delay in millisecond to sleep before TX of this frame during replay

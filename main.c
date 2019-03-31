@@ -1,42 +1,3 @@
-/**
- * Copyright (c) 2017 - 2018, Nordic Semiconductor ASA
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form, except as embedded into a Nordic
- *    Semiconductor ASA integrated circuit in a product or a software update for
- *    such product, must reproduce the above copyright notice, this list of
- *    conditions and the following disclaimer in the documentation and/or other
- *    materials provided with the distribution.
- *
- * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * 4. This software, with or without modification, must only be used with a
- *    Nordic Semiconductor ASA integrated circuit.
- *
- * 5. Any software provided in binary form under this license must not be reverse
- *    engineered, decompiled, modified and/or disassembled.
- *
- * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL NORDIC SEMICONDUCTOR ASA OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -399,7 +360,6 @@ void nrf_esb_process_rx() {
             }
             break;
         case RADIO_MODE_PTX: // process RX frames with ack payload in PTX mode
-            NRF_LOG_INFO("RX frame in PTX mode");
         case RADIO_MODE_PRX_PASSIVE:
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
@@ -416,7 +376,7 @@ void nrf_esb_process_rx() {
                         bool full_capture = unifying_record_rf_frame(rx_payload);
                         if (full_capture) {
                             NRF_LOG_INFO("scheduling replay");
-                            unifying_transmit_records(rx_payload.pipe, 10);
+                            unifying_transmit_records(rx_payload.pipe, 2);
                         }
                         break;
                     }
@@ -451,16 +411,15 @@ void nrf_esb_process_rx() {
     
 }
 
-void nrf_esb_event_handler(nrf_esb_evt_t *p_event)
-{
+void nrf_esb_event_handler(nrf_esb_evt_t *p_event) {
     //logPriority("nrf_esb_event_handler");
     switch (p_event->evt_id)
     {
         case NRF_ESB_EVENT_TX_SUCCESS:
-            NRF_LOG_INFO("nrf_esb_event_handler TX_SUCCESS");
+            NRF_LOG_DEBUG("nrf_esb_event_handler TX_SUCCESS");
             break;
         case NRF_ESB_EVENT_TX_FAILED:
-            NRF_LOG_INFO("nrf_esb_event_handler TX_FAILED");
+            NRF_LOG_WARNING("nrf_esb_event_handler TX_FAILED");
             //(void) nrf_esb_flush_tx();
             //(void) nrf_esb_start_tx();            
             break;
@@ -628,6 +587,22 @@ void timer_channel_hop_event_handler_to_scheduler(void* p_context) {
     app_sched_event_put(p_context, sizeof(app_timer_id_t), timer_channel_hop_event_handler_from_scheduler);
 }
 
+void unifying_event_handler(unifying_evt_t const *p_event) {
+    //logPriority("nrf_esb_event_handler");
+    switch (p_event->evt_id)
+    {
+        case UNIFYING_EVENT_REPLAY_RECORDS_FINISHED:
+            NRF_LOG_DEBUG("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FINISHED");
+            break;
+        case UNIFYING_EVENT_REPLAY_RECORDS_STARTED:
+            NRF_LOG_DEBUG("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_STARTED");
+            break;
+        case UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES:
+            NRF_LOG_DEBUG("Unifying event UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES");
+            break;
+    }
+}
+
 
 
 
@@ -715,7 +690,7 @@ int main(void)
     nrf_esb_start_rx();
     NRF_LOG_INFO("Start listening for devices in promiscuous mode");
 
-    unifying_init();
+    unifying_init(unifying_event_handler);
     //ret = nrf_esb_start_rx();
     //if (ret == NRF_SUCCESS) bsp_board_led_on(BSP_BOARD_LED_3);
         

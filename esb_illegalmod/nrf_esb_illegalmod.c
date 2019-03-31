@@ -57,7 +57,7 @@
 #include "nrf_delay.h"
 
 #include "bsp.h"
-#include "nrf_log.h"
+//#include "nrf_log.h"
 
 
 #define BIT_MASK_UINT_8(x) (0xFF >> (8 - (x)))
@@ -856,7 +856,7 @@ static void on_radio_disabled_tx_wait_for_ack()
         {
             if (rx_fifo_push_rfbuf((uint8_t)NRF_RADIO->TXADDRESS, m_rx_payload_buffer[1] >> 1))
             {
-                NRF_LOG_INFO("pushed ack RF frame to FIFO");
+//                NRF_LOG_INFO("pushed ack RF frame to FIFO");
                 m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
             }
         }

@@ -166,14 +166,12 @@ uint32_t unifyingExtractCounterFromEncKbdFrame(nrf_esb_payload_t frame, uint32_t
     return NRF_SUCCESS;
 }
 
-#define UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE 26
 
 bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
     unifying_rf_record_set_t *p_rs = &m_record_sets[pipe];
     // walk buffer backwards starting at last recorded frame
     int end_pos = (int) p_rs->write_pos - 1;
     if (end_pos < 0) end_pos += UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
-    NRF_LOG_INFO("end_pos %d", end_pos);
     int check_pos = end_pos;
     bool wantKeyRelease = true;
     uint32_t wantedCounter = p_rs->records[check_pos].counter; 
@@ -219,7 +217,7 @@ bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
         }
     }
 
-    NRF_LOG_INFO("found %d valid key down/up frames, starting from buffer end at %d", valid_count, end_pos);
+    if (valid_count != 0) NRF_LOG_INFO("found %d valid key down/up frames, starting from buffer end at %d", valid_count, end_pos);
 
     return false;
 }
@@ -327,6 +325,7 @@ void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType
     return;
 }
 
+#define UNIFYING_CLASSIFY_LOG_PREFIX "Unifying RF frame: "
 void unifying_frame_classify_log(nrf_esb_payload_t frame) {     
     bool logKeepAliveEmpty = false;
 
@@ -346,46 +345,46 @@ void unifying_frame_classify_log(nrf_esb_payload_t frame) {
     //filter out Unifying keep alive
     switch (reportType) {
         case UNIFYING_RF_REPORT_PLAIN_KEYBOARD:
-            NRF_LOG_INFO("Unencrypted keyboard");
+            NRF_LOG_INFO("%sUnencrypted keyboard", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case UNIFYING_RF_REPORT_PLAIN_MOUSE:
-            NRF_LOG_INFO("Unencrypted mouse"); 
+            NRF_LOG_INFO("%sUnencrypted mouse", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case UNIFYING_RF_REPORT_PLAIN_MULTIMEDIA:
-            NRF_LOG_INFO("Unencrypted multimedia key");
+            NRF_LOG_INFO("%sUnencrypted multimedia key", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case UNIFYING_RF_REPORT_PLAIN_SYSTEM_CTL:
-            NRF_LOG_INFO("Unencrypted system control key");
+            NRF_LOG_INFO("%sUnencrypted system control key", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case UNIFYING_RF_REPORT_LED:
-            NRF_LOG_INFO("LED (outbound)");
+            NRF_LOG_INFO("%sLED (outbound)", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
-            NRF_LOG_INFO("Set keep-alive");
+            NRF_LOG_INFO("%sSet keep-alive", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case UNIFYING_RF_REPORT_HIDPP_SHORT:
-            NRF_LOG_INFO("HID++ short");
+            NRF_LOG_INFO("%sHID++ short", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case UNIFYING_RF_REPORT_HIDPP_LONG:
-            NRF_LOG_INFO("HID++ long");
+            NRF_LOG_INFO("%sHID++ long", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
             //counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
             counter = 0;
             if (unifyingExtractCounterFromEncKbdFrame(frame, &counter) == NRF_SUCCESS) {
-                NRF_LOG_INFO("Encrypted keyboard, counter %08x", counter);
+                NRF_LOG_INFO("%sEncrypted keyboard, counter %08x", UNIFYING_CLASSIFY_LOG_PREFIX, counter);
 
             }
 
             return;
         case UNIFYING_RF_REPORT_PAIRING:
-            NRF_LOG_INFO("Pairing");
+            NRF_LOG_INFO("%sPairing", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         case 0x00:
-            if (keepAliveSet && logKeepAliveEmpty) NRF_LOG_INFO("Empty keep alive");
+            if (keepAliveSet && logKeepAliveEmpty) NRF_LOG_INFO("%sEmpty keep alive", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
         default:
-            NRF_LOG_INFO("Unknown frame type %02x, keep alive %s", frame.data[1], keepAliveSet ? "set" : "not set");
+            NRF_LOG_INFO("%sUnknown frame type %02x, keep alive %s", UNIFYING_CLASSIFY_LOG_PREFIX, frame.data[1], keepAliveSet ? "set" : "not set");
             return;
     }
 }
@@ -427,6 +426,7 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
             p_rs->keep_alives_needed = p_rs->keep_alives_to_insert;
         }
     } else {
+        // ToDo: channel sweep for PRX (receiver), abort if not found
         //NRF_LOG_INFO("TX failed")
     }
     
@@ -470,7 +470,6 @@ void timer_tx_record_to_scheduler(void* p_context) {
 
 void unifying_transmit_records(uint8_t pipe_num, uint8_t keep_alives_to_insert) {
     unifying_rf_record_set_t* p_rs = &m_record_sets[pipe_num];
-    uint8_t current_record = p_rs->first_pos;
     p_rs->keep_alives_to_insert = keep_alives_to_insert;
 
     p_rs->disallowWrite = true;
@@ -482,13 +481,19 @@ void unifying_transmit_records(uint8_t pipe_num, uint8_t keep_alives_to_insert) 
         radioSetMode(RADIO_MODE_PTX);
     }
 
+    /*
+    uint8_t current_record = p_rs->first_pos;
     uint32_t delay_ms = p_rs->records[current_record].pre_delay_ms;
     if (delay_ms == 0) delay_ms++; //zero delay wouldn't triger timer at all
     app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(delay_ms), p_rs);
+    */
+
+    // don't delay first tx
+    app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(1), p_rs);
     NRF_LOG_INFO("Replay timer started");
 }
 
-void unifying_init() {
+void unifying_init(unifying_event_handler_t event_handler){
     app_timer_create(&m_timer_tx_record, APP_TIMER_MODE_SINGLE_SHOT, timer_tx_record_to_scheduler);
     for (int i=0; i<NRF_ESB_PIPE_COUNT; i++) {
         m_record_sets[i].pipe_num = i;
