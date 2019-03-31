@@ -74,7 +74,15 @@ bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen);
 bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen);
 void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType, bool *p_outHasKeepAliveSet);
 void unifying_frame_classify_log(nrf_esb_payload_t frame);
-void unifying_transmit_records(uint8_t pipe_num, uint8_t keep_alives_to_insert);
+/*
+unifying_replay_records
+
+replay_realtime:        if enabled frames are played back with recording speed and gaps filled with keep alives (every 8ms)
+                        if disabled frames are played back with 8ms interval
+keep_alives_to_insert   if replay_realtime is disabled, this number of 8ms keep-alives is inserted after each frame (helps
+                        to correlate received ack payloads to replayed frames)
+*/
+void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert);
 bool unifying_record_rf_frame(nrf_esb_payload_t frame);
 
 
@@ -99,6 +107,7 @@ typedef struct {
     uint8_t lastRecordedReportType;
     bool disallowWrite;
 
+    bool    replay_realtime;         // tries to replay with same delays as recorded (fill gaps with 8ms keep alives)
     uint8_t keep_alives_to_insert; // how many keep alives (8ms) should be inserted between replays
     uint8_t keep_alives_needed; // how many keep alives are needed to fullfill keep_alives_to_insert before next record TX
 } unifying_rf_record_set_t;

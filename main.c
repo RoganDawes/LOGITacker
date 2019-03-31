@@ -376,7 +376,7 @@ void nrf_esb_process_rx() {
                         bool full_capture = unifying_record_rf_frame(rx_payload);
                         if (full_capture) {
                             NRF_LOG_INFO("scheduling replay");
-                            unifying_transmit_records(rx_payload.pipe, 2);
+                            unifying_replay_records(rx_payload.pipe, false, 2);
                         }
                         break;
                     }

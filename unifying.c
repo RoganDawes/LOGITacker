@@ -439,12 +439,11 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
             if (p_rs->read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) p_rs->read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
 
             uint32_t next_record_pre_delay_ms = p_rs->records[p_rs->read_pos].pre_delay_ms;
-            if (next_record_pre_delay_ms == 0) next_record_pre_delay_ms++; //zero delay wouldn't triger timer at all
 
-next_record_pre_delay_ms = 8;
+            if (p_rs->replay_realtime && next_record_pre_delay_ms > 7) p_rs->keep_alives_needed = next_record_pre_delay_ms / 8; //zero delay wouldn't triger timer at all
+            NRF_LOG_INFO("Next replay frame %d schedule for TX in %d ms", p_rs->read_pos, 8 + p_rs->keep_alives_needed*8);
+            app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(8), p_rs);
 
-            NRF_LOG_DEBUG("Next replay frame %d schedule for TX in %d ms", p_rs->read_pos, next_record_pre_delay_ms);
-            app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(next_record_pre_delay_ms), p_rs);
         } else {
             // don't restart timer
             NRF_LOG_INFO("Replay finished");
@@ -468,11 +467,13 @@ void timer_tx_record_to_scheduler(void* p_context) {
     app_sched_event_put(p_context, sizeof(unifying_rf_record_set_t), timer_tx_record_from_scheduler);
 }
 
-void unifying_transmit_records(uint8_t pipe_num, uint8_t keep_alives_to_insert) {
+void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert) {
     unifying_rf_record_set_t* p_rs = &m_record_sets[pipe_num];
-    p_rs->keep_alives_to_insert = keep_alives_to_insert;
+    if (replay_realtime) p_rs->keep_alives_to_insert = 0;
+    else p_rs->keep_alives_to_insert = keep_alives_to_insert;
 
     p_rs->disallowWrite = true;
+    p_rs->replay_realtime = replay_realtime;
 
      //store current mode and set to PTX to avoid mode toggling on every single TX (would flush RX'ed ack payloads otherwise)
     m_radio_mode_before_replay = radioGetMode();
