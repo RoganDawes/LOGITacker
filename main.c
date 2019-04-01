@@ -74,6 +74,8 @@ uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
 #endif
 
 
+static bool test_record_frames = true; //only for testing, not pipe agnostic; set to false when enough frames recorded
+
 /**
  * @brief Additional key release events
  *
@@ -81,13 +83,7 @@ uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
  */
 enum {
     BSP_USER_EVENT_RELEASE_0 = BSP_EVENT_KEY_LAST + 1, /**< Button 0 released */
-    BSP_USER_EVENT_RELEASE_1,                          /**< Button 1 released */
-    BSP_USER_EVENT_RELEASE_2,                          /**< Button 2 released */
-    BSP_USER_EVENT_RELEASE_3,                          /**< Button 3 released */
-    BSP_USER_EVENT_RELEASE_4,                          /**< Button 4 released */
-    BSP_USER_EVENT_RELEASE_5,                          /**< Button 5 released */
-    BSP_USER_EVENT_RELEASE_6,                          /**< Button 6 released */
-    BSP_USER_EVENT_RELEASE_7,                          /**< Button 7 released */
+    BSP_USER_EVENT_LONG_PRESS_0,                          /**< Button 1 released */
 };
 
 
@@ -223,6 +219,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
 }
 
 // handle event (press of physical dongle button)
+static bool long_pushed;
 static void bsp_event_callback(bsp_event_t ev)
 {
     // runs in interrupt mode
@@ -235,9 +232,10 @@ static void bsp_event_callback(bsp_event_t ev)
             bsp_board_led_on(LED_B);
             break;
 
-        case CONCAT_2(BSP_USER_EVENT_RELEASE_, BTN_TRIGGER_ACTION):
-            NRF_LOG_INFO("Button pressed, falling back to promiscuous mode...")
-            
+        case BSP_USER_EVENT_LONG_PRESS_0:
+            long_pushed = true;
+            NRF_LOG_INFO("Button long pressed, falling back to promiscuous mode...")
+
             while (nrf_esb_stop_rx() != NRF_SUCCESS) {};
 
             radioSetMode(RADIO_MODE_PROMISCOUS); //set back to promiscous
@@ -248,7 +246,25 @@ static void bsp_event_callback(bsp_event_t ev)
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop); //restart channel hopping timer
             nrf_esb_start_rx();
 
+            // re-enable frame recording
+            test_record_frames = true;
+
             bsp_board_led_off(LED_B);
+            break;
+
+        case BSP_USER_EVENT_RELEASE_0:
+            if (long_pushed) {
+                long_pushed = false;
+                break; // don't act if there was already a long press event
+            }
+            NRF_LOG_INFO("Button pressed")
+
+            // if enough frames recorded, replay
+            if (!test_record_frames) {
+                uint8_t pipe = 1;
+                NRF_LOG_INFO("replay recorded frames for pipe 1");
+                unifying_replay_records(pipe, false, 2);
+            }
             break;
 
         default:
@@ -256,27 +272,13 @@ static void bsp_event_callback(bsp_event_t ev)
     }
 }
 
-
-/**
- * @brief Auxiliary internal macro
- *
- * Macro used only in @ref init_bsp to simplify the configuration
- */
-#define INIT_BSP_ASSIGN_RELEASE_ACTION(btn)                      \
-    APP_ERROR_CHECK(                                             \
-        bsp_event_to_button_action_assign(                       \
-            btn,                                                 \
-            BSP_BUTTON_ACTION_RELEASE,                           \
-            (bsp_event_t)CONCAT_2(BSP_USER_EVENT_RELEASE_, btn)) \
-    )
-
 static void init_bsp(void)
 {
     ret_code_t ret;
     ret = bsp_init(BSP_INIT_BUTTONS, bsp_event_callback);
     APP_ERROR_CHECK(ret);
-
-    INIT_BSP_ASSIGN_RELEASE_ACTION(BTN_TRIGGER_ACTION );
+    bsp_event_to_button_action_assign(BTN_TRIGGER_ACTION, BSP_BUTTON_ACTION_RELEASE, BSP_USER_EVENT_RELEASE_0);
+    bsp_event_to_button_action_assign(BTN_TRIGGER_ACTION, BSP_BUTTON_ACTION_LONG_PUSH, BSP_USER_EVENT_LONG_PRESS_0);
 
     /* Configure LEDs */
     bsp_board_init(BSP_INIT_LEDS);
@@ -301,8 +303,6 @@ static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t repo
 /*
 * ESB
 */
-
-
 void nrf_esb_process_rx() {
     static nrf_esb_payload_t rx_payload;
 
@@ -373,10 +373,12 @@ void nrf_esb_process_rx() {
                     case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
                     case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
                     {
-                        bool full_capture = unifying_record_rf_frame(rx_payload);
-                        if (full_capture) {
-                            NRF_LOG_INFO("scheduling replay");
-                            unifying_replay_records(rx_payload.pipe, false, 2);
+                        // record frames, till enough received
+                        if (test_record_frames && unifying_record_rf_frame(rx_payload)) {
+                            // enough frames reecorded
+                            test_record_frames = false;
+                            //NRF_LOG_INFO("scheduling replay");
+                            //unifying_replay_records(rx_payload.pipe, false, 2);
                         }
                         break;
                     }
@@ -588,17 +590,21 @@ void timer_channel_hop_event_handler_to_scheduler(void* p_context) {
 }
 
 void unifying_event_handler(unifying_evt_t const *p_event) {
-    //logPriority("nrf_esb_event_handler");
+    //logPriority("UNIFYING_event_handler");
     switch (p_event->evt_id)
     {
+        case UNIFYING_EVENT_REPLAY_RECORDS_FAILED:
+            NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FAILED");
+            break;
         case UNIFYING_EVENT_REPLAY_RECORDS_FINISHED:
-            NRF_LOG_DEBUG("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FINISHED");
+            NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FINISHED");
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_STARTED:
-            NRF_LOG_DEBUG("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_STARTED");
+            NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_STARTED");
             break;
         case UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES:
-            NRF_LOG_DEBUG("Unifying event UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES");
+            NRF_LOG_INFO("Unifying event UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES");
+            test_record_frames = false;
             break;
     }
 }
@@ -609,6 +615,8 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
 
 int main(void)
 {
+    test_record_frames = true;
+
     // Note: For Makerdiary MDK dongle the button isn't working in event driven fashion (only BSP SIMPLE seems to be 
     // supported). Thus this code won't support button interaction on MDK dongle.
 

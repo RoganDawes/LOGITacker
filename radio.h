@@ -51,6 +51,7 @@ uint32_t nrf_esb_reuse_pid(uint8_t pipe);
 
 
 bool radioTransmit(nrf_esb_payload_t *p_tx_payload, bool blockTillResult);
+bool radioTransmitCollectAck(nrf_esb_payload_t *p_tx_payload, bool blockTillResult, bool *ack_payload_received, nrf_esb_payload_t *ack_payload);
 void radioTransmitDelayed(nrf_esb_payload_t *p_tx_payload, uint32_t delay_ms);
 
 uint32_t validate_esb_payload(nrf_esb_payload_t * p_payload);

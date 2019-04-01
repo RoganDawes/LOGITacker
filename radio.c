@@ -232,6 +232,63 @@ bool radioTransmit(nrf_esb_payload_t *p_tx_payload, bool blockTillResult) {
     
 }
 
+bool radioTransmitCollectAck(nrf_esb_payload_t *p_tx_payload, bool blockTillResult, bool *ack_payload_received, nrf_esb_payload_t *ack_payload) {
+    uint32_t ret;
+
+    // if mode isn't PTX, switch over to ptx
+    radio_rf_mode_t oldMode = m_local_config.mode;
+    if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+        NRF_LOG_DEBUG("Want to TX but mode is PRX_PASSIVE, stop RX ...")
+        nrf_esb_stop_rx();
+    }
+
+    radioSetMode(RADIO_MODE_PTX);
+    ret = nrf_esb_write_payload(p_tx_payload);
+    if(ret != NRF_SUCCESS) {
+        NRF_LOG_WARNING("Error write payload: %d", ret);
+    }
+    if (!blockTillResult) {
+        if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+            NRF_LOG_DEBUG("switching back to passive PRX after TX...")
+            radioSetMode(oldMode);
+            nrf_esb_start_rx();
+        }
+        return true;
+    }
+
+    bool tx_done = false;
+    bool tx_success = false;
+    while (!tx_done) {
+        CRITICAL_REGION_ENTER();
+        if (m_last_tx_event != NULL) {
+            tx_done = true;
+            if (m_last_tx_event->evt_id == NRF_ESB_EVENT_TX_SUCCESS) tx_success = true;
+        }
+        CRITICAL_REGION_EXIT();
+        __WFI();
+    }
+    CRITICAL_REGION_ENTER();
+    m_last_tx_event = NULL;
+    CRITICAL_REGION_EXIT();
+
+    if (nrf_esb_read_rx_payload(ack_payload) == NRF_SUCCESS) {
+        //NRF_LOG_INFO("ACK PAYLOAD received %02x", ack_payload->data[1]);
+        tx_success = true; //if TX event was FAILED, but an ACK payload arrived meanwhile return success, anyways
+        *ack_payload_received = true;
+    } else {
+        *ack_payload_received = false;
+    } 
+
+    if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+        NRF_LOG_DEBUG("switching back to passive PRX after TX...")
+        radioSetMode(oldMode);
+        nrf_esb_start_rx();
+    }
+
+    return tx_success;
+    
+}
+
 
 void timer_tx_frame_from_scheduler(void *p_event_data, uint16_t event_size) {
     // process scheduled event for this handler in main loop during scheduler processing
@@ -369,7 +426,7 @@ uint32_t radioInitPTXMode() {
     
     //esb_config.event_handler    = m_local_config.event_handler;
     esb_config.event_handler = radio_esb_event_handler;    esb_config.crc = NRF_ESB_CRC_16BIT;
-    esb_config.retransmit_count = 1;
+    esb_config.retransmit_count = 2;
     esb_config.retransmit_delay = 500;
 
     err_code = nrf_esb_init(&esb_config);
