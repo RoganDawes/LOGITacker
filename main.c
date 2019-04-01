@@ -306,8 +306,6 @@ static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t repo
 void nrf_esb_process_rx() {
     static nrf_esb_payload_t rx_payload;
 
-    NRF_LOG_DEBUG("process rx called");
-
     // we check current channel here, which isn't reliable as the frame from fifo could have been received on a
     // different one, but who cares
     uint32_t ch = 0;
@@ -318,7 +316,6 @@ void nrf_esb_process_rx() {
         case RADIO_MODE_PROMISCOUS:
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                
                 if (report_frames_without_crc_match) {
                     memset(report,0,REPORT_IN_MAXSIZE);
                     report[0] = rx_payload.pipe;
@@ -556,12 +553,7 @@ void timer_channel_hop_event_handler(void* p_context)
 //    app_timer_id_t timer = (app_timer_id_t)p_context;
 
     if (!m_channel_hop_data_received) {
-
         /*
-        uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(m_channel_hop_delay_ms), p_context); //restart timer
-        APP_ERROR_CHECK(err_code);
-        */
-
         uint32_t currentChannel;
         radioGetRfChannel(&currentChannel);
         currentChannel += 3;
@@ -570,6 +562,13 @@ void timer_channel_hop_event_handler(void* p_context)
             bsp_board_led_invert(LED_B); // toggle blue LED everytime we jumped through all channels (only noticable if no RX frames, as LED is toggled on received RF frame, too)
         }
         radioSetRfChannel(currentChannel);
+        */
+        
+        radioNextRfChannel();
+        uint8_t currentChIdx;
+        radioGetRfChannelIndex(&currentChIdx);
+        if (currentChIdx == 0) bsp_board_led_invert(LED_B); // toggle blue LED everytime we jumped through all channels (only noticable if no RX frames, as LED is toggled on received RF frame, too)
+
         m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
     }   
     m_channel_hop_data_received = false;

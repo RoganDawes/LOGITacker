@@ -33,6 +33,8 @@ typedef struct
     uint8_t num_pipes;              /**< Number of pipes available. */
     uint8_t addr_length;            /**< Length of the address including the prefix. */
     uint8_t rx_pipes_enabled;       /**< Bitfield for enabled pipes. */    
+    radio_channel_set_t channel_set;
+    uint8_t rf_channel_index;
 } radio_config_t;
 
 //static nrf_esb_config_t m_local_esb_config = NRF_ESB_DEFAULT_CONFIG;
@@ -46,7 +48,9 @@ static radio_config_t m_local_config = {
     .addr_length        = 5,                                                    \
     .num_pipes          = NRF_ESB_PIPE_COUNT,                                   \
     .rf_channel         = 5,                                                    \
-    .rx_pipes_enabled   = 0xFF                                                  \
+    .rx_pipes_enabled   = 0xFF,                                                 \
+    .channel_set        = RADIO_DEFAULT_CHANNELS,                               \
+    .rf_channel_index   = 0                                                     \
 };
 
 bool check_crc16(uint8_t * p_array, uint8_t len) {
@@ -320,7 +324,6 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler) {
     m_local_config.addr_length = 5;
     m_local_config.num_pipes = 8;
     m_local_config.rx_pipes_enabled = 0xFF;
-    
 
     uint8_t base_addr_0[4] = {0xa5, 0xdc, 0x0a, 0xbb}; //Unifying pairing address for pipe 0
     uint8_t base_addr_1[4] = { 0xC2, 0xC2, 0xC2, 0xC2 }; 
@@ -329,7 +332,9 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler) {
     memcpy(m_local_config.base_addr_p0, base_addr_0, 4);
     memcpy(m_local_config.base_addr_p1, base_addr_1, 4);
     memcpy(m_local_config.pipe_prefixes, addr_prefix, 8);
-    m_local_config.rf_channel = 5;
+
+    // work with channel index
+    m_local_config.rf_channel = m_local_config.channel_set.channel_list[m_local_config.rf_channel_index];
 
     return NRF_SUCCESS;
     //return err_code;
@@ -369,6 +374,7 @@ uint32_t radioInitPromiscuousMode() {
     VERIFY_SUCCESS(err_code);
 
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
+    //err_code = radioSetRfChannelIndex(m_local_config.rf_channel_index);
     VERIFY_SUCCESS(err_code);
 
     
@@ -405,6 +411,7 @@ uint32_t radioInitPRXPassiveMode(bool flushrx) {
     VERIFY_SUCCESS(err_code);
 
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
+    //err_code = radioSetRfChannelIndex(m_local_config.rf_channel_index);
     VERIFY_SUCCESS(err_code);
 
     
@@ -442,6 +449,7 @@ uint32_t radioInitPTXMode() {
     VERIFY_SUCCESS(err_code);
 
     err_code = nrf_esb_set_rf_channel(m_local_config.rf_channel);
+    //err_code = radioSetRfChannelIndex(m_local_config.rf_channel_index);
     VERIFY_SUCCESS(err_code);
 
     
@@ -573,6 +581,29 @@ uint32_t radioSetRfChannel(uint32_t channel) {
             break;
     }
     return NRF_SUCCESS;
+}
+
+uint32_t radioSetRfChannelIndex(uint8_t channel_idx) {
+    uint8_t idx = channel_idx % m_local_config.channel_set.channel_list_length;
+    if (idx != channel_idx) return NRF_ERROR_INVALID_PARAM;
+
+    m_local_config.rf_channel_index = channel_idx;
+    return radioSetRfChannel(m_local_config.channel_set.channel_list[channel_idx]);
+}
+
+uint32_t radioGetRfChannelIndex(uint8_t *channel_index_result) {
+    if (channel_index_result == NULL) return NRF_ERROR_INVALID_PARAM;
+    *channel_index_result = m_local_config.rf_channel_index;
+    return NRF_SUCCESS;
+}
+
+
+uint32_t radioNextRfChannel() {
+    uint8_t new_idx = m_local_config.rf_channel_index;
+    new_idx++;
+    new_idx %= m_local_config.channel_set.channel_list_length;
+    //NRF_LOG_INFO("channel idx set to %d", new_idx);
+    return radioSetRfChannelIndex(new_idx);
 }
 
 uint32_t radioGetRfChannel(uint32_t * p_channel) {

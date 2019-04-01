@@ -16,6 +16,11 @@ PRX_PASSIVE:    Only RX, transmit() not allowed, no ACKs will be sent in respons
 PROMISCOUS:     RX as much data as possible with invalid RF addresses, data could be checked to be ESB frame with validateESBFrame()
 */
 
+#define RADIO_MAX_CHANNEL_COUNT 100
+#define RADIO_MIN_CHANNEL       5
+#define RADIO_MAX_CHANNEL       77
+
+
 typedef enum {
     RADIO_MODE_DISABLED,
     RADIO_MODE_PTX,          // Primary transmitter mode
@@ -24,6 +29,15 @@ typedef enum {
     RADIO_MODE_PROMISCOUS,   // RX in pseudo promiscuous mode
 } radio_rf_mode_t;
 
+typedef struct {
+    uint8_t channel_list[100];
+    uint32_t channel_list_length;
+} radio_channel_set_t;
+
+#define RADIO_DEFAULT_CHANNELS {                                                                    \
+    .channel_list = { 5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59,62,65,68,71,74,77 },    \
+    .channel_list_length = 25                                                                       \
+}
 
 
 uint32_t radioInit(nrf_esb_event_handler_t event_handler);
@@ -38,6 +52,11 @@ uint32_t radioEnablePipes(uint8_t enable_mask);
 uint32_t radioUpdatePrefix(uint8_t pipe, uint8_t prefix);
 uint32_t radioSetRfChannel(uint32_t channel);
 uint32_t radioGetRfChannel(uint32_t * p_channel);
+uint32_t radioNextRfChannel();
+uint32_t radioSetRfChannelIndex(uint8_t channel_idx);
+uint32_t radioGetRfChannelIndex(uint8_t *channel_index_result);
+
+
 
 uint32_t radioPipeNumToRFAddress(uint8_t pipeNum, uint8_t *p_dst);
 /*
