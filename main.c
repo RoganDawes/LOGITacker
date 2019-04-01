@@ -263,7 +263,7 @@ static void bsp_event_callback(bsp_event_t ev)
             if (!test_record_frames) {
                 uint8_t pipe = 1;
                 NRF_LOG_INFO("replay recorded frames for pipe 1");
-                unifying_replay_records(pipe, false, 2);
+                unifying_replay_records(pipe, false, 1);
             }
             break;
 
@@ -594,12 +594,15 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
     {
         case UNIFYING_EVENT_REPLAY_RECORDS_FAILED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FAILED");
+            app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_FINISHED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FINISHED");
+            app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_STARTED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_STARTED");
+            app_timer_stop(m_timer_channel_hop);
             break;
         case UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES");

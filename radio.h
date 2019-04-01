@@ -80,4 +80,7 @@ bool check_crc16(uint8_t * p_array, uint8_t len);
 bool validate_esb_frame(uint8_t * p_array, uint8_t addrlen);
 void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits);
 
+bool radioPingPRX(uint8_t pipe_num);
+uint32_t radioPingSweepPRX(uint8_t pipe_num, uint8_t *channel_index_result);
+
 #endif

@@ -201,7 +201,14 @@ bool radioTransmit(nrf_esb_payload_t *p_tx_payload, bool blockTillResult) {
     ret = nrf_esb_write_payload(p_tx_payload);
     if(ret != NRF_SUCCESS) {
         NRF_LOG_WARNING("Error write payload: %d", ret);
+        if (oldMode == RADIO_MODE_PRX_PASSIVE) {
+            NRF_LOG_DEBUG("switching back to passive PRX after TX...")
+            radioSetMode(oldMode);
+            nrf_esb_start_rx();
+        }
+        return false;
     }
+
     if (!blockTillResult) {
         if (oldMode == RADIO_MODE_PRX_PASSIVE) {
             NRF_LOG_DEBUG("switching back to passive PRX after TX...")
@@ -432,9 +439,10 @@ uint32_t radioInitPTXMode() {
     //esb_config.disallow_auto_ack = true; //never send back acks
     
     //esb_config.event_handler    = m_local_config.event_handler;
-    esb_config.event_handler = radio_esb_event_handler;    esb_config.crc = NRF_ESB_CRC_16BIT;
-    esb_config.retransmit_count = 2;
-    esb_config.retransmit_delay = 500;
+    esb_config.event_handler = radio_esb_event_handler;    
+    esb_config.crc = NRF_ESB_CRC_16BIT;
+    esb_config.retransmit_count = 10;
+    esb_config.retransmit_delay = 600;
 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
@@ -577,6 +585,12 @@ uint32_t radioSetRfChannel(uint32_t channel) {
             return ret;
 
             break;
+        case RADIO_MODE_PTX:
+            ret = nrf_esb_set_rf_channel(channel);
+            if (ret == NRF_SUCCESS) m_local_config.rf_channel = channel;
+            return ret;
+
+            break;
         default:
             break;
     }
@@ -631,4 +645,32 @@ uint32_t radioPipeNumToRFAddress(uint8_t pipeNum, uint8_t *p_dst) {
     p_dst[4] = m_local_config.pipe_prefixes[pipeNum];
 
     return NRF_SUCCESS;
+}
+
+static nrf_esb_payload_t m_ping_payload;
+
+bool radioPingPRX(uint8_t pipe_num) {
+    m_ping_payload.pipe = pipe_num;
+    m_ping_payload.length = 1; // to avoid error during payload write
+    nrf_esb_flush_tx(); // clear TX pipe before ping
+    return radioTransmit(&m_ping_payload, true);
+}
+
+// sends ping on all channel, returns NRF_SUCCESS on hit (without further channel change)
+// returns error if no hit on any channel
+uint32_t radioPingSweepPRX(uint8_t pipe_num, uint8_t *channel_index_result) {
+    uint32_t err;
+    for (int i=0; i<m_local_config.channel_set.channel_list_length;i++) {
+        err = radioSetRfChannelIndex(i);
+        if (err != NRF_SUCCESS) {
+            NRF_LOG_WARNING("error setting channel during ping sweep %d", err);
+            return err;
+        }
+        if (radioPingPRX(pipe_num)) {
+            *channel_index_result = i;
+            return NRF_SUCCESS;
+        }
+    }
+
+    return NRF_ERROR_NOT_FOUND;
 }

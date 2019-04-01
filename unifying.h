@@ -77,7 +77,8 @@ typedef struct {
 // note: 26 frames are minimum to overwrite counter re-use protection, but more frames
 //       are used to overcome changing counters by real keypresses in between replayed RF frames
 #define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 40
-#define UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE 26
+#define UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE 30
+#define UNIFYING_MIN_REPLAY_DELAY_MS 8
 
 typedef struct {
     rf_report_22_t  report[NUM_WHITENED_REPORTS];

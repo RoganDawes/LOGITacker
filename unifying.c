@@ -454,7 +454,18 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
         }
     } else {
         // ToDo: channel sweep for PRX (receiver), abort if not found
-        //NRF_LOG_INFO("TX failed")
+        NRF_LOG_INFO("TX failed, starting ping sweep for PRX...");
+        uint8_t ch_idx;
+        bool prx_found = radioPingSweepPRX(tx_payload.pipe, &ch_idx) == NRF_SUCCESS;
+        if (prx_found) {
+            uint32_t ch;
+            radioGetRfChannel(&ch);
+            NRF_LOG_INFO("...PRX found on channel idx %d (channel %d), re-scheduling frame for sending...", ch_idx, ch);
+            app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(1), p_rs);
+            return; // no further processing
+        } else {
+            NRF_LOG_INFO("...PRX lost, aborting replay!");
+        }
 
         // replay failed
         // restore old radio mode if it wasn't PTX already
@@ -496,8 +507,8 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
             uint32_t next_record_pre_delay_ms = p_rs->records[p_rs->read_pos].pre_delay_ms;
 
             if (p_rs->replay_realtime && next_record_pre_delay_ms > 7) p_rs->keep_alives_needed = next_record_pre_delay_ms / 8; //zero delay wouldn't triger timer at all
-            NRF_LOG_INFO("Next replay frame %d schedule for TX in %d ms", p_rs->read_pos, 8 + p_rs->keep_alives_needed*8);
-            app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(8), p_rs);
+            NRF_LOG_INFO("Next replay frame %d schedule for TX in %d ms", p_rs->read_pos, UNIFYING_MIN_REPLAY_DELAY_MS + p_rs->keep_alives_needed*UNIFYING_MIN_REPLAY_DELAY_MS);
+            app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(UNIFYING_MIN_REPLAY_DELAY_MS), p_rs);
 
         } else {
             // don't restart timer
@@ -527,7 +538,7 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
         }
     } else {
         // restart timer to send next keep-alive
-        app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(8), p_rs);
+        app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(UNIFYING_MIN_REPLAY_DELAY_MS), p_rs);
     }
 }
 
