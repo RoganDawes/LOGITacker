@@ -1,50 +1,3 @@
-/**
- * Copyright (c) 2016 - 2018, Nordic Semiconductor ASA
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form, except as embedded into a Nordic
- *    Semiconductor ASA integrated circuit in a product or a software update for
- *    such product, must reproduce the above copyright notice, this list of
- *    conditions and the following disclaimer in the documentation and/or other
- *    materials provided with the distribution.
- *
- * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * 4. This software, with or without modification, must only be used with a
- *    Nordic Semiconductor ASA integrated circuit.
- *
- * 5. Any software provided in binary form under this license must not be reverse
- *    engineered, decompiled, modified and/or disassembled.
- *
- * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL NORDIC SEMICONDUCTOR ASA OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
-/**
- * Modified by Marcus Mengs (MaMe82), to allow a mode with illegal address length
- * (addr len 1, prefix len 1). This again should allow promiscuous mode behavior
- * if address and prefix are well chosen. The approach is similar to the one used
- * by Travis Goodspeed on nRF24 series.
- */ 
-
 #include "nrf_error.h"
 #include "nrf_esb_illegalmod.h"
 #include "nrf_esb_illegalmod_error_codes.h"
@@ -57,8 +10,11 @@
 #include "nrf_delay.h"
 
 #include "bsp.h"
-//#include "nrf_log.h"
+#include "nrf_log.h"
+#include "helper.h"
+#include "unifying.h"
 
+#define LOGITECH_FILTER
 
 #define BIT_MASK_UINT_8(x) (0xFF >> (8 - (x)))
 
@@ -98,9 +54,7 @@ typedef enum {
 do                                                          \
 {                                                           \
     if (p->length == 0 ||                                   \
-       p->length > NRF_ESB_MAX_PAYLOAD_LENGTH ||            \
-       (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB &&  \
-        p->length > m_config_local.payload_length))         \
+       p->length > NRF_ESB_MAX_PAYLOAD_LENGTH)              \
     {                                                       \
         return NRF_ERROR_INVALID_LENGTH;                    \
     }                                                       \
@@ -207,6 +161,15 @@ static void on_radio_disabled_rx_ack(void);
 #define NRF_ESB_ADDR_UPDATE_MASK_BASE1          (1 << 1)    /*< Mask value to signal updating BASE1 radio address. */
 #define NRF_ESB_ADDR_UPDATE_MASK_PREFIX         (1 << 2)    /*< Mask value to signal updating radio prefixes. */
 
+/*
+static void logPriority(char* source) {
+    if (current_int_priority_get() == APP_IRQ_PRIORITY_THREAD) {
+        NRF_LOG_INFO("%s: Running in Thread/main mode", source);
+    } else {
+        NRF_LOG_INFO("%s: Running in Interrupt mode", source);
+    } 
+}
+*/
 
 // Function to do bytewise bit-swap on an unsigned 32-bit value
 static uint32_t bytewise_bit_swap(uint8_t const * p_inp)
@@ -300,22 +263,8 @@ static void update_rf_payload_format_esb_dpl(uint32_t payload_length)
 }
 
 
-static void update_rf_payload_format_esb(uint32_t payload_length)
-{
-    NRF_RADIO->PCNF0 = (1 << RADIO_PCNF0_S0LEN_Pos) |
-                       (0 << RADIO_PCNF0_LFLEN_Pos) |
-                       (1 << RADIO_PCNF0_S1LEN_Pos);
-
-    NRF_RADIO->PCNF1 = (RADIO_PCNF1_WHITEEN_Disabled    << RADIO_PCNF1_WHITEEN_Pos) |
-                       (RADIO_PCNF1_ENDIAN_Big          << RADIO_PCNF1_ENDIAN_Pos)  |
-                       ((m_esb_addr.addr_length - 1)    << RADIO_PCNF1_BALEN_Pos)   |
-                       (payload_length                  << RADIO_PCNF1_STATLEN_Pos) |
-                       (payload_length                  << RADIO_PCNF1_MAXLEN_Pos);
-}
-
-
 //illegal radio settings
-static void update_rf_payload_format_esb_illegal(uint32_t payload_length)
+static void update_rf_payload_format_esb_promiscuous(uint32_t payload_length)
 {
     /**
      * We could set an illegal address length as done by Travis Goodspeed for nRF24.
@@ -424,23 +373,43 @@ static void update_rf_payload_format_esb_illegal(uint32_t payload_length)
 
 }
 
-
+static const uint8_t promiscuous_base_addr_0[4] = {0xa8, 0xa8, 0xa8, 0xa8}; //only one octet used, as address length will be illegal
+static const uint8_t promiscuous_base_addr_1[4] = {0xaa, 0xaa, 0xaa, 0xaa}; //only one octet used, as address length will be illegal
+static const uint8_t promiscuous_addr_prefix[8] = {0xaa, 0x1f, 0x9f, 0xa8, 0xaf, 0xa9, 0x8f, 0xaa}; //prefix for pipe 0..7    
 static void update_radio_addresses(uint8_t update_mask)
 {
-    if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_BASE0) != 0)
-    {
-        NRF_RADIO->BASE0 = addr_conv(m_esb_addr.base_addr_p0);
-    }
+    if (m_config_local.protocol != NRF_ESB_PROTOCOL_ESB_PROMISCUOUS) {
+        if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_BASE0) != 0)
+        {
+            NRF_RADIO->BASE0 = addr_conv(m_esb_addr.base_addr_p0);
+        }
 
-    if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_BASE1) != 0)
-    {
-        NRF_RADIO->BASE1 = addr_conv(m_esb_addr.base_addr_p1);
-    }
+        if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_BASE1) != 0)
+        {
+            NRF_RADIO->BASE1 = addr_conv(m_esb_addr.base_addr_p1);
+        }
 
-    if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_PREFIX) != 0)
-    {
-        NRF_RADIO->PREFIX0 = bytewise_bit_swap(&m_esb_addr.pipe_prefixes[0]);
-        NRF_RADIO->PREFIX1 = bytewise_bit_swap(&m_esb_addr.pipe_prefixes[4]);
+        if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_PREFIX) != 0)
+        {
+            NRF_RADIO->PREFIX0 = bytewise_bit_swap(&m_esb_addr.pipe_prefixes[0]);
+            NRF_RADIO->PREFIX1 = bytewise_bit_swap(&m_esb_addr.pipe_prefixes[4]);
+        }
+    } else {
+        if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_BASE0) != 0)
+        {
+            NRF_RADIO->BASE0 = addr_conv(promiscuous_base_addr_0);
+        }
+
+        if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_BASE1) != 0)
+        {
+            NRF_RADIO->BASE1 = addr_conv(promiscuous_base_addr_1);
+        }
+
+        if ((update_mask & NRF_ESB_ADDR_UPDATE_MASK_PREFIX) != 0)
+        {
+            NRF_RADIO->PREFIX0 = bytewise_bit_swap(&promiscuous_addr_prefix[0]);
+            NRF_RADIO->PREFIX1 = bytewise_bit_swap(&promiscuous_addr_prefix[4]);
+        }
     }
 }
 
@@ -488,24 +457,29 @@ static bool update_radio_bitrate()
 
 static bool update_radio_protocol()
 {
+    // assure address update if proto changed
+    NRF_LOG_INFO("New proto %d, updating rf_addresses", m_config_local.protocol);
+
     switch (m_config_local.protocol)
     {
         case NRF_ESB_PROTOCOL_ESB_DPL:
             update_rf_payload_format = update_rf_payload_format_esb_dpl;
             break;
 
-        case NRF_ESB_PROTOCOL_ESB:
-            update_rf_payload_format = update_rf_payload_format_esb;
-            break;
-
-        case NRF_ESB_PROTOCOL_ESB_ILLEGAL:
-            update_rf_payload_format = update_rf_payload_format_esb_illegal;
+        case NRF_ESB_PROTOCOL_ESB_PROMISCUOUS:
+            update_rf_payload_format = update_rf_payload_format_esb_promiscuous;
             break;
 
         default:
             // Should not be reached
             return false;
     }
+
+    // assure address update if proto changed
+    NRF_LOG_INFO("New proto %d, updating rf_addresses", m_config_local.protocol);
+    update_radio_addresses(NRF_ESB_ADDR_UPDATE_MASK_BASE0 | NRF_ESB_ADDR_UPDATE_MASK_BASE1 | NRF_ESB_ADDR_UPDATE_MASK_PREFIX);
+
+
     return true;
 }
 
@@ -629,7 +603,7 @@ static bool rx_fifo_push_rfbuf(uint8_t pipe, uint8_t pid)
             m_rx_fifo.p_payload[m_rx_fifo.entry_point]->length = m_config_local.payload_length;
         }
 
-        if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_ILLEGAL) {
+        if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_PROMISCUOUS) {
             //skip bytes with alternating bits (stop if rx_len is at 32)
 
 /*
@@ -715,20 +689,6 @@ static void start_tx_transaction()
 
     switch (m_config_local.protocol)
     {
-        case NRF_ESB_PROTOCOL_ESB:
-            update_rf_payload_format(mp_current_payload->length);
-            m_tx_payload_buffer[0] = mp_current_payload->pid;
-            m_tx_payload_buffer[1] = 0;
-            memcpy(&m_tx_payload_buffer[2], mp_current_payload->data, mp_current_payload->length);
-
-            NRF_RADIO->SHORTS   = m_radio_shorts_common | RADIO_SHORTS_DISABLED_RXEN_Msk;
-            NRF_RADIO->INTENSET = RADIO_INTENSET_DISABLED_Msk | RADIO_INTENSET_READY_Msk;
-
-            // Configure the retransmit counter
-            m_retransmits_remaining = m_config_local.retransmit_count;
-            on_radio_disabled = on_radio_disabled_tx;
-            m_nrf_esb_mainstate = NRF_ESB_STATE_PTX_TX_ACK;
-            break;
 
         case NRF_ESB_PROTOCOL_ESB_DPL:
         
@@ -778,7 +738,6 @@ static void start_tx_transaction()
     NRF_RADIO->EVENTS_PAYLOAD = 0;
     NRF_RADIO->EVENTS_DISABLED = 0;
 
-    DEBUG_PIN_SET(DEBUGPIN4);
     NRF_RADIO->TASKS_TXEN  = 1;
 }
 
@@ -822,10 +781,6 @@ static void on_radio_disabled_tx()
     NRF_PPI->CHENCLR            = (1 << NRF_ESB_PPI_TX_START);
     NRF_RADIO->EVENTS_END       = 0;
 
-    if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB)
-    {
-        update_rf_payload_format(0);
-    }
 
     NRF_RADIO->PACKETPTR        = (uint32_t)m_rx_payload_buffer;
     on_radio_disabled           = on_radio_disabled_tx_wait_for_ack;
@@ -852,7 +807,7 @@ static void on_radio_disabled_tx_wait_for_ack()
 
         (void) nrf_esb_skip_tx();
 
-        if (m_config_local.protocol != NRF_ESB_PROTOCOL_ESB && m_rx_payload_buffer[0] > 0)
+        if (m_rx_payload_buffer[0] > 0)
         {
             if (rx_fifo_push_rfbuf((uint8_t)NRF_RADIO->TXADDRESS, m_rx_payload_buffer[1] >> 1))
             {
@@ -920,53 +875,71 @@ static void clear_events_restart_rx(void)
     NRF_RADIO->TASKS_RXEN = 1;
 }
 
+static void clear_events_do_not_restart_rx(void)
+{
+    //NRF_RADIO->SHORTS = m_radio_shorts_common;
+    update_rf_payload_format(m_config_local.payload_length);
+    NRF_RADIO->PACKETPTR = (uint32_t)m_rx_payload_buffer;
+    NRF_RADIO->EVENTS_DISABLED = 0;
+    NRF_RADIO->TASKS_DISABLE = 1;
+
+    while (NRF_RADIO->EVENTS_DISABLED == 0);
+
+    NRF_RADIO->EVENTS_DISABLED = 0;
+    //NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
+
+    NRF_RADIO->TASKS_RXEN = 1;
+}
+
 static void on_radio_disabled_rx(void)
 {
-
-
-
+    NRF_LOG_INFO("on_rx_disabled");
     bool            ack                = false;
     bool            retransmit_payload = false;
     bool            send_rx_event      = true;
     pipe_info_t *   p_pipe_info;
 
+    uint8_t field_length = m_rx_payload_buffer[0];
+    uint8_t field_s1 = m_rx_payload_buffer[1];  //bit 2..1: PID, bit 0: no_ack flag
+
     //if (NRF_RADIO->CRCSTATUS == 0 && !m_config_local.disallow_auto_ack) //consume frames with invalid CRC
-    if (NRF_RADIO->CRCSTATUS == 0 && m_config_local.protocol != NRF_ESB_PROTOCOL_ESB_ILLEGAL)
+    if (NRF_RADIO->CRCSTATUS == 0 && m_config_local.protocol != NRF_ESB_PROTOCOL_ESB_PROMISCUOUS)
     {
-        clear_events_restart_rx();
+        if (m_config_local.mode == NRF_ESB_MODE_SNIFF) clear_events_do_not_restart_rx();
+        else clear_events_restart_rx();
         return;
     }
 
     if (m_rx_fifo.count >= NRF_ESB_RX_FIFO_SIZE)
     {
-        clear_events_restart_rx();
+        if (m_config_local.mode == NRF_ESB_MODE_SNIFF || m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) clear_events_do_not_restart_rx();
+        else clear_events_restart_rx();
         return;
     }
 
 
     p_pipe_info = &m_rx_pipe_info[NRF_RADIO->RXMATCH];
-    if (NRF_RADIO->RXCRC             == p_pipe_info->crc &&
-        (m_rx_payload_buffer[1] >> 1) == p_pipe_info->pid
-    )
-    {
+    if (NRF_RADIO->RXCRC == p_pipe_info->crc && (field_s1 >> 1) == p_pipe_info->pid) {
         retransmit_payload = true;
-        send_rx_event = false; // if  we are in passive rx mode, with auto ack, we fire a receive event, even on pipe mismatch (to collect ACK payloads from real PRX)
+        send_rx_event = false; // if we are in passive rx mode, with auto ack, we fire a receive event, even on pipe mismatch (to collect ACK payloads from real PRX)
     }
 
-    p_pipe_info->pid = m_rx_payload_buffer[1] >> 1;
+    p_pipe_info->pid = field_s1 >> 1;
     p_pipe_info->crc = NRF_RADIO->RXCRC;
-    if ((m_config_local.selective_auto_ack == false) || ((m_rx_payload_buffer[1] & 0x01) == 1))
+    if ((m_config_local.selective_auto_ack == false) || ((field_s1 & 0x01) == 1))
     {
         ack = true;
     }
 
-    if (m_config_local.disallow_auto_ack) {
-        ack = false; //override auto ack setting if  disallowed (stay pas)
-        NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
+
+    if (m_config_local.disallow_auto_ack || m_config_local.mode == NRF_ESB_MODE_SNIFF || m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) ack = false;
+    if (m_config_local.mode == NRF_ESB_MODE_SNIFF || m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) {
+        // in sniffer and promiscuous mode, we want the radio to immediatley restart RX (start_end short)
+        // don't use END->DISABLE shortcut, but END->start
+        NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_ADDRESS_RSSISTART_Msk | RADIO_SHORTS_DISABLED_RSSISTOP_Msk | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
     } 
 
-    if (ack)
-    {
+    if (ack) {
         NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_DISABLED_RXEN_Msk;
 
         switch (m_config_local.protocol)
@@ -1010,22 +983,15 @@ static void on_radio_disabled_rx(void)
                         m_tx_payload_buffer[0] = 0;
                     }
 
-                    m_tx_payload_buffer[1] = m_rx_payload_buffer[1];
+                    m_tx_payload_buffer[1] = field_s1;
                 }
                 break;
 
-            case NRF_ESB_PROTOCOL_ESB:
-                {
-                    update_rf_payload_format(0);
-                    m_tx_payload_buffer[0] = m_rx_payload_buffer[0];
-                    m_tx_payload_buffer[1] = 0;
-                }
-                break;
             // should never happen, we don't send ACKs in promiscuous mode               
-            case NRF_ESB_PROTOCOL_ESB_ILLEGAL:
+            default:
                 {
                     update_rf_payload_format(0);
-                    m_tx_payload_buffer[0] = m_rx_payload_buffer[0];
+                    m_tx_payload_buffer[0] = field_length;
                     m_tx_payload_buffer[1] = 0;
                 }
                 break;
@@ -1037,13 +1003,59 @@ static void on_radio_disabled_rx(void)
         on_radio_disabled = on_radio_disabled_rx_ack;
     }
     else
-    {
+    {        
         if (!m_config_local.disallow_auto_ack) {
-            clear_events_restart_rx();
-        } 
-
-        
+            if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS || m_config_local.mode == NRF_ESB_MODE_SNIFF) clear_events_do_not_restart_rx();
+            else clear_events_restart_rx();
+        }    
     }
+
+    if (send_rx_event)
+    {
+        // Push the new packet to the RX buffer and trigger a received event if the operation was
+        // successful.
+        if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
+        {
+            m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
+            NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+        }
+    }
+}
+
+static void on_radio_end_rx(void)
+{
+    NRF_LOG_INFO("on_rx_end");
+
+    bool            send_rx_event      = true;
+    pipe_info_t *   p_pipe_info;
+
+//    uint8_t field_length = m_rx_payload_buffer[0];
+    uint8_t field_s1 = m_rx_payload_buffer[1];  //bit 2..1: PID, bit 0: no_ack flag
+
+    //if (NRF_RADIO->CRCSTATUS == 0 && !m_config_local.disallow_auto_ack) //consume frames with invalid CRC
+    if (NRF_RADIO->CRCSTATUS == 0 && m_config_local.protocol != NRF_ESB_PROTOCOL_ESB_PROMISCUOUS)
+    {
+        //clear_events_restart_rx(); //ToDo: rework
+        clear_events_do_not_restart_rx();
+        return;
+    }
+
+    if (m_rx_fifo.count >= NRF_ESB_RX_FIFO_SIZE)
+    {
+        //clear_events_restart_rx(); //ToDo: rework
+        clear_events_do_not_restart_rx();
+        return;
+    }
+
+
+    p_pipe_info = &m_rx_pipe_info[NRF_RADIO->RXMATCH];
+    if (NRF_RADIO->RXCRC == p_pipe_info->crc && (field_s1 >> 1) == p_pipe_info->pid) {
+        send_rx_event = false; // if  we are in passive rx mode, with auto ack, we fire a receive event, even on pipe mismatch (to collect ACK payloads from real PRX)
+    }
+
+    p_pipe_info->pid = field_s1 >> 1;
+    p_pipe_info->crc = NRF_RADIO->RXCRC;
+
 
     if (send_rx_event)
     {
@@ -1060,12 +1072,7 @@ static void on_radio_disabled_rx(void)
 
 static void on_radio_disabled_rx_ack(void)
 {
-    //NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
-    if (m_config_local.disallow_auto_ack) {
-        NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
-    } else {
-        NRF_RADIO->SHORTS      = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
-    } 
+    NRF_RADIO->SHORTS      = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
 
     update_rf_payload_format(m_config_local.payload_length);
 
@@ -1105,13 +1112,11 @@ void RADIO_IRQHandler()
     if (NRF_RADIO->EVENTS_READY && (NRF_RADIO->INTENSET & RADIO_INTENSET_READY_Msk))
     {
         NRF_RADIO->EVENTS_READY = 0;
-        DEBUG_PIN_SET(DEBUGPIN1);
     }
 
     if (NRF_RADIO->EVENTS_END && (NRF_RADIO->INTENSET & RADIO_INTENSET_END_Msk))
     {
         NRF_RADIO->EVENTS_END = 0;
-        DEBUG_PIN_SET(DEBUGPIN2);
 
         // Call the correct on_radio_end function, depending on the current protocol state
         if (on_radio_end)
@@ -1123,7 +1128,6 @@ void RADIO_IRQHandler()
     if (NRF_RADIO->EVENTS_DISABLED && (NRF_RADIO->INTENSET & RADIO_INTENSET_DISABLED_Msk))
     {
         NRF_RADIO->EVENTS_DISABLED = 0;
-        DEBUG_PIN_SET(DEBUGPIN3);
 
         // Call the correct on_radio_disable function, depending on the current protocol state
         if (on_radio_disabled)
@@ -1132,10 +1136,6 @@ void RADIO_IRQHandler()
         }
     }
 
-    DEBUG_PIN_CLR(DEBUGPIN1);
-    DEBUG_PIN_CLR(DEBUGPIN2);
-    DEBUG_PIN_CLR(DEBUGPIN3);
-    DEBUG_PIN_CLR(DEBUGPIN4);
 }
 
 
@@ -1169,13 +1169,7 @@ uint32_t nrf_esb_init(nrf_esb_config_t const * p_config)
     memset(m_pids, 0, sizeof(m_pids));
 
     VERIFY_TRUE(update_radio_parameters(), NRF_ERROR_INVALID_PARAM);
-
-    // Configure radio address registers according to ESB default values
-    NRF_RADIO->BASE0   = 0xE7E7E7E7;
-    NRF_RADIO->BASE1   = 0x43434343;
-    NRF_RADIO->PREFIX0 = 0x23C343E7;
-    NRF_RADIO->PREFIX1 = 0x13E363A3;
-    
+   
     initialize_fifos();
 
     sys_timer_init();
@@ -1249,6 +1243,7 @@ bool nrf_esb_is_idle(void)
 
 void ESB_EVT_IRQHandler(void)
 {
+
     ret_code_t      err_code;
     uint32_t        interrupts;
     nrf_esb_evt_t   event;
@@ -1270,7 +1265,8 @@ void ESB_EVT_IRQHandler(void)
         }
         if (interrupts & NRF_ESB_INT_RX_DATA_RECEIVED_MSK)
         {
-            event.evt_id = NRF_ESB_EVENT_RX_RECEIVED;
+            if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) event.evt_id = NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED;
+            else event.evt_id = NRF_ESB_EVENT_RX_RECEIVED;
             m_event_handler(&event);
         }
     }
@@ -1329,7 +1325,7 @@ uint32_t nrf_esb_read_rx_payload(nrf_esb_payload_t * p_payload)
     p_payload->rssi   = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->rssi;
     p_payload->pid    = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->pid;
     p_payload->noack  = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->noack;
-    if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_ILLEGAL) {
+    if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_PROMISCUOUS) {
         memcpy(p_payload->data, m_rx_fifo.p_payload[m_rx_fifo.exit_point]->data, 60);
     } else {
         memcpy(p_payload->data, m_rx_fifo.p_payload[m_rx_fifo.exit_point]->data, p_payload->length);
@@ -1370,17 +1366,29 @@ uint32_t nrf_esb_start_rx(void)
     NRF_RADIO->INTENCLR = 0xFFFFFFFF;
     NRF_RADIO->EVENTS_DISABLED = 0;
     on_radio_disabled = on_radio_disabled_rx;
+    on_radio_end = on_radio_end_rx;
+    
 
-    if (m_config_local.disallow_auto_ack) {
-        NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
+    if (m_config_local.mode == NRF_ESB_MODE_SNIFF || m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) {
+        // don't use END->DISABLE shortcut, but END->start
+        NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_ADDRESS_RSSISTART_Msk | RADIO_SHORTS_DISABLED_RSSISTOP_Msk | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
     } else {
         NRF_RADIO->SHORTS      = m_radio_shorts_common | RADIO_SHORTS_DISABLED_TXEN_Msk;
     } 
 
-    NRF_RADIO->INTENSET    = RADIO_INTENSET_DISABLED_Msk;
+    switch (m_config_local.mode) {
+        case NRF_ESB_MODE_SNIFF:
+        case NRF_ESB_MODE_PROMISCOUS:
+            NRF_RADIO->INTENSET    = RADIO_INTENSET_DISABLED_Msk | RADIO_INTENSET_END_Msk;        
+            break;
+        default:    
+            NRF_RADIO->INTENSET    = RADIO_INTENSET_DISABLED_Msk;
+    }
+    
     m_nrf_esb_mainstate    = NRF_ESB_STATE_PRX;
 
-    NRF_RADIO->RXADDRESSES  = m_esb_addr.rx_pipes_enabled;
+    if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_PROMISCUOUS) NRF_RADIO->RXADDRESSES  = 0xff; //use all pipe addresses in promiscuous mode
+    else NRF_RADIO->RXADDRESSES  = m_esb_addr.rx_pipes_enabled;
     NRF_RADIO->FREQUENCY    = m_esb_addr.rf_channel;
     NRF_RADIO->PACKETPTR    = (uint32_t)m_rx_payload_buffer;
 
@@ -1786,12 +1794,25 @@ uint32_t nrf_esb_enable_pipes(uint8_t enable_mask)
 
 uint32_t nrf_esb_set_rf_channel(uint32_t channel)
 {
-    VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
-    VERIFY_TRUE(channel <= 100, NRF_ERROR_INVALID_PARAM);
+    //if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS || m_config_local.mode == NRF_ESB_MODE_SNIFF) {
+    if ((m_config_local.mode == NRF_ESB_MODE_PROMISCOUS || m_config_local.mode == NRF_ESB_MODE_SNIFF) && (m_nrf_esb_mainstate == NRF_ESB_STATE_PRX)) {
 
-    m_esb_addr.rf_channel = channel;
+        VERIFY_TRUE(channel <= 100, NRF_ERROR_INVALID_PARAM);
 
-    return NRF_SUCCESS;
+        nrf_esb_stop_rx();
+        m_esb_addr.rf_channel = channel;
+        nrf_esb_start_rx();
+
+        return NRF_SUCCESS;
+
+    } else {
+        VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
+        VERIFY_TRUE(channel <= 100, NRF_ERROR_INVALID_PARAM);
+
+        m_esb_addr.rf_channel = channel;
+
+        return NRF_SUCCESS;
+    }
 }
 
 
@@ -1873,3 +1894,88 @@ void NRF_ESB_BUGFIX_TIMER_IRQHandler(void)
     }
 }
 #endif
+
+
+
+
+
+
+
+
+
+bool nrf_esb_validate_promiscuous_frame(uint8_t * p_array, uint8_t addrlen) {
+    uint8_t framelen = p_array[addrlen] >> 2;
+#ifndef LOGITECH_FILTER    
+    if (framelen > 32) {
+#else        
+    if (framelen != 22 && framelen != 0 && framelen != 10 && framelen != 5) { // logitech
+#endif    
+        return false; // early out if ESB frame has a length > 32, this only accounts for "old style" ESB which is bound to 32 byte max payload length
+    }
+    uint8_t crclen = addrlen + 1 + framelen + 2; //+1 for PCF (we ignore one bit), +2 for crc16
+
+    return helper_array_check_crc16(p_array, crclen);
+}
+
+
+#define VALIDATION_SHIFT_BUF_SIZE 64
+uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload) {
+    uint8_t assumed_addrlen = 5; //Validation has to take RF address length of raw frames into account, thus we assume the given length in byte
+    uint8_t tmpData[VALIDATION_SHIFT_BUF_SIZE];
+    uint8_t tmpDataLen = p_payload->length;
+    static bool crcmatch = false;
+
+    for (uint8_t i=0; i< tmpDataLen; i++) {
+        tmpData[i] = p_payload -> data[i];
+    }
+
+    //Skip 7 bit if first 8 are alternating
+    if (p_payload -> data[0] == 0xaa) helper_array_shl(tmpData, tmpDataLen, 7);
+  
+    // if processing takes too long RF frames are discarded
+    // the shift value in the following for loop controls how often a received
+    // frame is shifted for CRC check. If this value is too large, frames are dropped,
+    // if it is too low, chance for detecting valid frames decreases.
+    // The nrf_esb_validate_promiscuous_frame function has an early out, if determined ESB frame length
+    // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
+    crcmatch = false;
+    for (uint8_t shift=0; shift<40; shift++) {
+        if (nrf_esb_validate_promiscuous_frame(tmpData, assumed_addrlen)) {
+            crcmatch = true;
+            break;
+        }
+        helper_array_shl(tmpData, tmpDataLen, 1);
+    }
+
+    if (crcmatch) {
+        //wipe out old rx data
+        memset(p_payload->data, 0, p_payload->length);
+
+        uint8_t esb_len = tmpData[assumed_addrlen] >> 2; //extract length bits from the assumed Packet Control Field, which starts right behind the RF address
+
+        //correct RF frame length if CRC match
+        p_payload->length = assumed_addrlen + 1 + esb_len + 2; //final payload (5 byte address, ESB payload with dynamic length, higher 8 PCF bits, 2 byte CRC)
+
+        //byte allign payload (throw away no_ack bit of PCF, keep the other 8 bits)
+        helper_array_shl(&tmpData[assumed_addrlen+1], esb_len, 1); //shift left all bytes behind the PCF field by one bit (we loose the lowest PCF bit, which is "no ack", and thus not of interest)
+
+#ifndef LOGITECH_FILTER    
+        // additional check of 8 bit unifying payload CRC (not CRC16 of ESB frame)
+        if (!unifying_validate_payload(&tmpData[assumed_addrlen+1], esb_len)) return NRF_ERROR_INVALID_DATA;
+#endif    
+
+
+        /*
+        //zero out rest of report
+        memset(&tmpData[p_payload->length], 0, VALIDATION_SHIFT_BUF_SIZE - p_payload->length);
+        */
+        memcpy(&p_payload->data[2], tmpData, p_payload->length);
+        p_payload->length += 2;
+        p_payload->data[0] = p_payload->pipe; //encode rx pipe
+        p_payload->data[1] = esb_len; //encode real ESB payload length
+
+        return NRF_SUCCESS;
+    } else {
+        return NRF_ERROR_INVALID_DATA;
+    }
+}

@@ -1,42 +1,4 @@
-/**
- * Copyright (c) 2016 - 2018, Nordic Semiconductor ASA
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form, except as embedded into a Nordic
- *    Semiconductor ASA integrated circuit in a product or a software update for
- *    such product, must reproduce the above copyright notice, this list of
- *    conditions and the following disclaimer in the documentation and/or other
- *    materials provided with the distribution.
- *
- * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
- *
- * 4. This software, with or without modification, must only be used with a
- *    Nordic Semiconductor ASA integrated circuit.
- *
- * 5. Any software provided in binary form under this license must not be reverse
- *    engineered, decompiled, modified and/or disassembled.
- *
- * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL NORDIC SEMICONDUCTOR ASA OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
+
 #ifndef __NRF_ESB_ILLEGALMOD_H
 #define __NRF_ESB_ILLEGALMOD_H
 
@@ -49,42 +11,6 @@
 extern "C" {
 #endif
 
-/** @defgroup nrf_esb Enhanced ShockBurst
- * @{
- * @ingroup proprietary_api
- *
- * @brief Enhanced ShockBurst (ESB) is a basic protocol that supports two-way data
- *        packet communication including packet buffering, packet acknowledgment,
- *        and automatic retransmission of lost packets.
- */
-
-/** @name Debug pins
- * @{
- * @brief If NRF_ESB_DEBUG is defined, these GPIO pins can be used for debug timing.
- */
-
-#ifndef NRF52840_XXAA
-#define DEBUGPIN1   12 //!< If NRF_ESB_DEBUG is defined, this GPIO pin is set with every radio interrupt.
-#define DEBUGPIN2   13 //!< If NRF_ESB_DEBUG is defined, this GPIO pin is set with every NRF_RADIO->EVENTS_END.
-#define DEBUGPIN3   14 //!< If NRF_ESB_DEBUG is defined, this GPIO pin is set with every NRF_RADIO->EVENTS_DISABLED.
-#define DEBUGPIN4   15 //!< If NRF_ESB_DEBUG is defined, this GPIO pin is set when the radio is set to start transmission.
-#else
-#define DEBUGPIN1   24 //!< If NRF_ESB_DEBUG is defined, this GPIO pin is set with every radio interrupt.
-#define DEBUGPIN2   25 //!< If NRF_ESB_DEBUG is defined, this GPIO pin is set with every NRF_RADIO->EVENTS_END.
-#define DEBUGPIN3   26 //!< If NRF_ESB_DEBUG is defined, this GPIO pin is set with every NRF_RADIO->EVENTS_DISABLED.
-#define DEBUGPIN4   27 //!< If NRF_ESB_DEBUG is defined, this GPIO pin is set when the radio is set to start transmission.
-#endif
-
-#ifdef  NRF_ESB_DEBUG
-#define DEBUG_PIN_SET(a)    (NRF_GPIO->OUTSET = (1 << (a))) //!< Used internally to set debug pins.
-#define DEBUG_PIN_CLR(a)    (NRF_GPIO->OUTCLR = (1 << (a))) //!< Used internally to clear debug pins.
-#else
-#define DEBUG_PIN_SET(a) //!< Used internally to set debug pins.
-#define DEBUG_PIN_CLR(a) //!< Used internally to clear debug pins.
-#endif
-
-  /** @} */
-  
 #define     NRF_ESB_RETRANSMIT_DELAY_MIN        135
 
 // Hardcoded parameters - change if necessary
@@ -175,10 +101,25 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .disallow_auto_ack      = false                             \
 }
 
-/** @brief Default radio parameters. 
- *  @details Roughly equal to the nRF24Lxx default parameters (except for CRC, which is set to 16 bit, and protocol, which is set to DPL). */
-#define NRF_ESB_ILLEGAL_CONFIG {.protocol               = NRF_ESB_PROTOCOL_ESB_ILLEGAL,     \
-                                .mode                   = NRF_ESB_MODE_PRX,                 \
+#define NRF_ESB_SNIFF_CONFIG   {.protocol               = NRF_ESB_PROTOCOL_ESB_DPL,         \
+                                .mode                   = NRF_ESB_MODE_SNIFF,               \
+                                .event_handler          = 0,                                \
+                                .bitrate                = NRF_ESB_BITRATE_2MBPS,            \
+                                .crc                    = NRF_ESB_CRC_16BIT,                \
+                                .tx_output_power        = NRF_ESB_TX_POWER_0DBM,            \
+                                .retransmit_delay       = 250,                              \
+                                .retransmit_count       = 3,                                \
+                                .tx_mode                = NRF_ESB_TXMODE_AUTO,              \
+                                .radio_irq_priority     = 1,                                \
+                                .event_irq_priority     = 2,                                \
+                                .payload_length         = 32,                               \
+                                .selective_auto_ack     = true,                            \
+                                .disallow_auto_ack      = true                             \
+}
+
+
+#define NRF_ESB_PROMISCUOUS_CONFIG {.protocol               = NRF_ESB_PROTOCOL_ESB_PROMISCUOUS,     \
+                                .mode                   = NRF_ESB_MODE_PROMISCOUS,          \
                                 .event_handler          = 0,                                \
                                 .bitrate                = NRF_ESB_BITRATE_2MBPS,            \
                                 .crc                    = NRF_ESB_CRC_OFF,                  \
@@ -191,24 +132,6 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .payload_length         = 60,                               \
                                 .selective_auto_ack     = true,                             \
                                 .disallow_auto_ack      = true                              \
-}
-
-
-/** @brief Default legacy radio parameters. Identical to the nRF24Lxx defaults. */
-#define NRF_ESB_LEGACY_CONFIG  {.protocol               = NRF_ESB_PROTOCOL_ESB,             \
-                                .mode                   = NRF_ESB_MODE_PTX,                 \
-                                .event_handler          = 0,                                \
-                                .bitrate                = NRF_ESB_BITRATE_2MBPS,            \
-                                .crc                    = NRF_ESB_CRC_8BIT,                 \
-                                .tx_output_power        = NRF_ESB_TX_POWER_0DBM,            \
-                                .retransmit_delay       = 600,                              \
-                                .retransmit_count       = 3,                                \
-                                .tx_mode                = NRF_ESB_TXMODE_AUTO,              \
-                                .radio_irq_priority     = 1,                                \
-                                .event_irq_priority     = 2,                                \
-                                .payload_length         = 32,                               \
-                                .selective_auto_ack     = false,                            \
-                                .disallow_auto_ack      = false                             \
 }
 
 
@@ -230,16 +153,17 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
 
 /**@brief Enhanced ShockBurst protocols. */
 typedef enum {
-    NRF_ESB_PROTOCOL_ESB,      /**< Enhanced ShockBurst with fixed payload length.                                            */
     NRF_ESB_PROTOCOL_ESB_DPL,   /**< Enhanced ShockBurst with dynamic payload length.                                          */
-    NRF_ESB_PROTOCOL_ESB_ILLEGAL   /**< illegal addr len 1, static payload length                                          */
+    NRF_ESB_PROTOCOL_ESB_PROMISCUOUS   /**< illegal addr len 1, static payload length                                          */
 } nrf_esb_protocol_t;
 
 
 /**@brief Enhanced ShockBurst modes. */
 typedef enum {
     NRF_ESB_MODE_PTX,          /**< Primary transmitter mode. */
-    NRF_ESB_MODE_PRX           /**< Primary receiver mode.    */
+    NRF_ESB_MODE_PRX,           /**< Primary receiver mode.    */
+    NRF_ESB_MODE_PROMISCOUS,
+    NRF_ESB_MODE_SNIFF
 } nrf_esb_mode_t;
 
 
@@ -295,7 +219,8 @@ typedef enum
 {
     NRF_ESB_EVENT_TX_SUCCESS,   /**< Event triggered on TX success.     */
     NRF_ESB_EVENT_TX_FAILED,    /**< Event triggered on TX failure.     */
-    NRF_ESB_EVENT_RX_RECEIVED   /**< Event triggered on RX received.    */
+    NRF_ESB_EVENT_RX_RECEIVED,   /**< Event triggered on RX received.    */
+    NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED   /**< Event triggered on RX in PROMISCUOUS mode.    */
 } nrf_esb_evt_id_t;
 
 
@@ -652,6 +577,8 @@ uint32_t nrf_esb_set_bitrate(nrf_esb_bitrate_t bitrate);
 uint32_t nrf_esb_reuse_pid(uint8_t pipe);
 
 /** @} */
+
+uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload);
 
 #ifdef __cplusplus
 }

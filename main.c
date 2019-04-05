@@ -47,7 +47,7 @@
 // Scheduler settings
 #define SCHED_MAX_EVENT_DATA_SIZE   BYTES_TO_WORDS(MAX(sizeof(unifying_rf_record_set_t),MAX(MAX(sizeof(nrf_esb_evt_t), APP_TIMER_SCHED_EVENT_DATA_SIZE), sizeof(nrf_esb_payload_t))))
 //#define SCHED_MAX_EVENT_DATA_SIZE   APP_TIMER_SCHED_EVENT_DATA_SIZE
-#define SCHED_QUEUE_SIZE            32
+#define SCHED_QUEUE_SIZE            16
 
 // channel hop timer
 APP_TIMER_DEF(m_timer_channel_hop);
@@ -65,7 +65,7 @@ uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
 
 #define BTN_TRIGGER_ACTION   0
 
-    bool report_frames_without_crc_match = false; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
+    bool report_frames_without_crc_match = true; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
     bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
 #ifdef NRF52840_MDK
     bool with_log = true;
@@ -263,7 +263,7 @@ static void bsp_event_callback(bsp_event_t ev)
             if (!test_record_frames) {
                 uint8_t pipe = 1;
                 NRF_LOG_INFO("replay recorded frames for pipe 1");
-                unifying_replay_records(pipe, false, 1);
+                unifying_replay_records(pipe, false, 2, 2);
             }
             break;
 
@@ -324,7 +324,7 @@ void nrf_esb_process_rx() {
                     bsp_board_led_invert(LED_G); // toggle green to indicate received RF data from promiscuous sniffing
                 }
 
-                if (validate_esb_payload(&rx_payload) == NRF_SUCCESS) {
+                if (nrf_esb_validate_promiscuous_esb_payload(&rx_payload) == NRF_SUCCESS) {
                     bsp_board_led_invert(LED_G); // toggle green to indicate valid ESB frame in promiscous mode
                     memset(report,0,REPORT_IN_MAXSIZE);
                     memcpy(report, rx_payload.data, rx_payload.length);
@@ -343,7 +343,7 @@ void nrf_esb_process_rx() {
 
                         nrf_esb_stop_rx();
                         
-                        radioSetMode(RADIO_MODE_PRX_PASSIVE);
+                        radioSetMode(RADIO_MODE_SNIFF);
                         radioSetBaseAddress1(RfAddress1);
                         radioUpdatePrefix(1, rx_payload.data[6]);   
                         //radioUpdatePrefix(1, 0x4c);   
@@ -357,7 +357,7 @@ void nrf_esb_process_rx() {
             }
             break;
         case RADIO_MODE_PTX: // process RX frames with ack payload in PTX mode
-        case RADIO_MODE_PRX_PASSIVE:
+        case RADIO_MODE_SNIFF:
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
                 if (rx_payload.length == 0) bsp_board_led_invert(LED_G); // toggle green led to indicate non-empty frame sniffed
@@ -418,11 +418,12 @@ void nrf_esb_event_handler(nrf_esb_evt_t *p_event) {
             NRF_LOG_DEBUG("nrf_esb_event_handler TX_SUCCESS");
             break;
         case NRF_ESB_EVENT_TX_FAILED:
-            NRF_LOG_WARNING("nrf_esb_event_handler TX_FAILED");
+            NRF_LOG_DEBUG("nrf_esb_event_handler TX_FAILED");
             //(void) nrf_esb_flush_tx();
             //(void) nrf_esb_start_tx();            
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
+        case NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED:
             NRF_LOG_DEBUG("nrf_esb_event_handler RX RECEIVED EVENT");
             nrf_esb_process_rx();
             break;
@@ -548,21 +549,8 @@ static void fds_evt_handler(fds_evt_t const * p_evt)
 // channel hop timer
 void timer_channel_hop_event_handler(void* p_context)
 {
-    //runs in interrupt mode
-    //logPriority("timer_channel_hop_event_handler");
-//    app_timer_id_t timer = (app_timer_id_t)p_context;
 
     if (!m_channel_hop_data_received) {
-        /*
-        uint32_t currentChannel;
-        radioGetRfChannel(&currentChannel);
-        currentChannel += 3;
-        if (currentChannel > 74) {
-            currentChannel = 5;
-            bsp_board_led_invert(LED_B); // toggle blue LED everytime we jumped through all channels (only noticable if no RX frames, as LED is toggled on received RF frame, too)
-        }
-        radioSetRfChannel(currentChannel);
-        */
         
         radioNextRfChannel();
         uint8_t currentChIdx;
@@ -706,7 +694,10 @@ int main(void)
         
 
     //FDS
+// ToDo: Debuf fds usage on pca10059
+#ifndef BOARD_PCA10059    
     restoreStateFromFlash(&m_dongle_state);
+#endif
 
     //Try to load first device info record from flash, create if not existing
     ret = restoreDeviceInfoFromFlash(0, &m_current_device_info);

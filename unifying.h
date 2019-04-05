@@ -70,6 +70,7 @@ typedef struct {
     bool    replay_realtime;         // tries to replay with same delays as recorded (fill gaps with 8ms keep alives)
     uint8_t keep_alives_to_insert; // how many keep alives (8ms) should be inserted between replays
     uint8_t keep_alives_needed; // how many keep alives are needed to fullfill keep_alives_to_insert before next record TX
+    uint8_t replay_loops_remaining; // how often a replay has to be repeated
 } unifying_rf_record_set_t;
 
 
@@ -78,7 +79,7 @@ typedef struct {
 //       are used to overcome changing counters by real keypresses in between replayed RF frames
 #define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 40
 #define UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE 30
-#define UNIFYING_MIN_REPLAY_DELAY_MS 8
+#define UNIFYING_MIN_REPLAY_DELAY_MS 6
 
 typedef struct {
     rf_report_22_t  report[NUM_WHITENED_REPORTS];
@@ -119,7 +120,7 @@ replay_realtime:        if enabled frames are played back with recording speed a
 keep_alives_to_insert   if replay_realtime is disabled, this number of 8ms keep-alives is inserted after each frame (helps
                         to correlate received ack payloads to replayed frames)
 */
-void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert);
+void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert, uint8_t loop_count);
 bool unifying_record_rf_frame(nrf_esb_payload_t frame);
 
 

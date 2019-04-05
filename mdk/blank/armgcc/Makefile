@@ -70,6 +70,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crc16/crc16.c \
   $(SDK_ROOT)/components/libraries/fds/fds.c \
   $(SDK_ROOT)/modules/nrfx/hal/nrf_nvmc.c \
+  $(PROJ_DIR)/helper.c \
   $(PROJ_DIR)/state.c \
   $(PROJ_DIR)/unifying.c \
   $(PROJ_DIR)/timestamp.c \
