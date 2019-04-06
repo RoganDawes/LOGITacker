@@ -13,6 +13,7 @@
 #include "nrf_log.h"
 #include "helper.h"
 #include "unifying.h"
+#include "app_scheduler.h"
 
 #define LOGITECH_FILTER
 
@@ -28,6 +29,7 @@
 #define     NRF_ESB_INT_TX_SUCCESS_MSK          0x01        /**< Interrupt mask value for TX success. */
 #define     NRF_ESB_INT_TX_FAILED_MSK           0x02        /**< Interrupt mask value for TX failure. */
 #define     NRF_ESB_INT_RX_DATA_RECEIVED_MSK    0x04        /**< Interrupt mask value for RX_DR. */
+#define     NRF_ESB_INT_RX_PROMISCUOUS_DATA_RECEIVED_MSK    0x08        /**< Interrupt mask value for RX_DR. */
 
 #define     NRF_ESB_PID_RESET_VALUE             0xFF        /**< Invalid PID value which is guaranteed to not collide with any valid PID value. */
 #define     NRF_ESB_PID_MAX                     3           /**< Maximum value for PID. */
@@ -160,6 +162,12 @@ static void on_radio_disabled_rx_ack(void);
 #define NRF_ESB_ADDR_UPDATE_MASK_BASE0          (1 << 0)    /*< Mask value to signal updating BASE0 radio address. */
 #define NRF_ESB_ADDR_UPDATE_MASK_BASE1          (1 << 1)    /*< Mask value to signal updating BASE1 radio address. */
 #define NRF_ESB_ADDR_UPDATE_MASK_PREFIX         (1 << 2)    /*< Mask value to signal updating radio prefixes. */
+
+//static bool m_lock_rx_fifo = false;
+//#define WAIT_UNLOCK_RX_FIFO while(m_lock_rx_fifo){}
+//#define LOCK_RX_FIFO m_lock_rx_fifo=true
+//#define UNLOCK_RX_FIFO m_lock_rx_fifo=false
+
 
 /*
 static void logPriority(char* source) {
@@ -528,9 +536,12 @@ static void reset_fifos()
     m_tx_fifo.exit_point  = 0;
     m_tx_fifo.count       = 0;
 
+//    WAIT_UNLOCK_RX_FIFO;
+//    UNLOCK_RX_FIFO;
     m_rx_fifo.entry_point = 0;
     m_rx_fifo.exit_point  = 0;
     m_rx_fifo.count       = 0;
+//    LOCK_RX_FIFO;
 }
 
 
@@ -568,6 +579,84 @@ uint32_t nrf_esb_skip_tx()
     return NRF_SUCCESS;
 }
 
+
+void nrf_esb_exec_promiscuous_payload_validation(void *p_event_data, uint16_t event_size) {
+    APP_ERROR_CHECK_BOOL(event_size == sizeof(nrf_esb_payload_t));
+    nrf_esb_payload_t * p_rx_payload_promiscuous_unvalidated = (nrf_esb_payload_t *)p_event_data;
+
+    if (nrf_esb_validate_promiscuous_esb_payload(p_rx_payload_promiscuous_unvalidated) == NRF_SUCCESS) {
+//        WAIT_UNLOCK_RX_FIFO;
+//        LOCK_RX_FIFO;
+
+        // push data to RX fifo and generate event for RX 
+        if (m_rx_fifo.count < NRF_ESB_RX_FIFO_SIZE) {
+            //push frame to queue
+            //NRF_LOG_DEBUG("Enqueueing valid pay at entry point %d", m_rx_fifo.entry_point);
+            memcpy(m_rx_fifo.p_payload[m_rx_fifo.entry_point], p_rx_payload_promiscuous_unvalidated, sizeof(nrf_esb_payload_t));
+            m_rx_fifo.p_payload[m_rx_fifo.entry_point]->validated_promiscuous_frame  = true;
+            //adjust queue
+            if (++m_rx_fifo.entry_point >= NRF_ESB_RX_FIFO_SIZE) m_rx_fifo.entry_point = 0;
+            m_rx_fifo.count++;
+
+            m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
+            NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+        } else {
+            NRF_LOG_WARNING("can not re-enqueue valid frame, because RX fifo is full")
+        }
+//        UNLOCK_RX_FIFO;
+    }
+}
+
+/** @brief  Function to push the content of the rx_buffer to the RX FIFO.
+ *
+ *  The module will point the register NRF_RADIO->PACKETPTR to a buffer for receiving packets.
+ *  After receiving a packet the module will call this function to copy the received data to
+ *  the RX FIFO.
+ *
+ *  @param  pipe Pipe number to set for the packet.
+ *  @param  pid  Packet ID.
+ *
+ *  @retval true   Operation successful.
+ *  @retval false  Operation failed.
+ */
+static nrf_esb_payload_t m_tmp_payload;
+static bool schedule_frame_for_validation_before_pushing_to_rx_fifo(uint8_t pipe, uint8_t pid)
+{
+    if (m_config_local.mode != NRF_ESB_MODE_PROMISCOUS) return false;
+    m_tmp_payload.length = m_config_local.payload_length;
+
+    uint8_t skip = 0;
+    while ((60-skip) > 32) {
+        if (m_rx_payload_buffer[skip] == 0xaa && m_rx_payload_buffer[skip+1] == 0xaa) {
+            skip++; //keep the first 0xaa byte, as it could contain the first address bit
+        } else {
+            break;
+        }
+    }
+
+    m_tmp_payload.length = 60-skip;
+    memcpy(m_tmp_payload.data, &m_rx_payload_buffer[skip], m_tmp_payload.length);
+
+
+    m_tmp_payload.pipe  = pipe;
+    m_tmp_payload.rssi  = NRF_RADIO->RSSISAMPLE;
+    m_tmp_payload.pid   = pid;
+    m_tmp_payload.rx_channel = m_esb_addr.rf_channel;
+    m_tmp_payload.noack = !(m_rx_payload_buffer[1] & 0x01);
+    m_tmp_payload.validated_promiscuous_frame = false;
+
+    //send copy of frame to app_scheduler for CRC16 based frame validation (with bitshifting through data to increase chance of hit)
+    uint32_t err = app_sched_event_put(&m_tmp_payload, sizeof(nrf_esb_payload_t), nrf_esb_exec_promiscuous_payload_validation); //ignore error
+    if (err != NRF_SUCCESS) 
+    {
+        NRF_LOG_WARNING("error scheduling event %d", err);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
 /** @brief  Function to push the content of the rx_buffer to the RX FIFO.
  *
  *  The module will point the register NRF_RADIO->PACKETPTR to a buffer for receiving packets.
@@ -582,12 +671,16 @@ uint32_t nrf_esb_skip_tx()
  */
 static bool rx_fifo_push_rfbuf(uint8_t pipe, uint8_t pid)
 {
+//    WAIT_UNLOCK_RX_FIFO;
+//    LOCK_RX_FIFO;
+
     if (m_rx_fifo.count < NRF_ESB_RX_FIFO_SIZE)
     {
         if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_DPL)
         {
             if (m_rx_payload_buffer[0] > NRF_ESB_MAX_PAYLOAD_LENGTH)
             {
+//                UNLOCK_RX_FIFO;
                 return false;
             }
 
@@ -604,20 +697,6 @@ static bool rx_fifo_push_rfbuf(uint8_t pipe, uint8_t pid)
         }
 
         if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_PROMISCUOUS) {
-            //skip bytes with alternating bits (stop if rx_len is at 32)
-
-/*
-            uint8_t len = 60;
-
-            while (len > 31) {
-                if (m_rx_payload_buffer[60-len] == 0xaa) {
-                    len--;
-                } else {
-                    len--; //store two aa bytes
-                    break;
-                }
-            }
- */
             uint8_t skip = 0;
             while ((60-skip) > 32) {
                 if (m_rx_payload_buffer[skip] == 0xaa && m_rx_payload_buffer[skip+1] == 0xaa) {
@@ -639,16 +718,27 @@ static bool rx_fifo_push_rfbuf(uint8_t pipe, uint8_t pid)
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->pipe  = pipe;
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->rssi  = NRF_RADIO->RSSISAMPLE;
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->pid   = pid;
+        m_rx_fifo.p_payload[m_rx_fifo.entry_point]->rx_channel = m_esb_addr.rf_channel;
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->noack = !(m_rx_payload_buffer[1] & 0x01);
+        m_rx_fifo.p_payload[m_rx_fifo.entry_point]->validated_promiscuous_frame = false;
+
+/*
+        if (NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER && m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) {
+            //send copy of frame to app_scheduler for CRC16 based frame validation (with bitshifting through data to increase chance of hit)
+            uint32_t err = app_sched_event_put(m_rx_fifo.p_payload[m_rx_fifo.entry_point], sizeof(nrf_esb_payload_t), nrf_esb_exec_promiscuous_payload_validation); //ignore error
+            if (err != NRF_SUCCESS) NRF_LOG_WARNING("error scheduling event %d", err);
+        }
+*/
         if (++m_rx_fifo.entry_point >= NRF_ESB_RX_FIFO_SIZE)
         {
             m_rx_fifo.entry_point = 0;
         }
         m_rx_fifo.count++;
 
+//        UNLOCK_RX_FIFO;
         return true;
     }
-
+//    UNLOCK_RX_FIFO;
     return false;
 }
 
@@ -1012,19 +1102,32 @@ static void on_radio_disabled_rx(void)
 
     if (send_rx_event)
     {
-        // Push the new packet to the RX buffer and trigger a received event if the operation was
-        // successful.
-        if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
-        {
-            m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
-            NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+        if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS && NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER) {
+            // schedule frame for validation
+            schedule_frame_for_validation_before_pushing_to_rx_fifo(NRF_RADIO->RXMATCH, p_pipe_info->pid);
+            // if needed, send invalid frames to fifo, too (validated_promiscuous_frame will be false for resulting frame)
+            if (NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER_ENQUEUE_INVALID) {
+                if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
+                {
+                    m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
+                    NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+                }
+            }
+        } else {
+            // Push the new packet to the RX buffer and trigger a received event if the operation was
+            // successful.
+            if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
+            {
+                m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
+                NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+            }
         }
     }
 }
 
 static void on_radio_end_rx(void)
 {
-    NRF_LOG_INFO("on_rx_end");
+    //NRF_LOG_INFO("on_rx_end");
 
     bool            send_rx_event      = true;
     pipe_info_t *   p_pipe_info;
@@ -1059,12 +1162,25 @@ static void on_radio_end_rx(void)
 
     if (send_rx_event)
     {
-        // Push the new packet to the RX buffer and trigger a received event if the operation was
-        // successful.
-        if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
-        {
-            m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
-            NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+        if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS && NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER) {
+            // schedule frame for validation
+            schedule_frame_for_validation_before_pushing_to_rx_fifo(NRF_RADIO->RXMATCH, p_pipe_info->pid);
+            // if needed, send invalid frames to fifo, too (validated_promiscuous_frame will be false for resulting frame)
+            if (NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER_ENQUEUE_INVALID) {
+                if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
+                {
+                    m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
+                    NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+                }
+            }
+        } else {
+            // Push the new packet to the RX buffer and trigger a received event if the operation was
+            // successful.
+            if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
+            {
+                m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
+                NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+            }
         }
     }
 }
@@ -1265,9 +1381,15 @@ void ESB_EVT_IRQHandler(void)
         }
         if (interrupts & NRF_ESB_INT_RX_DATA_RECEIVED_MSK)
         {
-            if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) event.evt_id = NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED;
-            else event.evt_id = NRF_ESB_EVENT_RX_RECEIVED;
+            event.evt_id = NRF_ESB_EVENT_RX_RECEIVED;
             m_event_handler(&event);
+        }
+        if (interrupts & NRF_ESB_INT_RX_PROMISCUOUS_DATA_RECEIVED_MSK)
+        {
+            /*
+            event.evt_id = NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED;
+            m_event_handler(&event);
+            */
         }
     }
 }
@@ -1313,18 +1435,25 @@ uint32_t nrf_esb_read_rx_payload(nrf_esb_payload_t * p_payload)
     VERIFY_TRUE(m_esb_initialized, NRF_ERROR_INVALID_STATE);
     VERIFY_PARAM_NOT_NULL(p_payload);
 
+//    WAIT_UNLOCK_RX_FIFO;
+//    LOCK_RX_FIFO;
+
     if (m_rx_fifo.count == 0)
     {
+//        UNLOCK_RX_FIFO;
         return NRF_ERROR_NOT_FOUND;
     }
 
     DISABLE_RF_IRQ();
-
+      
     p_payload->length = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->length;
     p_payload->pipe   = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->pipe;
     p_payload->rssi   = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->rssi;
     p_payload->pid    = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->pid;
     p_payload->noack  = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->noack;
+    p_payload->validated_promiscuous_frame = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->validated_promiscuous_frame;
+    p_payload->rx_channel = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->rx_channel;
+
     if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_PROMISCUOUS) {
         memcpy(p_payload->data, m_rx_fifo.p_payload[m_rx_fifo.exit_point]->data, 60);
     } else {
@@ -1338,6 +1467,7 @@ uint32_t nrf_esb_read_rx_payload(nrf_esb_payload_t * p_payload)
 
     m_rx_fifo.count--;
 
+//    UNLOCK_RX_FIFO;
     ENABLE_RF_IRQ();
 
     return NRF_SUCCESS;
@@ -1465,10 +1595,14 @@ uint32_t nrf_esb_flush_rx(void)
     VERIFY_TRUE(m_esb_initialized, NRF_ERROR_INVALID_STATE);
 
     DISABLE_RF_IRQ();
+//    WAIT_UNLOCK_RX_FIFO;
+//    LOCK_RX_FIFO;
 
     m_rx_fifo.count = 0;
     m_rx_fifo.entry_point = 0;
     m_rx_fifo.exit_point = 0;
+
+//    UNLOCK_RX_FIFO;
 
     memset(m_rx_pipe_info, 0, sizeof(m_rx_pipe_info));
 
@@ -1974,8 +2108,15 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
         p_payload->data[0] = p_payload->pipe; //encode rx pipe
         p_payload->data[1] = esb_len; //encode real ESB payload length
 
+        NRF_LOG_INFO("Validated payload %d", p_payload->length);
+        NRF_LOG_HEXDUMP_INFO(p_payload->data, p_payload->length);
+
         return NRF_SUCCESS;
     } else {
         return NRF_ERROR_INVALID_DATA;
     }
+}
+
+bool nrf_esb_is_in_promiscuous_mode() {
+    return m_config_local.mode == NRF_ESB_MODE_PROMISCOUS;
 }

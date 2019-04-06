@@ -45,8 +45,10 @@
 #define CHANNEL_HOP_RESTART_DELAY 1200
 
 // Scheduler settings
-#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_TO_WORDS(MAX(sizeof(unifying_rf_record_set_t),MAX(MAX(sizeof(nrf_esb_evt_t), APP_TIMER_SCHED_EVENT_DATA_SIZE), sizeof(nrf_esb_payload_t))))
-//#define SCHED_MAX_EVENT_DATA_SIZE   APP_TIMER_SCHED_EVENT_DATA_SIZE
+//#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_TO_WORDS(MAX(MAX(sizeof(unifying_rf_record_set_t),MAX(MAX(sizeof(nrf_esb_evt_t), APP_TIMER_SCHED_EVENT_DATA_SIZE), sizeof(nrf_esb_payload_t))), NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE))
+#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),MAX(sizeof(unifying_rf_record_set_t),sizeof(nrf_esb_evt_t))))))
+
+
 #define SCHED_QUEUE_SIZE            16
 
 // channel hop timer
@@ -303,6 +305,54 @@ static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t repo
 /*
 * ESB
 */
+static nrf_esb_payload_t * m_current_payload = NULL;
+void esb_process_unvalidated_promiscuous() {
+    if (m_current_payload == NULL) return;
+
+    if (report_frames_without_crc_match) {
+        static uint8_t report[REPORT_IN_MAXSIZE];
+
+        memset(report,0,REPORT_IN_MAXSIZE);
+        report[0] = m_current_payload->pipe;
+        memcpy(&report[2], m_current_payload->data, m_current_payload->length);
+        app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+        bsp_board_led_invert(LED_G); // toggle green to indicate received RF data from promiscuous sniffing
+    }
+}
+
+void esb_process_valid_promiscuous() {
+    if (m_current_payload == NULL) return;
+    if (!m_current_payload->validated_promiscuous_frame) return;
+
+    static uint8_t report[REPORT_IN_MAXSIZE];
+
+    bsp_board_led_invert(LED_G); // toggle green to indicate valid ESB frame in promiscous mode
+    memset(report,0,REPORT_IN_MAXSIZE);
+    memcpy(report, m_current_payload->data, m_current_payload->length);
+    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
+
+    // assign discovered address to pipe 1 and switch over to passive sniffing (doesn't send ACK payloads)
+    if (switch_from_promiscous_to_sniff_on_discovered_address) {
+        uint8_t RfAddress1[4] = {m_current_payload->data[5], m_current_payload->data[4], m_current_payload->data[3], m_current_payload->data[2]}; //prefix, addr3, addr2, addr1, addr0
+        NRF_LOG_INFO("Received valid frame from %02x:%02x:%02x:%02x:%02x, sniffing this address", RfAddress1[3], RfAddress1[2], RfAddress1[1], RfAddress1[0], m_current_payload->data[6])
+
+        bsp_board_leds_off();
+        //m_channel_hop_data_received = true; //don't restart channel hop timer when called ...
+        app_timer_stop(m_timer_channel_hop); // stop channel hop timer
+        app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(1000), m_timer_channel_hop); //... and restart in 1000ms if no further data received
+
+        nrf_esb_stop_rx();
+        
+        radioSetMode(RADIO_MODE_SNIFF);
+        radioSetBaseAddress1(RfAddress1);
+        radioUpdatePrefix(1, m_current_payload->data[6]);   
+        while (nrf_esb_start_rx() != NRF_SUCCESS) {};
+    } else {
+        uint8_t RfAddress1[4] = {m_current_payload->data[5], m_current_payload->data[4], m_current_payload->data[3], m_current_payload->data[2]}; //prefix, addr3, addr2, addr1, addr0
+        NRF_LOG_INFO("Received valid frame from %02x:%02x:%02x:%02x:%02x, go on with promiscuous mode anyways", RfAddress1[3], RfAddress1[2], RfAddress1[1], RfAddress1[0], m_current_payload->data[6])
+    }
+}
+
 void nrf_esb_process_rx() {
     static nrf_esb_payload_t rx_payload;
 
@@ -311,49 +361,22 @@ void nrf_esb_process_rx() {
     uint32_t ch = 0;
     nrf_esb_get_rf_channel(&ch);
 
+
     static uint8_t report[REPORT_IN_MAXSIZE];
     switch (radioGetMode()) {
         case RADIO_MODE_PROMISCOUS:
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                if (report_frames_without_crc_match) {
-                    memset(report,0,REPORT_IN_MAXSIZE);
-                    report[0] = rx_payload.pipe;
-                    memcpy(&report[2], rx_payload.data, rx_payload.length);
-                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-                    bsp_board_led_invert(LED_G); // toggle green to indicate received RF data from promiscuous sniffing
+                m_current_payload = &rx_payload;
+                if (m_current_payload->validated_promiscuous_frame) {
+                    NRF_LOG_INFO("main thread valid promisc frame");
+                    esb_process_valid_promiscuous();
+                } else {
+                    //NRF_LOG_INFO("main thread UNVALIDATED promisc frame");
+                    //NRF_LOG_HEXDUMP_INFO(m_current_payload->data, m_current_payload->length);
+                    esb_process_unvalidated_promiscuous();
                 }
 
-                if (nrf_esb_validate_promiscuous_esb_payload(&rx_payload) == NRF_SUCCESS) {
-                    bsp_board_led_invert(LED_G); // toggle green to indicate valid ESB frame in promiscous mode
-                    memset(report,0,REPORT_IN_MAXSIZE);
-                    memcpy(report, rx_payload.data, rx_payload.length);
-                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-
-
-                    // assign discovered address to pipe 1 and switch over to passive sniffing (doesn't send ACK payloads)
-                    if (switch_from_promiscous_to_sniff_on_discovered_address) {
-                        uint8_t RfAddress1[4] = {rx_payload.data[5], rx_payload.data[4], rx_payload.data[3], rx_payload.data[2]}; //prefix, addr3, addr2, addr1, addr0
-                        NRF_LOG_INFO("Received valid frame from %02x:%02x:%02x:%02x:%02x, sniffing this address", RfAddress1[3], RfAddress1[2], RfAddress1[1], RfAddress1[0], rx_payload.data[6])
-
-                        bsp_board_leds_off();
-                        //m_channel_hop_data_received = true; //don't restart channel hop timer when called ...
-                        app_timer_stop(m_timer_channel_hop); // stop channel hop timer
-                        app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(1000), m_timer_channel_hop); //... and restart in 1000ms if no further data received
-
-                        nrf_esb_stop_rx();
-                        
-                        radioSetMode(RADIO_MODE_SNIFF);
-                        radioSetBaseAddress1(RfAddress1);
-                        radioUpdatePrefix(1, rx_payload.data[6]);   
-                        //radioUpdatePrefix(1, 0x4c);   
-                        while (nrf_esb_start_rx() != NRF_SUCCESS) {};
-                        break; //exit while loop
-                    } else {
-                        uint8_t RfAddress1[4] = {rx_payload.data[5], rx_payload.data[4], rx_payload.data[3], rx_payload.data[2]}; //prefix, addr3, addr2, addr1, addr0
-                        NRF_LOG_INFO("Received valid frame from %02x:%02x:%02x:%02x:%02x, go on with promiscuous mode anyways", RfAddress1[3], RfAddress1[2], RfAddress1[1], RfAddress1[0], rx_payload.data[6])
-                    }
-                } 
             }
             break;
         case RADIO_MODE_PTX: // process RX frames with ack payload in PTX mode
@@ -423,8 +446,9 @@ void nrf_esb_event_handler(nrf_esb_evt_t *p_event) {
             //(void) nrf_esb_start_tx();            
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
-        case NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED:
-            NRF_LOG_DEBUG("nrf_esb_event_handler RX RECEIVED EVENT");
+            if (nrf_esb_is_in_promiscuous_mode()) {
+                NRF_LOG_DEBUG("promiscuous frame event received");
+            }
             nrf_esb_process_rx();
             break;
     }
@@ -440,7 +464,7 @@ void nrf_esb_event_handler_to_scheduler(nrf_esb_evt_t const *p_event) {
     queue_space = app_sched_queue_space_get();
     CRITICAL_REGION_EXIT();
 
-    if (queue_space <= 1) {
+    if (queue_space <= 2) {
         NRF_LOG_INFO("only one event schedule slot left, dropping rx frame");
         bsp_board_led_on(LED_R); //indicate frame arrived, while scheduler is full with red LED (overload)
         return; //drop frame, don't schedule event
@@ -733,13 +757,13 @@ int main(void)
                 case HID_COMMAND_SET_CHANNEL:
                     //nrf_esb_get_rf_channel(&ch);
                     ch = (uint32_t) hid_out_report[2];
-                    nrf_esb_stop_rx();
+                    //nrf_esb_stop_rx();
                     if (nrf_esb_set_rf_channel(ch) == NRF_SUCCESS) {
                         hid_out_report[2] = 0;
                     } else {
                         hid_out_report[2] = -1;
                     }
-                    while (nrf_esb_start_rx() != NRF_SUCCESS) {};
+                    //while (nrf_esb_start_rx() != NRF_SUCCESS) {};
                     
                     memset(&hid_out_report[3], 0, sizeof(hid_out_report)-3);
                     app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 

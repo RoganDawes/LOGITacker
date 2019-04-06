@@ -7,9 +7,24 @@
 #include "nrf.h"
 #include "app_util.h"
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/*
+ * In promiscuous mode, all captured frames produce a NRF_ESB_EVENT_RX_RECEIVED event
+ *
+ * If NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER is enabled, promiscuous mode frames are additionally
+ * processed to check CRC16 and bitshift the whole frame several times (and check CRC again) to raise the
+ * chance of capturing valid frames. This requires that the main loop processes app_scheduler. ONLY in case a valid frame
+ * is found, an NRF_ESB_EVENT_RX_RECEIVED event is generated in promiscuous mode and the validated frame
+ * gets queued in the RX fifo (shifted corerectly).
+ * 
+*/
+#define     NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER        true // if true, promiscuous mode frames are validated using app_scheduler ()
+#define     NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE         sizeof(nrf_esb_payload_t)
+#define     NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER_ENQUEUE_INVALID true // if enabled, invalid frames are send to RX fifo, too (but validated_promiscuous_frame flag won't be set)
 
 #define     NRF_ESB_RETRANSMIT_DELAY_MIN        135
 
@@ -220,7 +235,7 @@ typedef enum
     NRF_ESB_EVENT_TX_SUCCESS,   /**< Event triggered on TX success.     */
     NRF_ESB_EVENT_TX_FAILED,    /**< Event triggered on TX failure.     */
     NRF_ESB_EVENT_RX_RECEIVED,   /**< Event triggered on RX received.    */
-    NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED   /**< Event triggered on RX in PROMISCUOUS mode.    */
+    //NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED   /**< Event triggered on RX in PROMISCUOUS mode.    */
 } nrf_esb_evt_id_t;
 
 
@@ -236,7 +251,9 @@ typedef struct
     int8_t  rssi;                                   //!< RSSI for the received packet.
     uint8_t noack;                                  //!< Flag indicating that this packet will not be acknowledgement. Flag is ignored when selective auto ack is enabled.
     uint8_t pid;                                    //!< PID assigned during communication.
+    uint8_t rx_channel;
     uint8_t data[NRF_ESB_MAX_PAYLOAD_LENGTH + 30];       //!< The payload data.
+    bool    validated_promiscuous_frame;
 } nrf_esb_payload_t;
 
 
@@ -579,6 +596,7 @@ uint32_t nrf_esb_reuse_pid(uint8_t pipe);
 /** @} */
 
 uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload);
+bool nrf_esb_is_in_promiscuous_mode();
 
 #ifdef __cplusplus
 }
