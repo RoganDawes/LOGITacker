@@ -250,12 +250,14 @@ bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
 
         //success condition
         if (valid_count >= UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE) {
-            int start_pos = (end_pos - valid_count) + 1;
+            int start_pos = (end_pos - valid_count);
             if (start_pos < 0) start_pos += UNIFYING_MAX_STORED_REPORTS_PER_PIPE; //account for ring buffer style of record buffer
+
+            if (end_pos == 0) end_pos = UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
 
             // update record set
             p_rs->first_pos = (uint8_t) start_pos;
-            p_rs->last_pos = (uint8_t) end_pos;
+            p_rs->last_pos = (uint8_t) --end_pos;
             //m_replay_state.read_pos = p_rs->first_pos;
             NRF_LOG_INFO("found enough (%d) valid frames, start %d end %d", valid_count, start_pos, end_pos);
             return true;
@@ -455,9 +457,9 @@ void process_next_replay_step(replay_event_t replay_event) {
             // if all channels failed, change state to replay failed
 
             // TEST abort replay
-            
             m_replay_state.substate = REPLAY_SUBSTATE_REPLAY_FAILED;
             NRF_LOG_INFO("Replay: transmission failed (timestamp %d)", timestamp_get());
+            
         }
         break;
         case REPLAY_EVENT_TIMER:
@@ -536,6 +538,11 @@ void process_next_replay_step(replay_event_t replay_event) {
 
     if (m_replay_state.substate == REPLAY_SUBSTATE_REPLAY_FAILED) {
         // TEST abort replay
+        if (m_state_local.radio_mode_before_replay != RADIO_MODE_PTX) {
+            radioSetMode(m_state_local.radio_mode_before_replay);
+            nrf_esb_start_rx();
+        }
+        
         NRF_LOG_INFO("Replay frame transmit failed (timestamp %d)", timestamp_get());
         if (m_state_local.event_handler != NULL) {
             event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_FAILED;
@@ -543,6 +550,8 @@ void process_next_replay_step(replay_event_t replay_event) {
             m_state_local.event_handler(&event);
         } 
         m_replay_state.running = false;
+
+
     }
 }
 
@@ -609,8 +618,11 @@ void unifying_replay_records2(uint8_t pipe_num, bool replay_realtime, uint8_t ke
     m_replay_state.tx_payload.length = cur_rec.length;
     m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
     m_replay_state.tx_payload.noack = false;
-    nrf_esb_write_payload(&m_replay_state.tx_payload);
     m_replay_state.substate = REPLAY_SUBSTATE_FRAME_TX;
+    nrf_esb_flush_tx();
+    nrf_esb_start_tx();
+    uint32_t tx_err = nrf_esb_write_payload(&m_replay_state.tx_payload);
+    
 
     // send event
     if (m_state_local.event_handler != NULL) {
@@ -618,6 +630,14 @@ void unifying_replay_records2(uint8_t pipe_num, bool replay_realtime, uint8_t ke
         event.pipe = m_replay_state.pipe_num;
         m_state_local.event_handler(&event);
     } 
+    
+    if (tx_err) {
+        NRF_LOG_INFO("Replay: failed to write first TX frame");
+        event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_FAILED;
+        event.pipe = m_replay_state.pipe_num;
+        m_state_local.event_handler(&event);
+    } 
+    
 }
 
 
