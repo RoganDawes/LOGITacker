@@ -57,20 +57,20 @@ typedef struct {
 typedef struct {
     unifying_rf_record_t* records;
     uint8_t write_pos;
-    uint8_t read_pos;
+    //uint8_t read_pos;
     uint8_t first_pos;
     uint8_t last_pos;
 
-    uint8_t pipe_num;
+//    uint8_t pipe_num;
 
     uint8_t lastRecordedReportType;
     bool disallowWrite;
 
-    bool    isReplaying;
-    bool    replay_realtime;         // tries to replay with same delays as recorded (fill gaps with 8ms keep alives)
-    uint8_t keep_alives_to_insert; // how many keep alives (8ms) should be inserted between replays
-    uint8_t keep_alives_needed; // how many keep alives are needed to fullfill keep_alives_to_insert before next record TX
-    uint8_t replay_loops_remaining; // how often a replay has to be repeated
+    //bool    isReplaying;
+    //bool    replay_realtime;         // tries to replay with same delays as recorded (fill gaps with 8ms keep alives)
+    //uint8_t keep_alives_to_insert; // how many keep alives (8ms) should be inserted between replays
+    //uint8_t keep_alives_needed; // how many keep alives are needed to fullfill keep_alives_to_insert before next record TX
+    //uint8_t replay_loops_remaining; // how often a replay has to be repeated
 } unifying_rf_record_set_t;
 
 
@@ -121,8 +121,10 @@ keep_alives_to_insert   if replay_realtime is disabled, this number of 8ms keep-
                         to correlate received ack payloads to replayed frames)
 */
 void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert, uint8_t loop_count);
+void unifying_replay_records2(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert, uint8_t loop_count);
 bool unifying_record_rf_frame(nrf_esb_payload_t frame);
 
-
+// returns true if the given esb event was consumed by unifying module
+bool unifying_process_esb_event(nrf_esb_evt_t *p_event);
 
 #endif

@@ -266,7 +266,8 @@ typedef struct
 
 
 /**@brief Definition of the event handler for the module. */
-typedef void (* nrf_esb_event_handler_t)(nrf_esb_evt_t const * p_event);
+//typedef void (* nrf_esb_event_handler_t)(nrf_esb_evt_t const * p_event);
+typedef void (* nrf_esb_event_handler_t)(nrf_esb_evt_t * p_event);
 
 
 /**@brief Main configuration structure for the module. */

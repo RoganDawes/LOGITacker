@@ -24,7 +24,6 @@ PROMISCOUS:     RX as much data as possible with invalid RF addresses, data coul
 typedef enum {
     RADIO_MODE_DISABLED,
     RADIO_MODE_PTX,          // Primary transmitter mode
-    RADIO_MODE_PRX_ACTIVE,   // Primary receiver mode (with tx of ACK payload).
     RADIO_MODE_SNIFF,  // Primary receiver mode (no ACKS == sniffing).
     RADIO_MODE_PROMISCOUS,   // RX in pseudo promiscuous mode
 } radio_rf_mode_t;

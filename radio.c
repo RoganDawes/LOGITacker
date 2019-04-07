@@ -56,7 +56,8 @@ static radio_config_t m_local_config = {
 
 
 static nrf_esb_evt_t *m_last_tx_event;
-void radio_esb_event_handler(nrf_esb_evt_t const * p_event)
+//void radio_esb_event_handler(nrf_esb_evt_t const * p_event)
+void radio_esb_event_handler(nrf_esb_evt_t * p_event)
 {
     switch (p_event->evt_id)
     {
@@ -190,7 +191,7 @@ bool radioTransmitCollectAck(nrf_esb_payload_t *p_tx_payload, bool blockTillResu
 void timer_tx_frame_from_scheduler(void *p_event_data, uint16_t event_size) {
     // process scheduled event for this handler in main loop during scheduler processing
     nrf_esb_payload_t *p_tx_payload = (nrf_esb_payload_t *) p_event_data;
-    radioTransmit(p_tx_payload, true);
+    radioTransmit(p_tx_payload, false);
 }
 
 void timer_tx_frame_to_scheduler(void* p_context) {
@@ -380,8 +381,6 @@ uint32_t radioSetMode(radio_rf_mode_t mode) {
             err_code = radioInitPTXMode();
             VERIFY_SUCCESS(err_code);
             m_local_config.mode = mode; //update current mode
-            break;
-        case RADIO_MODE_PRX_ACTIVE:
             break;
         case RADIO_MODE_SNIFF:
             /*

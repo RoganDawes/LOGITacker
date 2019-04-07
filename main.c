@@ -265,7 +265,7 @@ static void bsp_event_callback(bsp_event_t ev)
             if (!test_record_frames) {
                 uint8_t pipe = 1;
                 NRF_LOG_INFO("replay recorded frames for pipe 1");
-                unifying_replay_records(pipe, false, 2, 2);
+                unifying_replay_records2(pipe, false, 2, 2);
             }
             break;
 
@@ -434,6 +434,7 @@ void nrf_esb_process_rx() {
 }
 
 void nrf_esb_event_handler(nrf_esb_evt_t *p_event) {
+    if (unifying_process_esb_event(p_event)) return;
     //logPriority("nrf_esb_event_handler");
     switch (p_event->evt_id)
     {
@@ -453,29 +454,6 @@ void nrf_esb_event_handler(nrf_esb_evt_t *p_event) {
             break;
     }
 }
-
-void nrf_esb_event_handler_from_scheduler(void *p_event_data, uint16_t event_size) {
-    nrf_esb_event_handler((nrf_esb_evt_t*) p_event_data);
-}
-
-void nrf_esb_event_handler_to_scheduler(nrf_esb_evt_t const *p_event) {
-    uint16_t queue_space;
-    CRITICAL_REGION_ENTER();
-    queue_space = app_sched_queue_space_get();
-    CRITICAL_REGION_EXIT();
-
-    if (queue_space <= 2) {
-        NRF_LOG_INFO("only one event schedule slot left, dropping rx frame");
-        bsp_board_led_on(LED_R); //indicate frame arrived, while scheduler is full with red LED (overload)
-        return; //drop frame, don't schedule event
-    }
-    bsp_board_led_off(LED_R);
-
-    //NRF_LOG_INFO("Sched queue space %d", queue_space);
-    app_sched_event_put(p_event, sizeof(*p_event), nrf_esb_event_handler_from_scheduler);
-
-}
-
 
 void clocks_start( void )
 {
@@ -704,7 +682,8 @@ int main(void)
     clocks_start();
 
     //ESB
-    ret = radioInit(nrf_esb_event_handler_to_scheduler);
+    //ret = radioInit(nrf_esb_event_handler_to_scheduler);
+    ret = radioInit(nrf_esb_event_handler);
     APP_ERROR_CHECK(ret);
 
     ret = radioSetMode(RADIO_MODE_PROMISCOUS);

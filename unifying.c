@@ -11,11 +11,43 @@
 #include "timestamp.h"
 #include "app_scheduler.h"
 
+APP_TIMER_DEF(m_timer_next_action);
+
+typedef enum {
+    REPLAY_SUBSTATE_FRAME_WAIT_TX,
+    REPLAY_SUBSTATE_FRAME_TX,
+    REPLAY_SUBSTATE_PING_TX,
+    REPLAY_SUBSTATE_REPLAY_FAILED
+} replay_substate_t;
+
+typedef enum {
+    REPLAY_EVENT_TIMER,
+    REPLAY_EVENT_TX_SUCEEDED,
+    REPLAY_EVENT_ACK_PAY_FOR_LAST_TX,
+    REPLAY_EVENT_TX_FAILED
+} replay_event_t;
+
+typedef struct {
+    bool running;
+    uint8_t pipe_num;
+    unifying_rf_record_set_t* p_record_set;
+    uint8_t read_pos;
+
+    bool    replay_realtime;         // tries to replay with same delays as recorded (fill gaps with 8ms keep alives)
+    uint8_t keep_alives_to_insert; // how many keep alives (8ms) should be inserted between replays
+    uint8_t keep_alives_needed; // how many keep alives are needed to fullfill keep_alives_to_insert before next record TX
+    uint8_t replay_loops_remaining; // how often a replay has to be repeated
+
+    replay_substate_t substate;
+    nrf_esb_payload_t tx_payload;
+} unifying_replay_state_t;
+
+static unifying_replay_state_t m_replay_state;
+
 typedef struct {
     unifying_rf_record_set_t record_sets[NRF_ESB_PIPE_COUNT];
     unifying_rf_record_t records_from_sets[NRF_ESB_PIPE_COUNT][UNIFYING_MAX_STORED_REPORTS_PER_PIPE];
     radio_rf_mode_t radio_mode_before_replay;
-    bool replayRunning; //indicates if a replay is running on any pipe, each record set has a dedicated 'isReplaying' bool (per pipe)
     unifying_replay_ack_payload_handler_t ack_handler; //handler for ack PAYLOADS DURING REPLAY
     unifying_event_handler_t event_handler; //handler for unifying events
 } unifying_state_t;
@@ -224,7 +256,7 @@ bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
             // update record set
             p_rs->first_pos = (uint8_t) start_pos;
             p_rs->last_pos = (uint8_t) end_pos;
-            p_rs->read_pos = p_rs->first_pos;
+            //m_replay_state.read_pos = p_rs->first_pos;
             NRF_LOG_INFO("found enough (%d) valid frames, start %d end %d", valid_count, start_pos, end_pos);
             return true;
         }
@@ -288,9 +320,9 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
             return false; //ignore frame
     }
     // ignore successive SetKeepAlive frames
-    if (frameType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE && m_state_local.record_sets[p_rs->pipe_num].lastRecordedReportType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE) return false;
+    if (frameType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE && m_state_local.record_sets[frame.pipe].lastRecordedReportType == UNIFYING_RF_REPORT_SET_KEEP_ALIVE) return false;
 
-    m_state_local.record_sets[p_rs->pipe_num].lastRecordedReportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
+    m_state_local.record_sets[frame.pipe].lastRecordedReportType = frame.data[1] & UNIFYING_RF_REPORT_TYPE_MSK;
     
 
     if (storeFrame) {
@@ -323,7 +355,7 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
     // send event
     if (result && m_state_local.event_handler != NULL) {
         event.evt_id = UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES;
-        event.pipe = p_rs->pipe_num;
+        event.pipe = frame.pipe;
         m_state_local.event_handler(&event);
     } 
     return result;
@@ -409,14 +441,193 @@ void unifying_frame_classify_log(nrf_esb_payload_t frame) {
 }
 
 uint8_t keep_alive_8ms[5] = {0x00, 0x40, 0x00, 0x08, 0xb8}; 
+void test_ack_handler(unifying_rf_record_set_t *p_rs, nrf_esb_payload_t const *p_ack_payload) {
+    NRF_LOG_INFO("test ack handler pipe %d tx frame %d ack pay byte2 %02x", m_replay_state.pipe_num, m_replay_state.read_pos, p_ack_payload->data[1]);
+    return;
+}
+
+void process_next_replay_step(replay_event_t replay_event) {
+    switch (m_replay_state.substate) {
+        case REPLAY_EVENT_TX_FAILED:
+        {
+            // change to next channel and transmit again
+
+            // if all channels failed, change state to replay failed
+
+            // TEST abort replay
+            
+            m_replay_state.substate = REPLAY_SUBSTATE_REPLAY_FAILED;
+            NRF_LOG_INFO("Replay: transmission failed (timestamp %d)", timestamp_get());
+        }
+        break;
+        case REPLAY_EVENT_TIMER:
+        {
+            if (m_replay_state.substate != REPLAY_SUBSTATE_FRAME_WAIT_TX) {
+                NRF_LOG_WARNING("Received REPLAY_EVENT_TIMER while not in FRAME_WAIT_TX state (timestamp %d)", timestamp_get());
+                return;
+            }
+
+            unifying_rf_record_t cur_rec = m_replay_state.p_record_set->records[m_replay_state.read_pos];
+            memcpy(m_replay_state.tx_payload.data, cur_rec.data, cur_rec.length);
+            m_replay_state.tx_payload.length = cur_rec.length;
+            m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
+            m_replay_state.tx_payload.noack = false;
+            
+            NRF_LOG_INFO("Replay: transmitting frame %d (timestamp %d)", m_replay_state.read_pos, timestamp_get());
+            uint32_t err = nrf_esb_write_payload(&m_replay_state.tx_payload);
+            if (err != NRF_SUCCESS) {
+                NRF_LOG_WARNING("Error sending frame: %d", err);
+                m_replay_state.substate = REPLAY_SUBSTATE_REPLAY_FAILED;
+            } else {
+                m_replay_state.substate = REPLAY_SUBSTATE_FRAME_TX;
+            }
+        }
+        break;
+        case REPLAY_EVENT_ACK_PAY_FOR_LAST_TX:
+        {
+            NRF_LOG_INFO("ACK PAY DURING REPLAY");
+        }
+        break;
+        case REPLAY_EVENT_TX_SUCEEDED:
+        {
+            NRF_LOG_INFO("Replay frame transmission succeeded (timestamp %d)", timestamp_get());
+            // schedule next frame for transmission, with proper delay
+
+            //next read pos
+            if (++m_replay_state.read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) m_replay_state.read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+
+            if (m_replay_state.read_pos >= m_replay_state.p_record_set->last_pos) {
+                // last frame has been transmitted, replay done
+
+                NRF_LOG_INFO("Replay finished (timestamp %d)", timestamp_get());
+                m_replay_state.p_record_set->disallowWrite = false; 
+                
+                // disable global replay indicator
+                m_state_local.ack_handler = NULL;
+
+                // restore old radio mode if it wasn't PTX already
+                if (m_state_local.radio_mode_before_replay != RADIO_MODE_PTX) {
+                    radioSetMode(m_state_local.radio_mode_before_replay);
+                    nrf_esb_start_rx();
+                }
+
+                // send event
+                if (m_state_local.event_handler != NULL) {
+                    event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_FINISHED;
+                    event.pipe = m_replay_state.pipe_num;
+                    m_state_local.event_handler(&event);
+                } 
+
+                m_replay_state.running = false;
+            }
+
+            // sleep before next transmission
+            uint32_t sleep_delay = 8;
+            app_timer_start(m_timer_next_action, APP_TIMER_TICKS(sleep_delay), NULL);
+            m_replay_state.substate = REPLAY_SUBSTATE_FRAME_WAIT_TX;
+            NRF_LOG_INFO("Replay: sleeping %d ms (timestamp %d)", sleep_delay, timestamp_get());
+            
+
+        }
+        break;
+        default:
+           NRF_LOG_INFO("process_next_replay_step ... unhandled event")
+    }
+
+    if (m_replay_state.substate == REPLAY_SUBSTATE_REPLAY_FAILED) {
+        // TEST abort replay
+        NRF_LOG_INFO("Replay frame transmit failed (timestamp %d)", timestamp_get());
+        if (m_state_local.event_handler != NULL) {
+            event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_FAILED;
+            event.pipe = m_replay_state.pipe_num;
+            m_state_local.event_handler(&event);
+        } 
+        m_replay_state.running = false;
+    }
+}
+
+// returns true if the given esb event was consumed by unifying module
+bool unifying_process_esb_event(nrf_esb_evt_t *p_event) {
+    if (m_replay_state.running) {
+        switch (p_event->evt_id)
+        {
+            case NRF_ESB_EVENT_TX_SUCCESS:
+                process_next_replay_step(REPLAY_EVENT_TX_SUCEEDED);
+                break;
+            case NRF_ESB_EVENT_RX_RECEIVED:
+                process_next_replay_step(REPLAY_EVENT_ACK_PAY_FOR_LAST_TX);
+                break;
+            case NRF_ESB_EVENT_TX_FAILED:
+                process_next_replay_step(REPLAY_EVENT_TX_FAILED);
+                break;
+            default:
+                return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+void timer_next_action_handler(void* p_context) {
+    //NRF_LOG_INFO("Forward replay timer event to scheduler");
+    // schedule as event to main  (not isr) instead of executing directly
+    
+    process_next_replay_step(REPLAY_EVENT_TIMER);
+}
+
+
+void unifying_replay_records2(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert, uint8_t loop_count) {
+    if (m_replay_state.running) {
+        NRF_LOG_WARNING("attempt to start replay, while replay is already running on pipe %d", m_replay_state.pipe_num);
+        return;
+    }
+
+    m_replay_state.pipe_num = pipe_num;
+    m_replay_state.p_record_set = &m_state_local.record_sets[pipe_num];
+    if (replay_realtime) m_replay_state.keep_alives_to_insert = 0;
+    else m_replay_state.keep_alives_to_insert = keep_alives_to_insert;
+    m_replay_state.replay_loops_remaining = loop_count;
+
+    m_replay_state.p_record_set->disallowWrite = true;
+    m_replay_state.replay_realtime = replay_realtime;
+    m_replay_state.read_pos = m_replay_state.p_record_set->first_pos;
+    NRF_LOG_INFO("Replay: first_pos %d, read_pos %d, last_pos %d", m_replay_state.p_record_set->first_pos, m_replay_state.read_pos, m_replay_state.p_record_set->last_pos);
+    m_replay_state.running = true;
+
+    m_state_local.ack_handler = test_ack_handler;
+
+     //store current mode and set to PTX to avoid mode toggling on every single TX (would flush RX'ed ack payloads otherwise)
+    m_state_local.radio_mode_before_replay = radioGetMode();
+    if (m_state_local.radio_mode_before_replay != RADIO_MODE_PTX) {
+        nrf_esb_stop_rx();
+        radioSetMode(RADIO_MODE_PTX);
+    }
+
+    // transmit first record
+    unifying_rf_record_t cur_rec = m_replay_state.p_record_set->records[m_replay_state.read_pos];
+    memcpy(m_replay_state.tx_payload.data, cur_rec.data, cur_rec.length);
+    m_replay_state.tx_payload.length = cur_rec.length;
+    m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
+    m_replay_state.tx_payload.noack = false;
+    nrf_esb_write_payload(&m_replay_state.tx_payload);
+    m_replay_state.substate = REPLAY_SUBSTATE_FRAME_TX;
+
+    // send event
+    if (m_state_local.event_handler != NULL) {
+        event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_STARTED;
+        event.pipe = m_replay_state.pipe_num;
+        m_state_local.event_handler(&event);
+    } 
+}
+
+
 void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
     // process scheduled event for this handler in main loop during scheduler processing
     static nrf_esb_payload_t tx_payload; 
-    unifying_rf_record_set_t* p_rs = (unifying_rf_record_set_t*) p_event_data;
-    p_rs = &m_state_local.record_sets[p_rs->pipe_num]; // pointer to real record set, not copy
-    uint8_t current_record_pos = p_rs->read_pos;
+    unifying_rf_record_set_t* p_rs = m_replay_state.p_record_set;
+    uint8_t current_record_pos = m_replay_state.read_pos;
     unifying_rf_record_t current_record = p_rs->records[current_record_pos];
-    uint8_t keep_alives_needed = p_rs->keep_alives_needed;
+    uint8_t keep_alives_needed = m_replay_state.keep_alives_needed;
     bool send_keep_alive = false;
     
     static nrf_esb_payload_t rx_ack_payload; 
@@ -427,13 +638,13 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
         NRF_LOG_INFO("%d TX: Replaying frame %d", timestamp_get(), current_record_pos);
         memcpy(tx_payload.data, current_record.data, current_record.length);
         tx_payload.length = current_record.length;
-        tx_payload.pipe = p_rs->pipe_num;
+        tx_payload.pipe = m_replay_state.pipe_num;
         tx_payload.noack = false;
     } else {
         NRF_LOG_INFO("%d TX: Sending 8ms keep-alive frame", timestamp_get());
         memcpy(tx_payload.data, keep_alive_8ms, sizeof(keep_alive_8ms));
         tx_payload.length = sizeof(keep_alive_8ms);
-        tx_payload.pipe = p_rs->pipe_num;
+        tx_payload.pipe = m_replay_state.pipe_num;
         tx_payload.noack = false;
         send_keep_alive = true;
     }
@@ -447,9 +658,9 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
         
         // update keep-alives which have to be sent before next record
         if (send_keep_alive) {
-            p_rs->keep_alives_needed--;
+            m_replay_state.keep_alives_needed--;
         } else {
-            p_rs->keep_alives_needed = p_rs->keep_alives_to_insert;
+            m_replay_state.keep_alives_needed = m_replay_state.keep_alives_to_insert;
         }
     } else {
         // ToDo: channel sweep for PRX (receiver), abort if not found
@@ -476,20 +687,16 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
         // send event
         if (m_state_local.event_handler != NULL) {
             event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_FAILED;
-            event.pipe = p_rs->pipe_num;
+            event.pipe = m_replay_state.pipe_num;
             m_state_local.event_handler(&event);
         } 
 
-        p_rs->read_pos = p_rs->first_pos;
+        m_replay_state.read_pos = p_rs->first_pos;
 
         // if no other pipe is replaying, disable global replay indicator
-        p_rs->isReplaying = false;
-        m_state_local.replayRunning = false;
-        for (int i=0; i<NRF_ESB_PIPE_COUNT; i++) {
-            if (m_state_local.record_sets[i].isReplaying) m_state_local.replayRunning = true;
-        }
-        if (!m_state_local.replayRunning) m_state_local.ack_handler = NULL;
-
+        
+        m_replay_state.running = false;
+        m_state_local.ack_handler = NULL;
 
         return; // don't restart timer
 
@@ -500,32 +707,28 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
     if (!send_keep_alive) {
         if (current_record_pos != p_rs->last_pos) {
             // advance read_pos to next record
-            p_rs->read_pos = current_record_pos+1; 
-            if (p_rs->read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) p_rs->read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+            m_replay_state.read_pos = current_record_pos+1; 
+            if (m_replay_state.read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) m_replay_state.read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
 
-            uint32_t next_record_pre_delay_ms = p_rs->records[p_rs->read_pos].pre_delay_ms;
+            uint32_t next_record_pre_delay_ms = p_rs->records[m_replay_state.read_pos].pre_delay_ms;
 
-            if (p_rs->replay_realtime && next_record_pre_delay_ms > 7) p_rs->keep_alives_needed = next_record_pre_delay_ms / 8; //zero delay wouldn't triger timer at all
-            NRF_LOG_INFO("Next replay frame %d schedule for TX in %d ms", p_rs->read_pos, UNIFYING_MIN_REPLAY_DELAY_MS + p_rs->keep_alives_needed*UNIFYING_MIN_REPLAY_DELAY_MS);
+            if (m_replay_state.replay_realtime && next_record_pre_delay_ms > 7) m_replay_state.keep_alives_needed = next_record_pre_delay_ms / 8; //zero delay wouldn't triger timer at all
+            NRF_LOG_INFO("Next replay frame %d schedule for TX in %d ms", m_replay_state.read_pos, UNIFYING_MIN_REPLAY_DELAY_MS + m_replay_state.keep_alives_needed*UNIFYING_MIN_REPLAY_DELAY_MS);
             app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(UNIFYING_MIN_REPLAY_DELAY_MS), p_rs);
 
         } else {
-            if (p_rs->replay_loops_remaining > 0) {
+            if (m_replay_state.replay_loops_remaining > 0) {
                 NRF_LOG_INFO("Restarting replay ...");
-                p_rs->isReplaying = false;
-                unifying_replay_records(p_rs->pipe_num, p_rs->replay_realtime, p_rs->keep_alives_to_insert, p_rs->replay_loops_remaining - 1);
+                m_replay_state.running = false;
+                unifying_replay_records(m_replay_state.pipe_num, m_replay_state.replay_realtime, m_replay_state.keep_alives_to_insert, --m_replay_state.replay_loops_remaining);
             } else {
                 // don't restart timer
                 NRF_LOG_INFO("Replay finished");
                 p_rs->disallowWrite = false; 
-                p_rs->isReplaying = false;
-
-                // if no other pipe is replaying, disable global replay indicator
-                m_state_local.replayRunning = false;
-                for (int i=0; i<NRF_ESB_PIPE_COUNT; i++) {
-                    if (m_state_local.record_sets[i].isReplaying) m_state_local.replayRunning = true;
-                }
-                if (!m_state_local.replayRunning) m_state_local.ack_handler = NULL;
+                
+                // disable global replay indicator
+                m_replay_state.running = false;
+                m_state_local.ack_handler = NULL;
 
                 // restore old radio mode if it wasn't PTX already
                 if (m_state_local.radio_mode_before_replay != RADIO_MODE_PTX) {
@@ -536,7 +739,7 @@ void timer_tx_record_from_scheduler(void *p_event_data, uint16_t event_size) {
                 // send event
                 if (m_state_local.event_handler != NULL) {
                     event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_FINISHED;
-                    event.pipe = p_rs->pipe_num;
+                    event.pipe = m_replay_state.pipe_num;
                     m_state_local.event_handler(&event);
                 } 
             }
@@ -557,28 +760,25 @@ void timer_tx_record_to_scheduler(void* p_context) {
     NRF_LOG_INFO("TX SCHEDULED %d (queue space %d)", timestamp_get(), app_sched_queue_space_get());
 }
 
-void test_ack_handler(unifying_rf_record_set_t *p_rs, nrf_esb_payload_t const *p_ack_payload) {
-    NRF_LOG_INFO("test ack handler pipe %d tx frame %d ack pay byte2 %02x", p_rs->pipe_num, p_rs->read_pos, p_ack_payload->data[1]);
-    return;
-}
-
 void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert, uint8_t loop_count) {
-    unifying_rf_record_set_t* p_rs = &m_state_local.record_sets[pipe_num];
-    if (replay_realtime) p_rs->keep_alives_to_insert = 0;
-    else p_rs->keep_alives_to_insert = keep_alives_to_insert;
-    p_rs->replay_loops_remaining = loop_count;
-
-    if (p_rs->isReplaying) {
-        NRF_LOG_WARNING("attempt to start replay, while replay is already running on pipe %d", p_rs->pipe_num);
+    if (m_replay_state.running) {
+        NRF_LOG_WARNING("attempt to start replay, while replay is already running on pipe %d", m_replay_state.pipe_num);
         return;
     }
 
-    p_rs->disallowWrite = true;
-    p_rs->isReplaying = true;
-    p_rs->replay_realtime = replay_realtime;
-    p_rs->read_pos = p_rs->first_pos;
-    NRF_LOG_INFO("Replay: first_pos %d, read_pos %d", p_rs->first_pos, p_rs->read_pos);
-    m_state_local.replayRunning = true;
+    m_replay_state.pipe_num = pipe_num;
+    m_replay_state.p_record_set = &m_state_local.record_sets[pipe_num];
+    //unifying_rf_record_set_t* p_rs = &m_state_local.record_sets[pipe_num];
+    if (replay_realtime) m_replay_state.keep_alives_to_insert = 0;
+    else m_replay_state.keep_alives_to_insert = keep_alives_to_insert;
+    m_replay_state.replay_loops_remaining = loop_count;
+
+
+    m_replay_state.p_record_set->disallowWrite = true;
+    m_replay_state.replay_realtime = replay_realtime;
+    m_replay_state.read_pos = m_replay_state.p_record_set->first_pos;
+    NRF_LOG_INFO("Replay: first_pos %d, read_pos %d", m_replay_state.p_record_set->first_pos, m_replay_state.read_pos);
+    m_replay_state.running = true;
 
     m_state_local.ack_handler = test_ack_handler;
 
@@ -597,21 +797,21 @@ void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t kee
     */
 
     // don't delay first tx
-    app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(1), p_rs);
+    app_timer_start(m_timer_tx_record, APP_TIMER_TICKS(1), m_replay_state.p_record_set);
     NRF_LOG_INFO("Replay timer started");
 
     // send event
     if (m_state_local.event_handler != NULL) {
         event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_STARTED;
-        event.pipe = p_rs->pipe_num;
+        event.pipe = m_replay_state.pipe_num;
         m_state_local.event_handler(&event);
     } 
 }
 
 void unifying_init(unifying_event_handler_t event_handler){
     app_timer_create(&m_timer_tx_record, APP_TIMER_MODE_SINGLE_SHOT, timer_tx_record_to_scheduler);
+    app_timer_create(&m_timer_next_action, APP_TIMER_MODE_SINGLE_SHOT, timer_next_action_handler);
     for (int i=0; i<NRF_ESB_PIPE_COUNT; i++) {
-        m_state_local.record_sets[i].pipe_num = i;
         m_state_local.record_sets[i].records = m_state_local.records_from_sets[i];
     }
     m_state_local.radio_mode_before_replay = RADIO_MODE_SNIFF;

@@ -1165,14 +1165,6 @@ static void on_radio_end_rx(void)
         if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS && NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER) {
             // schedule frame for validation
             schedule_frame_for_validation_before_pushing_to_rx_fifo(NRF_RADIO->RXMATCH, p_pipe_info->pid);
-            // if needed, send invalid frames to fifo, too (validated_promiscuous_frame will be false for resulting frame)
-            if (NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER_ENQUEUE_INVALID) {
-                if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
-                {
-                    m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
-                    NVIC_SetPendingIRQ(ESB_EVT_IRQ);
-                }
-            }
         } else {
             // Push the new packet to the RX buffer and trigger a received event if the operation was
             // successful.
@@ -1401,6 +1393,8 @@ uint32_t nrf_esb_write_payload(nrf_esb_payload_t const * p_payload)
     VERIFY_PAYLOAD_LENGTH(p_payload);
     VERIFY_FALSE(m_tx_fifo.count >= NRF_ESB_TX_FIFO_SIZE, NRF_ERROR_NO_MEM);
     VERIFY_TRUE(p_payload->pipe < NRF_ESB_PIPE_COUNT, NRF_ERROR_INVALID_PARAM);
+
+NRF_LOG_INFO("TX FIFO COUNT %d", m_tx_fifo.count)
 
     DISABLE_RF_IRQ();
 
