@@ -76,7 +76,9 @@ uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
 #endif
 
 
-static bool test_record_frames = true; //only for testing, not pipe agnostic; set to false when enough frames recorded
+static bool continue_frame_recording = true;
+static bool enough_frames_recorded = false;
+static bool continuo_redording_even_if_enough_frames = true;
 
 /**
  * @brief Additional key release events
@@ -249,7 +251,7 @@ static void bsp_event_callback(bsp_event_t ev)
             nrf_esb_start_rx();
 
             // re-enable frame recording
-            test_record_frames = true;
+            continue_frame_recording = true;
 
             bsp_board_led_off(LED_B);
             break;
@@ -262,7 +264,7 @@ static void bsp_event_callback(bsp_event_t ev)
             NRF_LOG_INFO("Button pressed")
 
             // if enough frames recorded, replay
-            if (!test_record_frames) {
+            if (enough_frames_recorded) {
                 uint8_t pipe = 1;
                 NRF_LOG_INFO("replay recorded frames for pipe 1");
                 unifying_replay_records2(pipe, false, 2, 2);
@@ -394,11 +396,8 @@ void nrf_esb_process_rx() {
                     case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
                     {
                         // record frames, till enough received
-                        if (test_record_frames && unifying_record_rf_frame(rx_payload)) {
-                            // enough frames reecorded
-                            test_record_frames = false;
-                            //NRF_LOG_INFO("scheduling replay");
-                            //unifying_replay_records(rx_payload.pipe, false, 2);
+                        if (continue_frame_recording) {
+                            unifying_record_rf_frame(rx_payload);
                         }
                         break;
                     }
@@ -596,7 +595,12 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
             break;
         case UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES");
-            test_record_frames = false;
+            bsp_board_led_invert(LED_R);
+
+            enough_frames_recorded = true;
+
+            if (continuo_redording_even_if_enough_frames) continue_frame_recording = true; //go on recording, even if enough frames
+            else continue_frame_recording = false; // don't record additional frames
             break;
     }
 }
@@ -607,7 +611,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
 
 int main(void)
 {
-    test_record_frames = true;
+    continue_frame_recording = true;
 
     // Note: For Makerdiary MDK dongle the button isn't working in event driven fashion (only BSP SIMPLE seems to be 
     // supported). Thus this code won't support button interaction on MDK dongle.
