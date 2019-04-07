@@ -267,7 +267,7 @@ static void bsp_event_callback(bsp_event_t ev)
             if (enough_frames_recorded) {
                 uint8_t pipe = 1;
                 NRF_LOG_INFO("replay recorded frames for pipe 1");
-                unifying_replay_records2(pipe, false, 2, 2);
+                unifying_replay_records(pipe, false, 1);
             }
             break;
 

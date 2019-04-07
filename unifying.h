@@ -52,6 +52,8 @@ typedef struct {
     uint8_t data[32];
     bool isEncrytedKeyRelease; //true if encrypted keyboard report is assumed to be a key release frame
     uint32_t counter; //counter, in case this is a encrypted keyboard report
+    bool resulted_in_LED_report;
+    uint8_t resulting_LED_state;
 } unifying_rf_record_t;
 
 typedef struct {
@@ -120,8 +122,7 @@ replay_realtime:        if enabled frames are played back with recording speed a
 keep_alives_to_insert   if replay_realtime is disabled, this number of 8ms keep-alives is inserted after each frame (helps
                         to correlate received ack payloads to replayed frames)
 */
-void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert, uint8_t loop_count);
-void unifying_replay_records2(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert, uint8_t loop_count);
+void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert);
 bool unifying_record_rf_frame(nrf_esb_payload_t frame);
 
 // returns true if the given esb event was consumed by unifying module

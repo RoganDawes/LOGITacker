@@ -36,7 +36,6 @@ typedef struct {
     bool    replay_realtime;         // tries to replay with same delays as recorded (fill gaps with 8ms keep alives)
     uint8_t keep_alives_to_insert; // how many keep alives (8ms) should be inserted between replays
     uint8_t keep_alives_needed; // how many keep alives are needed to fullfill keep_alives_to_insert before next record TX
-    uint8_t replay_loops_remaining; // how often a replay has to be repeated
 
     replay_substate_t substate;
     nrf_esb_payload_t tx_payload;
@@ -230,18 +229,16 @@ bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
         wantedCounter--;
 
         //if here, the recorded frame is valid
-        valid_count = i;
+        valid_count = i+1;
 
         //success condition
         if (valid_count >= UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE) {
-            int start_pos = (end_pos - valid_count);
+            int start_pos = (end_pos - valid_count) + 1;
             if (start_pos < 0) start_pos += UNIFYING_MAX_STORED_REPORTS_PER_PIPE; //account for ring buffer style of record buffer
-
-            if (end_pos == 0) end_pos = UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
 
             // update record set
             p_rs->first_pos = (uint8_t) start_pos;
-            p_rs->last_pos = (uint8_t) --end_pos;
+            p_rs->last_pos = (uint8_t) end_pos;
             //m_replay_state.read_pos = p_rs->first_pos;
             NRF_LOG_INFO("found enough (%d) valid frames, start %d end %d", valid_count, start_pos, end_pos);
             return true;
@@ -291,7 +288,7 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
             unifying_rf_record_t* p_previous_record = &p_rs->records[previous_pos];
             if (!p_previous_record->isEncrytedKeyRelease && p_previous_record->reportType == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
                 p_previous_record->isEncrytedKeyRelease = true;
-                NRF_LOG_INFO("last recorded encrypted keyboard frame marked as key release frame")
+                NRF_LOG_INFO("encrypted keyboard frame at record pos %d marked as key release", previous_pos);
             } 
             
             break;
@@ -320,6 +317,7 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
         memcpy(p_record->data, frame.data, frame.length);
         if (p_record->reportType == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
             unifyingExtractCounterFromEncKbdFrame(frame, &p_record->counter);
+            p_record->resulted_in_LED_report = false; //not known for now
         }
 
         timestamp_last = timestamp;
@@ -432,6 +430,7 @@ void test_ack_handler(unifying_rf_record_set_t *p_rs, nrf_esb_payload_t const *p
     return;
 }
 
+static nrf_esb_payload_t ack_payload;
 void process_next_replay_step(replay_event_t replay_event) {
     switch (replay_event) {
         case REPLAY_EVENT_TX_FAILED:
@@ -480,6 +479,33 @@ void process_next_replay_step(replay_event_t replay_event) {
         case REPLAY_EVENT_ACK_PAY_FOR_LAST_TX:
         {
             NRF_LOG_INFO("ACK PAY DURING REPLAY");
+            uint32_t err = nrf_esb_read_rx_payload(&ack_payload);
+            if (err != NRF_SUCCESS) {
+                NRF_LOG_INFO("Error reading ack payload");
+            } else {
+                uint8_t ack_report_type = 0;
+                bool ack_is_keep_alive = false;
+                unifying_frame_classify(ack_payload, &ack_report_type, &ack_is_keep_alive);
+                if (ack_report_type == UNIFYING_RF_REPORT_LED) {
+                    NRF_LOG_INFO("LED outpout report received with ACK");
+                    // this LED report could either have been issued after a key release or key down (depending on host OS and device in use)
+                    // the report is always assigned to the last "key down" event, to avoid confusion during ongoing processing
+                    uint8_t new_led_state = ack_payload.data[2];
+
+                    //find key down report to assign this LED frame
+                    uint8_t key_down_record_num = m_replay_state.read_pos;
+                    do {
+                        // this is a key release, we are looking for the prepending key-down
+                        key_down_record_num = key_down_record_num == 0 ? UNIFYING_MAX_STORED_REPORTS_PER_PIPE-1 : key_down_record_num-1;
+                    } while (m_replay_state.p_record_set->records[key_down_record_num].isEncrytedKeyRelease);
+                    // assign LED state to key down report
+                    m_replay_state.p_record_set->records[key_down_record_num].resulted_in_LED_report = true;
+                    m_replay_state.p_record_set->records[key_down_record_num].resulting_LED_state = new_led_state;
+                    NRF_LOG_INFO("LED state %02x assigned to key down record no. %d", new_led_state, key_down_record_num);
+                } else {
+                    NRF_LOG_DEBUG("UNEXPECTED ACK PAYLOAD REPORT TYPE %d", ack_report_type);
+                }
+            }
         }
         break;
         case REPLAY_EVENT_TX_SUCEEDED:
@@ -496,8 +522,8 @@ void process_next_replay_step(replay_event_t replay_event) {
             }
             
 
-
-            if (m_replay_state.read_pos == m_replay_state.p_record_set->last_pos) {
+            uint8_t last_sent_pos = m_replay_state.read_pos == 0 ? UNIFYING_MAX_STORED_REPORTS_PER_PIPE-1 : m_replay_state.read_pos-1;
+            if (last_sent_pos == m_replay_state.p_record_set->last_pos && m_replay_state.keep_alives_needed == 0) {
                 // last frame has been transmitted, replay done
 
                 NRF_LOG_INFO("Replay finished (timestamp %d)", timestamp_get());
@@ -529,7 +555,7 @@ void process_next_replay_step(replay_event_t replay_event) {
             uint32_t sleep_delay = 8;
             app_timer_start(m_timer_next_action, APP_TIMER_TICKS(sleep_delay), NULL);
             m_replay_state.substate = REPLAY_SUBSTATE_FRAME_WAIT_TX;
-            NRF_LOG_INFO("Replay: sleeping %d ms (timestamp %d)", sleep_delay, timestamp_get());
+            NRF_LOG_DEBUG("Replay: sleeping %d ms (timestamp %d)", sleep_delay, timestamp_get());
             
 
         }
@@ -578,7 +604,7 @@ bool unifying_process_esb_event(nrf_esb_evt_t *p_event) {
             default:
                 return false;
         }
-        return false;
+        return true;
     }
     return false;
 }
@@ -591,7 +617,7 @@ void timer_next_action_handler(void* p_context) {
 }
 
 
-void unifying_replay_records2(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert, uint8_t loop_count) {
+void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert) {
     if (m_replay_state.running) {
         NRF_LOG_WARNING("attempt to start replay, while replay is already running on pipe %d", m_replay_state.pipe_num);
         return;
@@ -601,7 +627,6 @@ void unifying_replay_records2(uint8_t pipe_num, bool replay_realtime, uint8_t ke
     m_replay_state.p_record_set = &m_state_local.record_sets[pipe_num];
     if (replay_realtime) m_replay_state.keep_alives_to_insert = 0;
     else m_replay_state.keep_alives_to_insert = keep_alives_to_insert;
-    m_replay_state.replay_loops_remaining = loop_count;
 
     // store write lock state of record buffer and disallow write while replaying
     m_replay_state.record_buffer_was_write_protected_before_replay = m_replay_state.p_record_set->disallowWrite;
@@ -627,7 +652,8 @@ void unifying_replay_records2(uint8_t pipe_num, bool replay_realtime, uint8_t ke
     m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
     m_replay_state.tx_payload.noack = false;
     m_replay_state.substate = REPLAY_SUBSTATE_FRAME_TX;
-    nrf_esb_flush_tx();
+    nrf_esb_flush_tx(); //Avoid receiving TX_SUCCESS for old transmissions from TX queue
+    nrf_esb_flush_rx(); // RX fifo should be empty, as ACK payloads are fetched (and co-related to TX frames)
     nrf_esb_start_tx();
     uint32_t tx_err = nrf_esb_write_payload(&m_replay_state.tx_payload);
     
