@@ -433,7 +433,7 @@ void test_ack_handler(unifying_rf_record_set_t *p_rs, nrf_esb_payload_t const *p
 }
 
 void process_next_replay_step(replay_event_t replay_event) {
-    switch (m_replay_state.substate) {
+    switch (replay_event) {
         case REPLAY_EVENT_TX_FAILED:
         {
             // change to next channel and transmit again
@@ -453,13 +453,21 @@ void process_next_replay_step(replay_event_t replay_event) {
                 return;
             }
 
-            unifying_rf_record_t cur_rec = m_replay_state.p_record_set->records[m_replay_state.read_pos];
-            memcpy(m_replay_state.tx_payload.data, cur_rec.data, cur_rec.length);
-            m_replay_state.tx_payload.length = cur_rec.length;
-            m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
-            m_replay_state.tx_payload.noack = false;
+            if (m_replay_state.keep_alives_needed == 0) {
+                unifying_rf_record_t cur_rec = m_replay_state.p_record_set->records[m_replay_state.read_pos];
+                memcpy(m_replay_state.tx_payload.data, cur_rec.data, cur_rec.length);
+                m_replay_state.tx_payload.length = cur_rec.length;
+                m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
+                m_replay_state.tx_payload.noack = false;
+                NRF_LOG_INFO("Replay: transmitting frame %d (timestamp %d)", m_replay_state.read_pos, timestamp_get());
+            } else {
+                memcpy(m_replay_state.tx_payload.data, keep_alive_8ms, sizeof(keep_alive_8ms));
+                m_replay_state.tx_payload.length = sizeof(keep_alive_8ms);
+                m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
+                m_replay_state.tx_payload.noack = false;
+                NRF_LOG_INFO("Replay: transmitting 8ms keep-alive (timestamp %d)", timestamp_get());
+            }
             
-            NRF_LOG_INFO("Replay: transmitting frame %d (timestamp %d)", m_replay_state.read_pos, timestamp_get());
             uint32_t err = nrf_esb_write_payload(&m_replay_state.tx_payload);
             if (err != NRF_SUCCESS) {
                 NRF_LOG_WARNING("Error sending frame: %d", err);
@@ -480,7 +488,13 @@ void process_next_replay_step(replay_event_t replay_event) {
             // schedule next frame for transmission, with proper delay
 
             //next read pos
-            if (++m_replay_state.read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) m_replay_state.read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+            if (m_replay_state.keep_alives_needed == 0) {
+                if (++m_replay_state.read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) m_replay_state.read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+                m_replay_state.keep_alives_needed = m_replay_state.keep_alives_to_insert;
+            } else {
+                m_replay_state.keep_alives_needed--;
+            }
+            
 
 
             if (m_replay_state.read_pos == m_replay_state.p_record_set->last_pos) {
@@ -551,18 +565,20 @@ bool unifying_process_esb_event(nrf_esb_evt_t *p_event) {
         switch (p_event->evt_id)
         {
             case NRF_ESB_EVENT_TX_SUCCESS:
+                NRF_LOG_DEBUG("Unifying process ESB event, TX SUCCEEDED");
                 process_next_replay_step(REPLAY_EVENT_TX_SUCEEDED);
                 break;
             case NRF_ESB_EVENT_RX_RECEIVED:
                 process_next_replay_step(REPLAY_EVENT_ACK_PAY_FOR_LAST_TX);
                 break;
             case NRF_ESB_EVENT_TX_FAILED:
+                NRF_LOG_DEBUG("Unifying process ESB event, TX FAILED");
                 process_next_replay_step(REPLAY_EVENT_TX_FAILED);
                 break;
             default:
                 return false;
         }
-        return true;
+        return false;
     }
     return false;
 }

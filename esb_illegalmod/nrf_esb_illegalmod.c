@@ -1394,8 +1394,6 @@ uint32_t nrf_esb_write_payload(nrf_esb_payload_t const * p_payload)
     VERIFY_FALSE(m_tx_fifo.count >= NRF_ESB_TX_FIFO_SIZE, NRF_ERROR_NO_MEM);
     VERIFY_TRUE(p_payload->pipe < NRF_ESB_PIPE_COUNT, NRF_ERROR_INVALID_PARAM);
 
-NRF_LOG_INFO("TX FIFO COUNT %d", m_tx_fifo.count)
-
     DISABLE_RF_IRQ();
 
     memcpy(m_tx_fifo.p_payload[m_tx_fifo.entry_point], p_payload, sizeof(nrf_esb_payload_t));
