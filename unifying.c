@@ -690,6 +690,15 @@ void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
         p_rs->first_pos = successive_led_keydowns_longest_startpos;
         p_rs->last_pos = successive_led_keydowns_longest_endpos;
 
+        // trim down to size wanted
+        while (successive_led_keydowns_longest > UNIFYING_MIN_STORED_REPORTS_WITH_SUCCESSIVE_LED_TOGGLE_KEY_DOWNS) {
+            if (p_rs->last_pos < 2) p_rs->last_pos += UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+            p_rs->last_pos -= 2;
+//            p_rs->first_pos += 2;
+//            if (p_rs->first_pos > UNIFYING_MAX_STORED_REPORTS_PER_PIPE) p_rs->first_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+            successive_led_keydowns_longest--;
+        }
+
         p_rs->all_encrypted_reports_produce_LED_reports = true;
     } else {
         NRF_LOG_INFO("%d out of %d key down records result in LED report, rest has been modified", with_led_count, read_length/2);

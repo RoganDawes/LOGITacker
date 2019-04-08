@@ -4,12 +4,14 @@
 #include <stdint.h>
 #include "nrf_esb_illegalmod.h"
 
-#define UNIFYING_SLEEP_MS_BETWEEN_TX                        5  //should be 8ms, but as keep-alives are inserted, could be halfed (see next param)
-#define UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX    2
+#define UNIFYING_SLEEP_MS_BETWEEN_TX                        4  //should be 8ms, but as keep-alives are inserted, could be halfed (see next param)
+#define UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX    3
 
 #define XOR_BRUTEFORCE_FIRST_HID_CODE       0x04
-//#define XOR_BRUTEFORCE_LAST_HID_CODE        0x65
-#define XOR_BRUTEFORCE_LAST_HID_CODE        0x52 //exclude keypad keys, "key Non-US" and "key application"
+#define XOR_BRUTEFORCE_LAST_HID_CODE        0x65
+//#define XOR_BRUTEFORCE_LAST_HID_CODE        0x52 //exclude keypad keys, "key Non-US" and "key application"
+//#define XOR_BRUTEFORCE_LAST_HID_CODE        0x39 //exclude keypad keys, "key Non-US" and "key application"
+
 #define REPLAYS_BEFORE_BRUTEFORCE_ITERATION 1 //how often keys are replayed to check for LED reports, before next bruteforce iteration
 
 #define UNIFYING_RF_REPORT_TYPE_MSK             0x1f
@@ -29,7 +31,7 @@
 // note: 26 frames are minimum to overwrite counter re-use protection, but more frames
 //       are used to overcome changing counters by real keypresses in between replayed RF frames
 #define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 60                                 //space for record storage per pipe
-#define UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE 46                           //number of encrypted keyboard reports to collect (shouldn't be less than 26, not more than UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE)
+#define UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE 52                           //number of encrypted keyboard reports to collect (shouldn't be less than 26, not more than UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE)
 #define UNIFYING_MIN_STORED_REPORTS_WITH_SUCCESSIVE_LED_TOGGLE_KEY_DOWNS 13     //required number of key down reports which toggle LED during bruteforce (not less than 13, not more than UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE/2)
 
 
