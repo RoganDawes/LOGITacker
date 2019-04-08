@@ -78,7 +78,7 @@ uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
 
 static bool continue_frame_recording = true;
 static bool enough_frames_recorded = false;
-static bool continuo_redording_even_if_enough_frames = true;
+static bool continuo_redording_even_if_enough_frames = false;
 
 /**
  * @brief Additional key release events
