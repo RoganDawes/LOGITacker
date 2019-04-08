@@ -577,6 +577,8 @@ void timer_channel_hop_event_handler_to_scheduler(void* p_context) {
     app_sched_event_put(p_context, sizeof(app_timer_id_t), timer_channel_hop_event_handler_from_scheduler);
 }
 
+#define REPLAYS_BEFORE_BRUTEFORCE_ITERATION 3
+uint8_t m_replay_count;
 void unifying_event_handler(unifying_evt_t const *p_event) {
     //logPriority("UNIFYING_event_handler");
     switch (p_event->evt_id)
@@ -585,16 +587,29 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FAILED");
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
 
-//            unifying_replay_records(p_event->pipe, false, 1);
+            // restart failed replay bruteforce
+            if (!unifying_replay_records_LED_bruteforce_done(p_event->pipe)) {
+                unifying_replay_records(p_event->pipe, false, 1);
+            }
+
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_FINISHED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FINISHED");
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
 
-            NRF_LOG_INFO("Applying next bruteforce iteration to keyboard frames")
-//            unifying_replay_records_LED_bruteforce_iteration(p_event->pipe);
 
-//            unifying_replay_records(p_event->pipe, false, 1);
+            // restart replay with bruteforce iteration, if not all records result in LED reports for response
+            if (!unifying_replay_records_LED_bruteforce_done(p_event->pipe)) {
+                m_replay_count++;
+                if (m_replay_count == REPLAYS_BEFORE_BRUTEFORCE_ITERATION) {
+                    NRF_LOG_INFO("Applying next bruteforce iteration to keyboard frames")
+                    unifying_replay_records_LED_bruteforce_iteration(p_event->pipe);
+                    m_replay_count = 0;
+                }
+
+                unifying_replay_records(p_event->pipe, false, 1);
+            }
+            
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_STARTED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_STARTED");

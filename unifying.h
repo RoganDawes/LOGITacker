@@ -119,6 +119,7 @@ keep_alives_to_insert   if replay_realtime is disabled, this number of 8ms keep-
 void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert);
 bool unifying_record_rf_frame(nrf_esb_payload_t frame);
 void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num);
+bool unifying_replay_records_LED_bruteforce_done(uint8_t pipe_num);
 
 // returns true if the given esb event was consumed by unifying module
 bool unifying_process_esb_event(nrf_esb_evt_t *p_event);
