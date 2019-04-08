@@ -267,7 +267,7 @@ static void bsp_event_callback(bsp_event_t ev)
             if (enough_frames_recorded) {
                 uint8_t pipe = 1;
                 NRF_LOG_INFO("replay recorded frames for pipe 1");
-                unifying_replay_records(pipe, false, 1);
+                unifying_replay_records(pipe, false, UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX);
             }
             break;
 
@@ -577,7 +577,6 @@ void timer_channel_hop_event_handler_to_scheduler(void* p_context) {
     app_sched_event_put(p_context, sizeof(app_timer_id_t), timer_channel_hop_event_handler_from_scheduler);
 }
 
-#define REPLAYS_BEFORE_BRUTEFORCE_ITERATION 3
 uint8_t m_replay_count;
 void unifying_event_handler(unifying_evt_t const *p_event) {
     //logPriority("UNIFYING_event_handler");
@@ -589,7 +588,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
 
             // restart failed replay bruteforce
             if (!unifying_replay_records_LED_bruteforce_done(p_event->pipe)) {
-                unifying_replay_records(p_event->pipe, false, 1);
+                unifying_replay_records(p_event->pipe, false, UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX);
             }
 
             break;
@@ -607,7 +606,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
                     m_replay_count = 0;
                 }
 
-                unifying_replay_records(p_event->pipe, false, 1);
+                unifying_replay_records(p_event->pipe, false, UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX);
             }
             
             break;
