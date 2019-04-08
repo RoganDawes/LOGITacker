@@ -584,10 +584,17 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
         case UNIFYING_EVENT_REPLAY_RECORDS_FAILED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FAILED");
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
+
+//            unifying_replay_records(p_event->pipe, false, 1);
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_FINISHED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FINISHED");
             app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
+
+            NRF_LOG_INFO("Applying next bruteforce iteration to keyboard frames")
+//            unifying_replay_records_LED_bruteforce_iteration(p_event->pipe);
+
+//            unifying_replay_records(p_event->pipe, false, 1);
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_STARTED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_STARTED");
@@ -595,6 +602,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
             break;
         case UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES");
+            app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
             bsp_board_led_invert(LED_R);
 
             enough_frames_recorded = true;

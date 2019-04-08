@@ -59,20 +59,14 @@ typedef struct {
 typedef struct {
     unifying_rf_record_t* records;
     uint8_t write_pos;
-    //uint8_t read_pos;
     uint8_t first_pos;
     uint8_t last_pos;
-
-//    uint8_t pipe_num;
 
     uint8_t lastRecordedReportType;
     bool disallowWrite;
 
-    //bool    isReplaying;
-    //bool    replay_realtime;         // tries to replay with same delays as recorded (fill gaps with 8ms keep alives)
-    //uint8_t keep_alives_to_insert; // how many keep alives (8ms) should be inserted between replays
-    //uint8_t keep_alives_needed; // how many keep alives are needed to fullfill keep_alives_to_insert before next record TX
-    //uint8_t replay_loops_remaining; // how often a replay has to be repeated
+    uint8_t XOR_key_for_LED_brute_force;
+    bool all_encrypted_reports_produce_LED_reports;
 } unifying_rf_record_set_t;
 
 
@@ -124,6 +118,7 @@ keep_alives_to_insert   if replay_realtime is disabled, this number of 8ms keep-
 */
 void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert);
 bool unifying_record_rf_frame(nrf_esb_payload_t frame);
+void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num);
 
 // returns true if the given esb event was consumed by unifying module
 bool unifying_process_esb_event(nrf_esb_evt_t *p_event);
