@@ -41,6 +41,7 @@
 
 #include "timestamp.h"
 
+
 #define CHANNEL_HOP_INTERVAL 30
 #define CHANNEL_HOP_RESTART_DELAY 1200
 
@@ -76,9 +77,14 @@ uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
 #endif
 
 
+#define AUTO_BRUTEFORCE true
 static bool continue_frame_recording = true;
 static bool enough_frames_recorded = false;
 static bool continuo_redording_even_if_enough_frames = false;
+
+uint32_t m_act_led = LED_B;
+uint32_t m_channel_scan_led = LED_G;
+
 
 /**
  * @brief Additional key release events
@@ -253,7 +259,10 @@ static void bsp_event_callback(bsp_event_t ev)
             // re-enable frame recording
             continue_frame_recording = true;
 
-            bsp_board_led_off(LED_B);
+            bsp_board_led_off(m_channel_scan_led);
+            m_act_led = LED_G;
+            m_channel_scan_led = LED_B;
+            
             break;
 
         case BSP_USER_EVENT_RELEASE_0:
@@ -318,7 +327,7 @@ void esb_process_unvalidated_promiscuous() {
         report[0] = m_current_payload->pipe;
         memcpy(&report[2], m_current_payload->data, m_current_payload->length);
         app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-        bsp_board_led_invert(LED_G); // toggle green to indicate received RF data from promiscuous sniffing
+        bsp_board_led_invert(m_act_led); // toggle green to indicate received RF data from promiscuous sniffing
     }
 }
 
@@ -328,13 +337,15 @@ void esb_process_valid_promiscuous() {
 
     static uint8_t report[REPORT_IN_MAXSIZE];
 
-    bsp_board_led_invert(LED_G); // toggle green to indicate valid ESB frame in promiscous mode
+    bsp_board_led_invert(m_act_led); // toggle green to indicate valid ESB frame in promiscous mode
     memset(report,0,REPORT_IN_MAXSIZE);
     memcpy(report, m_current_payload->data, m_current_payload->length);
     app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
 
     // assign discovered address to pipe 1 and switch over to passive sniffing (doesn't send ACK payloads)
     if (switch_from_promiscous_to_sniff_on_discovered_address) {
+        m_act_led = LED_B;
+        m_channel_scan_led = LED_G;
         uint8_t RfAddress1[4] = {m_current_payload->data[5], m_current_payload->data[4], m_current_payload->data[3], m_current_payload->data[2]}; //prefix, addr3, addr2, addr1, addr0
         NRF_LOG_INFO("Received valid frame from %02x:%02x:%02x:%02x:%02x, sniffing this address", RfAddress1[3], RfAddress1[2], RfAddress1[1], RfAddress1[0], m_current_payload->data[6])
 
@@ -385,7 +396,7 @@ void nrf_esb_process_rx() {
         case RADIO_MODE_SNIFF:
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                if (rx_payload.length == 0) bsp_board_led_invert(LED_G); // toggle green led to indicate non-empty frame sniffed
+                if (rx_payload.length == 0) bsp_board_led_invert(m_act_led); // toggle act led to indicate non-empty frame sniffed
                 
                 uint8_t rfReportType;
                 bool rfReportIsKeepAlive;
@@ -408,7 +419,7 @@ void nrf_esb_process_rx() {
 
                 m_channel_hop_delay_ms = CHANNEL_HOP_RESTART_DELAY; // set restart timer interval (will start channel hopping, if no data received after this timeout)
                 m_channel_hop_data_received = true; //don't restart channel hop timer
-                bsp_board_led_off(LED_B); //assure LED indicating channel hops is disabled
+                bsp_board_led_off(m_channel_scan_led); //assure LED indicating channel hops is disabled
 
                 // hid report:
                 // byte 0:    rx pipe
@@ -556,7 +567,7 @@ void timer_channel_hop_event_handler(void* p_context)
         radioNextRfChannel();
         uint8_t currentChIdx;
         radioGetRfChannelIndex(&currentChIdx);
-        if (currentChIdx == 0) bsp_board_led_invert(LED_B); // toggle blue LED everytime we jumped through all channels (only noticable if no RX frames, as LED is toggled on received RF frame, too)
+        if (currentChIdx == 0) bsp_board_led_invert(m_channel_scan_led); // toggle blue LED everytime we jumped through all channels (only noticable if no RX frames, as LED is toggled on received RF frame, too)
 
         m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
     }   
@@ -576,6 +587,8 @@ void timer_channel_hop_event_handler_from_scheduler(void *p_event_data, uint16_t
 void timer_channel_hop_event_handler_to_scheduler(void* p_context) {
     app_sched_event_put(p_context, sizeof(app_timer_id_t), timer_channel_hop_event_handler_from_scheduler);
 }
+
+bool m_auto_bruteforce_started = false;
 
 uint8_t m_replay_count;
 void unifying_event_handler(unifying_evt_t const *p_event) {
@@ -611,6 +624,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
             
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_STARTED:
+            bsp_board_led_invert(LED_R);
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_STARTED");
             app_timer_stop(m_timer_channel_hop);
             break;
@@ -623,6 +637,13 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
 
             if (continuo_redording_even_if_enough_frames) continue_frame_recording = true; //go on recording, even if enough frames
             else continue_frame_recording = false; // don't record additional frames
+
+            if (AUTO_BRUTEFORCE && !m_auto_bruteforce_started) {
+                uint8_t pipe = 1;
+                NRF_LOG_INFO("replay recorded frames for pipe 1");
+                unifying_replay_records(pipe, false, UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX);
+                m_auto_bruteforce_started = true;
+            }
             break;
     }
 }
