@@ -163,21 +163,6 @@ static void on_radio_disabled_rx_ack(void);
 #define NRF_ESB_ADDR_UPDATE_MASK_BASE1          (1 << 1)    /*< Mask value to signal updating BASE1 radio address. */
 #define NRF_ESB_ADDR_UPDATE_MASK_PREFIX         (1 << 2)    /*< Mask value to signal updating radio prefixes. */
 
-//static bool m_lock_rx_fifo = false;
-//#define WAIT_UNLOCK_RX_FIFO while(m_lock_rx_fifo){}
-//#define LOCK_RX_FIFO m_lock_rx_fifo=true
-//#define UNLOCK_RX_FIFO m_lock_rx_fifo=false
-
-
-/*
-static void logPriority(char* source) {
-    if (current_int_priority_get() == APP_IRQ_PRIORITY_THREAD) {
-        NRF_LOG_INFO("%s: Running in Thread/main mode", source);
-    } else {
-        NRF_LOG_INFO("%s: Running in Interrupt mode", source);
-    } 
-}
-*/
 
 // Function to do bytewise bit-swap on an unsigned 32-bit value
 static uint32_t bytewise_bit_swap(uint8_t const * p_inp)
@@ -248,6 +233,98 @@ static ret_code_t apply_address_workarounds()
     return NRF_SUCCESS;
 }
 #endif
+
+
+uint32_t nrf_esb_init_promiscuous_mode() {
+    if (!m_esb_initialized) return NRF_ERROR_INVALID_STATE;
+
+    uint32_t err_code;
+    nrf_esb_config_t esb_config = NRF_ESB_PROMISCUOUS_CONFIG;
+
+    esb_config.event_handler = m_event_handler;
+
+    err_code = nrf_esb_init(&esb_config);
+    VERIFY_SUCCESS(err_code);
+
+    while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PRX_PASSIVE mode and could get mis-interpreted
+
+    VERIFY_SUCCESS(err_code);
+    m_config_local.mode = NRF_ESB_MODE_PROMISCOUS;
+    return NRF_SUCCESS;
+}
+
+uint32_t nrf_esb_init_sniffer_mode() {
+    if (!m_esb_initialized) return NRF_ERROR_INVALID_STATE;
+
+    uint32_t err_code;
+    
+    nrf_esb_config_t esb_config = NRF_ESB_SNIFF_CONFIG;
+    esb_config.event_handler = m_event_handler;
+
+    err_code = nrf_esb_init(&esb_config);
+    VERIFY_SUCCESS(err_code);
+
+
+    // if old mode was promiscuous mode, flush RX
+    if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) {
+        while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+    }
+    
+    m_config_local.mode = NRF_ESB_MODE_SNIFF;
+    return NRF_SUCCESS;
+}
+
+uint32_t nrf_esb_init_ptx_mode() {
+    if (!m_esb_initialized) return NRF_ERROR_INVALID_STATE;
+
+    uint32_t err_code;
+    
+    nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
+    esb_config.event_handler = m_event_handler;    
+    esb_config.crc = NRF_ESB_CRC_16BIT;
+    esb_config.retransmit_count = 1;
+    esb_config.retransmit_delay = 5*250;
+
+    err_code = nrf_esb_init(&esb_config);
+    VERIFY_SUCCESS(err_code);
+
+    m_config_local.mode = NRF_ESB_MODE_PTX;
+    return NRF_SUCCESS;
+}
+
+nrf_esb_mode_t nrf_esb_get_mode() {
+    return m_config_local.mode;
+}
+
+uint32_t nrf_esb_set_mode(nrf_esb_mode_t mode) {
+    if (m_config_local.mode == mode) {
+        return NRF_SUCCESS; //no change
+    }
+
+    uint32_t err_code;
+
+    switch (mode) {
+        case NRF_ESB_MODE_PTX:
+            err_code = nrf_esb_init_ptx_mode();
+            VERIFY_SUCCESS(err_code);
+            break;
+        case NRF_ESB_MODE_SNIFF:
+            err_code = nrf_esb_init_sniffer_mode();
+            VERIFY_SUCCESS(err_code);
+            break;
+        case NRF_ESB_MODE_PROMISCOUS:
+            // promiscous mode always needs (re)init, as Packet Format is changed
+            //err_code = radioInitPromiscuousMode();
+            err_code = nrf_esb_init_promiscuous_mode();
+            VERIFY_SUCCESS(err_code);
+            break;
+        default:
+            NRF_LOG_WARNING("nrf_esb_set_mode unhandled mode %d", mode);
+            break;
+    }
+
+    return 0;
+}
 
 
 static void update_rf_payload_format_esb_dpl(uint32_t payload_length)
@@ -1249,6 +1326,7 @@ void RADIO_IRQHandler()
 
 uint32_t nrf_esb_init(nrf_esb_config_t const * p_config)
 {
+    NRF_LOG_INFO("called nrf_esb_init with mode %d", p_config->mode);
     uint32_t err_code;
 
     VERIFY_PARAM_NOT_NULL(p_config);

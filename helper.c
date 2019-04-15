@@ -1,5 +1,8 @@
 #include "helper.h"
 #include "crc16.h"
+#include "app_util_platform.h"
+#include "nrf_log.h"
+
 
 void helper_array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
     if (len == 1) {
@@ -22,4 +25,12 @@ bool helper_array_check_crc16(uint8_t * p_array, uint8_t len) {
     }
 
     return false;
+}
+
+void helper_log_priority(char* source) {
+    if (current_int_priority_get() == APP_IRQ_PRIORITY_THREAD) {
+        NRF_LOG_INFO("%s: Running in Thread/main mode", source);
+    } else {
+        NRF_LOG_INFO("%s: Running in Interrupt mode", source);
+    } 
 }

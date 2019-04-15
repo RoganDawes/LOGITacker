@@ -2,7 +2,7 @@
 #define STATE_H__
 
 #include <stdint.h>
-#include "radio.h"
+#include "nrf_esb_illegalmod.h"
 
 
 // dongle state for persistent flash storage
@@ -17,7 +17,7 @@ typedef struct
 {
     //RF address
     //Channel
-    radio_rf_mode_t  rf_mode; //RF mode 
+    nrf_esb_mode_t  rf_mode; //RF mode 
 
 } dongle_state_volatile_t;
 

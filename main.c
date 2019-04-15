@@ -6,7 +6,6 @@
 #include "nrf_esb_illegalmod.h"
 #include "nrf_esb_illegalmod_error_codes.h"
 #include "nrf_delay.h"
-#include "app_util_platform.h"
 #include "nrf_drv_usbd.h"
 #include "nrf_drv_clock.h"
 #include "nrf_gpio.h"
@@ -55,8 +54,6 @@
 
 
 #define SCHED_QUEUE_SIZE            16
-
-
 
 /**
  * @brief Enable USB power detection
@@ -122,13 +119,6 @@ struct
 static bool m_report_pending; //Mark ongoing USB transmission
 
 
-void logPriority(char* source) {
-    if (current_int_priority_get() == APP_IRQ_PRIORITY_THREAD) {
-        NRF_LOG_INFO("%s: Running in Thread/main mode", source);
-    } else {
-        NRF_LOG_INFO("%s: Running in Interrupt mode", source);
-    } 
-}
 
 static uint8_t hid_out_report[REPORT_OUT_MAXSIZE];
 static bool processing_hid_out_report = false;
@@ -141,7 +131,7 @@ static bool processing_hid_out_report = false;
 static void usbd_hid_event_handler(app_usbd_class_inst_t const * p_inst,
                                 app_usbd_hid_user_event_t event)
 {
-    //logPriority("usbd_hid_event_handler");
+    //helper_log_priority("usbd_hid_event_handler");
     switch (event)
     {
         case APP_USBD_HID_USER_EVT_OUT_REPORT_READY:
@@ -231,7 +221,7 @@ static bool long_pushed;
 static void bsp_event_callback(bsp_event_t ev)
 {
     // runs in interrupt mode
-    //logPriority("bsp_event_callback");
+    //helper_log_priority("bsp_event_callback");
     //uint32_t ret;
     switch ((unsigned int)ev)
     {
@@ -246,7 +236,8 @@ static void bsp_event_callback(bsp_event_t ev)
 
             while (nrf_esb_stop_rx() != NRF_SUCCESS) {};
 
-            radioSetMode(RADIO_MODE_PROMISCOUS); //set back to promiscous
+//            radioSetMode(RADIO_MODE_PROMISCOUS); //set back to promiscous
+            nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS); //set back to promiscous
             radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY); //produce event if there's no RX in given time
 
             nrf_esb_start_rx();
@@ -351,7 +342,8 @@ void esb_process_valid_promiscuous() {
 
         nrf_esb_stop_rx();
         
-        radioSetMode(RADIO_MODE_SNIFF);
+        //radioSetMode(RADIO_MODE_SNIFF);
+        nrf_esb_set_mode(NRF_ESB_MODE_SNIFF);
         nrf_esb_set_base_address_1(RfAddress1);
         nrf_esb_update_prefix(1, m_current_payload->data[6]);   
         while (nrf_esb_start_rx() != NRF_SUCCESS) {};
@@ -371,8 +363,9 @@ void nrf_esb_process_rx() {
 
 
     static uint8_t report[REPORT_IN_MAXSIZE];
-    switch (radioGetMode()) {
-        case RADIO_MODE_PROMISCOUS:
+//    switch (radioGetMode()) {
+      switch (nrf_esb_get_mode()) {
+        case NRF_ESB_MODE_PROMISCOUS:
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
                 m_current_payload = &rx_payload;
@@ -387,8 +380,8 @@ void nrf_esb_process_rx() {
 
             }
             break;
-        case RADIO_MODE_PTX: // process RX frames with ack payload in PTX mode
-        case RADIO_MODE_SNIFF:
+        case NRF_ESB_MODE_PTX: // process RX frames with ack payload in PTX mode
+        case NRF_ESB_MODE_SNIFF:
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
                 if (rx_payload.length == 0) bsp_board_led_invert(m_act_led); // toggle act led to indicate non-empty frame sniffed
@@ -438,7 +431,7 @@ void nrf_esb_process_rx() {
 
 void nrf_esb_event_handler(nrf_esb_evt_t *p_event) {
     if (unifying_process_esb_event(p_event)) return;
-    //logPriority("nrf_esb_event_handler");
+    //helper_log_priority("nrf_esb_event_handler");
     switch (p_event->evt_id)
     {
         case NRF_ESB_EVENT_TX_SUCCESS:
@@ -506,7 +499,7 @@ static void wait_for_fds_ready(void)
 static void fds_evt_handler(fds_evt_t const * p_evt)
 {
     // runs in thread mode
-    //logPriority("fds_evt_handler");
+    //helper_log_priority("fds_evt_handler");
     switch (p_evt->id)
     {
         case FDS_EVT_INIT:
@@ -546,7 +539,7 @@ bool m_auto_bruteforce_started = false;
 
 uint8_t m_replay_count;
 void unifying_event_handler(unifying_evt_t const *p_event) {
-    //logPriority("UNIFYING_event_handler");
+    //helper_log_priority("UNIFYING_event_handler");
     switch (p_event->evt_id)
     {
         case UNIFYING_EVENT_REPLAY_RECORDS_FAILED:
@@ -602,7 +595,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
 }
 
 void radio_event_handler(radio_evt_t const *p_event) {
-    //logPriority("UNIFYING_event_handler");
+    //helper_log_priority("UNIFYING_event_handler");
     switch (p_event->evt_id)
     {
         case RADIO_EVENT_NO_RX_TIMEOUT:
@@ -627,7 +620,7 @@ void radio_event_handler(radio_evt_t const *p_event) {
 }
 
 NRF_CLI_CDC_ACM_DEF(m_cli_cdc_acm_transport);
-NRF_CLI_DEF(m_cli_cdc_acm, "logitacker:~$ ", &m_cli_cdc_acm_transport.transport, '\r', 20);
+NRF_CLI_DEF(m_cli_cdc_acm, "logitacker $ ", &m_cli_cdc_acm_transport.transport, '\r', 20);
 
 
 
@@ -667,7 +660,6 @@ int main(void)
     //BSP
     init_bsp();
 
-
     //FDS
     // Register first to receive an event when initialization is complete.
     (void) fds_register(fds_evt_handler);
@@ -697,7 +689,6 @@ int main(void)
     APP_ERROR_CHECK(ret);
 
 
-
     if (with_log) {
         NRF_LOG_DEFAULT_BACKENDS_INIT();  
     } 
@@ -725,15 +716,18 @@ int main(void)
     //high frequency clock needed for ESB
     clocks_start();
 
+    
     //ESB
     //ret = radioInit(nrf_esb_event_handler_to_scheduler);
     ret = radioInit(nrf_esb_event_handler, radio_event_handler);
     APP_ERROR_CHECK(ret);
 
-    ret = radioSetMode(RADIO_MODE_PROMISCOUS);
+    //ret = radioSetMode(RADIO_MODE_PROMISCOUS);
+    ret = nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS);
     APP_ERROR_CHECK(ret);
     nrf_esb_start_rx();
     NRF_LOG_INFO("Start listening for devices in promiscuous mode");
+
 
     radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY);
     unifying_init(unifying_event_handler);
@@ -743,7 +737,7 @@ int main(void)
 
     //FDS
 // ToDo: Debuf fds usage on pca10059
-//#ifndef BOARD_PCA10059
+#ifndef BOARD_PCA10059
     restoreStateFromFlash(&m_dongle_state);
 
     //Try to load first device info record from flash, create if not existing
@@ -752,7 +746,8 @@ int main(void)
         // restore failed, update/create record on flash with current data
         updateDeviceInfoOnFlash(0, &m_current_device_info); //ignore errors
     } 
-//#endif
+#endif
+
 
     timestamp_init();
 

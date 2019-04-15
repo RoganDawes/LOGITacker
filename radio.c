@@ -21,7 +21,7 @@ radio_evt_t event;
 typedef struct
 {
     bool initialized;
-    radio_rf_mode_t         mode;
+    //radio_rf_mode_t         mode;
     nrf_esb_event_handler_t event_handler;
 
     radio_channel_set_t channel_set;
@@ -39,7 +39,7 @@ typedef struct
 
 
 static radio_state_t m_radio_state = {
-    .mode = RADIO_MODE_SNIFF,
+    //.mode = RADIO_MODE_SNIFF,
     .initialized = false,
 
     .channel_set        = RADIO_DEFAULT_CHANNELS,                               \
@@ -58,9 +58,9 @@ void radio_esb_event_handler(nrf_esb_evt_t * p_event)
         case NRF_ESB_EVENT_TX_FAILED:
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
+            NRF_LOG_DEBUG("RX_RECEIVED");
             if (m_radio_state.channel_hop_enabled && m_radio_state.channel_hop_disable_on_rx) radio_stop_channel_hopping();
             
-            NRF_LOG_DEBUG("RX_RECEIVED");
             //stop rx timeout watcher and restart
             if (m_radio_state.rx_timeout_enabled) {
                 NRF_LOG_DEBUG("Restart RX timeout timer with %d ms", m_radio_state.rx_timeout_delay_ms);
@@ -115,29 +115,6 @@ void timer_no_rx_event_handler(void* p_context)
     m_radio_state.radio_event_handler(&event);
 }
 
-uint32_t radioInitPromiscuousMode() {
-    if (!m_radio_state.initialized) return NRF_ERROR_INVALID_STATE;
-
-    uint32_t err_code;
-    nrf_esb_config_t esb_config = NRF_ESB_PROMISCUOUS_CONFIG;
-
-    esb_config.event_handler = radio_esb_event_handler;
-
-    err_code = nrf_esb_init(&esb_config);
-    VERIFY_SUCCESS(err_code);
-
-    while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PRX_PASSIVE mode and could get mis-interpreted
-
-    VERIFY_SUCCESS(err_code);
-
-    
-
-    //Note: start_rx here would hinder changing RF address after calling radioSetMode() unless stop_rx is called upfront
-
-    return NRF_SUCCESS;
-}
-
-
 uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t radio_event_handler) {
     app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler);
     app_timer_create(&m_timer_no_rx_timeout, APP_TIMER_MODE_SINGLE_SHOT, timer_no_rx_event_handler);
@@ -151,88 +128,16 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t 
 
     m_radio_state.initialized = true;
 
-    radioInitPromiscuousMode();
-
-    return NRF_SUCCESS;
-}
-
-
-uint32_t radioInitSnifferMode(bool flushrx) {
-    if (!m_radio_state.initialized) return NRF_ERROR_INVALID_STATE;
-
-    uint32_t err_code;
     
-    nrf_esb_config_t esb_config = NRF_ESB_SNIFF_CONFIG;
-    esb_config.event_handler = radio_esb_event_handler;
 
-    err_code = nrf_esb_init(&esb_config);
+    nrf_esb_config_t esb_config = NRF_ESB_PROMISCUOUS_CONFIG;
+    esb_config.event_handler = radio_esb_event_handler; // pass custom event handler with call through
+    uint32_t err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
 
-    if (flushrx) {
-        while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
-    }
-    
-    //Note: start_rx here would hinder changing RF address after calling radioSetMode() unless stop_rx is called upfront
+    //nrf_esb_init_promiscuous_mode();
 
     return NRF_SUCCESS;
-}
-
-uint32_t radioInitPTXMode() {
-    if (!m_radio_state.initialized) return NRF_ERROR_INVALID_STATE;
-
-    uint32_t err_code;
-    
-    nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
-    esb_config.event_handler = radio_esb_event_handler;    
-    esb_config.crc = NRF_ESB_CRC_16BIT;
-    esb_config.retransmit_count = 1;
-    esb_config.retransmit_delay = 5*250;
-
-    err_code = nrf_esb_init(&esb_config);
-    VERIFY_SUCCESS(err_code);
-
-
-    //Note: start_rx here would hinder changing RF address after calling radioSetMode() unless stop_rx is called upfront
-
-    return NRF_SUCCESS;
-}
-
-radio_rf_mode_t radioGetMode() {
-    return m_radio_state.mode;
-}
-
-uint32_t radioSetMode(radio_rf_mode_t mode) {
-    if (m_radio_state.mode == mode) {
-        return NRF_SUCCESS; //no change
-    }
-
-    uint32_t err_code;
-
-    switch (mode) {
-        case RADIO_MODE_PTX:
-            err_code = radioInitPTXMode();
-            VERIFY_SUCCESS(err_code);
-            m_radio_state.mode = mode; //update current mode
-            break;
-        case RADIO_MODE_SNIFF:
-            if (m_radio_state.mode == RADIO_MODE_PROMISCOUS) {
-                err_code = radioInitSnifferMode(true);
-            } else {
-                err_code = radioInitSnifferMode(false); //don't flush RX if not comming from promiscuous mode
-            }
-            
-            VERIFY_SUCCESS(err_code);
-            m_radio_state.mode = mode; //update current mode
-            break;
-        case RADIO_MODE_PROMISCOUS:
-            // promiscous mode always needs (re)init, as Packer Format is changed
-            err_code = radioInitPromiscuousMode();
-            VERIFY_SUCCESS(err_code);
-            m_radio_state.mode = mode; //update current mode
-            break;
-    }
-
-    return 0;
 }
 
 uint32_t radioSetRfChannelIndex(uint8_t channel_idx) {

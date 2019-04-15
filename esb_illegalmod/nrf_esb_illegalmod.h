@@ -105,7 +105,7 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .event_handler          = 0,                                \
                                 .bitrate                = NRF_ESB_BITRATE_2MBPS,            \
                                 .crc                    = NRF_ESB_CRC_16BIT,                \
-                                .tx_output_power        = NRF_ESB_TX_POWER_0DBM,            \
+                                .tx_output_power        = NRF_ESB_TX_POWER_8DBM,            \
                                 .retransmit_delay       = 250,                              \
                                 .retransmit_count       = 3,                                \
                                 .tx_mode                = NRF_ESB_TXMODE_AUTO,              \
@@ -206,6 +206,7 @@ typedef enum {
 
 /**@brief Enhanced ShockBurst radio transmission power modes. */
 typedef enum {
+    NRF_ESB_TX_POWER_8DBM     = RADIO_TXPOWER_TXPOWER_Pos8dBm,  /**< 4 dBm radio transmit power.   */
     NRF_ESB_TX_POWER_4DBM     = RADIO_TXPOWER_TXPOWER_Pos4dBm,  /**< 4 dBm radio transmit power.   */
 #if defined(NRF52)
     NRF_ESB_TX_POWER_3DBM     = RADIO_TXPOWER_TXPOWER_Pos3dBm,  /**< 3 dBm radio transmit power.   */
@@ -599,6 +600,13 @@ uint32_t nrf_esb_reuse_pid(uint8_t pipe);
 uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload);
 bool nrf_esb_is_in_promiscuous_mode();
 uint32_t nrf_esb_convert_pipe_to_address(uint8_t pipeNum, uint8_t *p_dst);
+
+
+uint32_t nrf_esb_init_promiscuous_mode();
+uint32_t nrf_esb_init_sniffer_mode();
+uint32_t nrf_esb_init_ptx_mode();
+uint32_t nrf_esb_set_mode(nrf_esb_mode_t mode);
+nrf_esb_mode_t nrf_esb_get_mode();
 
 #ifdef __cplusplus
 }
