@@ -51,7 +51,6 @@ static unifying_replay_state_t m_replay_state;
 typedef struct {
     unifying_rf_record_set_t record_sets[NRF_ESB_PIPE_COUNT];
     unifying_rf_record_t records_from_sets[NRF_ESB_PIPE_COUNT][UNIFYING_MAX_STORED_REPORTS_PER_PIPE];
-    //radio_rf_mode_t radio_mode_before_replay;
     nrf_esb_mode_t radio_mode_before_replay;
     unifying_replay_ack_payload_handler_t ack_handler; //handler for ack PAYLOADS DURING REPLAY
     unifying_event_handler_t event_handler; //handler for unifying events
@@ -544,9 +543,7 @@ void process_next_replay_step(replay_event_t replay_event) {
                 m_state_local.ack_handler = NULL;
 
                 // restore old radio mode if it wasn't PTX already
-//                if (m_state_local.radio_mode_before_replay != RADIO_MODE_PTX) {
                 if (m_state_local.radio_mode_before_replay != NRF_ESB_MODE_PTX) {
-                    //radioSetMode(m_state_local.radio_mode_before_replay);
                     nrf_esb_set_mode(m_state_local.radio_mode_before_replay);
                     nrf_esb_start_rx();
                 }
@@ -579,7 +576,6 @@ void process_next_replay_step(replay_event_t replay_event) {
 
     if (m_replay_state.substate == REPLAY_SUBSTATE_REPLAY_FAILED) {
         // TEST abort replay
-//        if (m_state_local.radio_mode_before_replay != RADIO_MODE_PTX) {
         if (m_state_local.radio_mode_before_replay != NRF_ESB_MODE_PTX) {
             nrf_esb_set_mode(m_state_local.radio_mode_before_replay);
             nrf_esb_start_rx();
@@ -782,12 +778,9 @@ void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t kee
     m_state_local.ack_handler = test_ack_handler;
 
      //store current mode and set to PTX to avoid mode toggling on every single TX (would flush RX'ed ack payloads otherwise)
-    //m_state_local.radio_mode_before_replay = radioGetMode();
     m_state_local.radio_mode_before_replay = nrf_esb_get_mode();
-//    if (m_state_local.radio_mode_before_replay != RADIO_MODE_PTX) {
     if (m_state_local.radio_mode_before_replay != NRF_ESB_MODE_PTX) {
         nrf_esb_stop_rx();
-        //radioSetMode(RADIO_MODE_PTX);
         nrf_esb_set_mode(NRF_ESB_MODE_PTX);
     }
 
@@ -831,12 +824,8 @@ void unifying_init(unifying_event_handler_t event_handler){
     for (int i=0; i<NRF_ESB_PIPE_COUNT; i++) {
         m_state_local.record_sets[i].records = m_state_local.records_from_sets[i];
     }
-//    m_state_local.radio_mode_before_replay = RADIO_MODE_SNIFF;
     m_state_local.radio_mode_before_replay = NRF_ESB_MODE_SNIFF;
     m_state_local.event_handler = event_handler;
-
-
-
 }
 
 

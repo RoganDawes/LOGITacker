@@ -236,7 +236,6 @@ static void bsp_event_callback(bsp_event_t ev)
 
             while (nrf_esb_stop_rx() != NRF_SUCCESS) {};
 
-//            radioSetMode(RADIO_MODE_PROMISCOUS); //set back to promiscous
             nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS); //set back to promiscous
             radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY); //produce event if there's no RX in given time
 
@@ -342,7 +341,6 @@ void esb_process_valid_promiscuous() {
 
         nrf_esb_stop_rx();
         
-        //radioSetMode(RADIO_MODE_SNIFF);
         nrf_esb_set_mode(NRF_ESB_MODE_SNIFF);
         nrf_esb_set_base_address_1(RfAddress1);
         nrf_esb_update_prefix(1, m_current_payload->data[6]);   
@@ -363,8 +361,7 @@ void nrf_esb_process_rx() {
 
 
     static uint8_t report[REPORT_IN_MAXSIZE];
-//    switch (radioGetMode()) {
-      switch (nrf_esb_get_mode()) {
+    switch (nrf_esb_get_mode()) {
         case NRF_ESB_MODE_PROMISCOUS:
             // pull RX payload from fifo, till no more left
             while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
@@ -600,7 +597,7 @@ void radio_event_handler(radio_evt_t const *p_event) {
     {
         case RADIO_EVENT_NO_RX_TIMEOUT:
         {
-            NRF_LOG_INFO("no rx timeout reached, start channel hopping");
+            NRF_LOG_INFO("timeout reached without RX");
             radio_start_channel_hopping(30, 1, true);
             break;
         }
@@ -722,7 +719,6 @@ int main(void)
     ret = radioInit(nrf_esb_event_handler, radio_event_handler);
     APP_ERROR_CHECK(ret);
 
-    //ret = radioSetMode(RADIO_MODE_PROMISCOUS);
     ret = nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS);
     APP_ERROR_CHECK(ret);
     nrf_esb_start_rx();

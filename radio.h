@@ -38,14 +38,6 @@ typedef struct {
 
 typedef void (* radio_event_handler_t)(radio_evt_t const * p_event);
 
-/*
-typedef enum {
-    RADIO_MODE_PTX,          // Primary transmitter mode
-    RADIO_MODE_SNIFF,  // Primary receiver mode (no ACKS == sniffing).
-    RADIO_MODE_PROMISCOUS,   // RX in pseudo promiscuous mode
-} radio_rf_mode_t;
-*/
-
 typedef struct {
     uint8_t channel_list[100];
     uint32_t channel_list_length;
@@ -58,9 +50,6 @@ typedef struct {
 
 
 uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t radio_event_handler);
-//uint32_t radioSetMode(radio_rf_mode_t mode);
-//radio_rf_mode_t radioGetMode();
-
 
 uint32_t radioNextRfChannel();
 uint32_t radioSetRfChannelIndex(uint8_t channel_idx);
@@ -69,7 +58,6 @@ uint32_t radioGetRfChannelIndex(uint8_t *channel_index_result);
 
 uint32_t radio_start_channel_hopping(uint32_t interval, uint32_t start_delay_ms, bool disable_on_rx);
 uint32_t radio_stop_channel_hopping();
-uint32_t radio_rx_timeout_event(uint32_t timeout_ms);
 
 uint32_t radio_enable_rx_timeout_event(uint32_t timeout_ms);
 uint32_t radio_disable_rx_timeout_event();

@@ -21,7 +21,6 @@ radio_evt_t event;
 typedef struct
 {
     bool initialized;
-    //radio_rf_mode_t         mode;
     nrf_esb_event_handler_t event_handler;
 
     radio_channel_set_t channel_set;
@@ -39,7 +38,6 @@ typedef struct
 
 
 static radio_state_t m_radio_state = {
-    //.mode = RADIO_MODE_SNIFF,
     .initialized = false,
 
     .channel_set        = RADIO_DEFAULT_CHANNELS,                               \
