@@ -21,10 +21,17 @@
 #include "app_error.h"
 #include "bsp.h"
 
+#include "app_usbd_cdc_acm.h"
+#include "app_usbd_serial_num.h"
 
+// LOG
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
+
+//CLI
+#include "nrf_cli.h"
+#include "nrf_cli_cdc_acm.h"
 
 #include "app_scheduler.h"
 
@@ -111,8 +118,6 @@ APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_generic,
                                 REPORT_OUT_MAXSIZE,
                                 APP_USBD_HID_SUBCLASS_BOOT,
                                 APP_USBD_HID_PROTO_GENERIC);
-
-
 
 // internal state
 struct
@@ -521,7 +526,6 @@ static void fds_evt_handler(fds_evt_t const * p_evt)
                   fds_evt_str[p_evt->id],
                   fds_err_str[p_evt->result]);
     */
-
     switch (p_evt->id)
     {
         case FDS_EVT_INIT:
@@ -648,6 +652,8 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
     }
 }
 
+NRF_CLI_CDC_ACM_DEF(m_cli_cdc_acm_transport);
+NRF_CLI_DEF(m_cli_cdc_acm, "logitacker:~$ ", &m_cli_cdc_acm_transport.transport, '\r', 20);
 
 
 
@@ -669,7 +675,6 @@ int main(void)
     ret = NRF_LOG_INIT(NULL);
     APP_ERROR_CHECK(ret);
 
-    if (with_log) NRF_LOG_DEFAULT_BACKENDS_INIT();
 
     ret = nrf_drv_clock_init();
     APP_ERROR_CHECK(ret);
@@ -712,6 +717,24 @@ int main(void)
     ret = app_usbd_class_append(class_inst_generic);
     APP_ERROR_CHECK(ret);
 
+
+    app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&nrf_cli_cdc_acm);
+    ret = app_usbd_class_append(class_cdc_acm);
+    APP_ERROR_CHECK(ret);
+
+
+
+    if (with_log) {
+        NRF_LOG_DEFAULT_BACKENDS_INIT();  
+    } 
+
+    /* CLI configured as NRF_LOG backend */
+    ret = nrf_cli_init(&m_cli_cdc_acm, NULL, true, true, NRF_LOG_SEVERITY_INFO);
+    APP_ERROR_CHECK(ret);
+    ret = nrf_cli_start(&m_cli_cdc_acm);
+    APP_ERROR_CHECK(ret);
+
+
     if (USBD_POWER_DETECTION)
     {
         ret = app_usbd_power_events_enable();
@@ -745,9 +768,9 @@ int main(void)
 
     //FDS
 // ToDo: Debuf fds usage on pca10059
-#ifndef BOARD_PCA10059    
+//#ifndef BOARD_PCA10059    
     restoreStateFromFlash(&m_dongle_state);
-#endif
+//#endif
 
     //Try to load first device info record from flash, create if not existing
     ret = restoreDeviceInfoFromFlash(0, &m_current_device_info);
@@ -765,10 +788,8 @@ int main(void)
     while (true)
     {
         app_sched_execute();
-        while (app_usbd_event_queue_process())
-        {
-            /* Nothing to do */
-        }
+        //while (app_usbd_event_queue_process()) { }
+        nrf_cli_process(&m_cli_cdc_acm);
 
         if (processing_hid_out_report) {
             uint8_t command = hid_out_report[1]; //preserve pos 0 for report ID
