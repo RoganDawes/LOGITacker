@@ -2112,3 +2112,26 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
 bool nrf_esb_is_in_promiscuous_mode() {
     return m_config_local.mode == NRF_ESB_MODE_PROMISCOUS;
 }
+
+uint32_t nrf_esb_convert_pipe_to_address(uint8_t pipeNum, uint8_t *p_dst) {
+    if (pipeNum > 8) return NRF_ERROR_INVALID_PARAM;
+    if (p_dst == NULL) return NRF_ERROR_INVALID_PARAM;
+
+    //ToDo: account for address length, currently length 5 is assumed
+
+    if (pipeNum == 0) {
+        p_dst[0] = m_esb_addr.base_addr_p0[3];
+        p_dst[1] = m_esb_addr.base_addr_p0[2];
+        p_dst[2] = m_esb_addr.base_addr_p0[1];
+        p_dst[3] = m_esb_addr.base_addr_p0[0];
+    } else {
+        p_dst[0] = m_esb_addr.base_addr_p1[3];
+        p_dst[1] = m_esb_addr.base_addr_p1[2];
+        p_dst[2] = m_esb_addr.base_addr_p1[1];
+        p_dst[3] = m_esb_addr.base_addr_p1[0];
+    }
+
+    p_dst[4] = m_esb_addr.pipe_prefixes[pipeNum];
+
+    return NRF_SUCCESS;
+}

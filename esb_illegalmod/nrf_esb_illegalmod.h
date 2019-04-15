@@ -598,6 +598,7 @@ uint32_t nrf_esb_reuse_pid(uint8_t pipe);
 
 uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload);
 bool nrf_esb_is_in_promiscuous_mode();
+uint32_t nrf_esb_convert_pipe_to_address(uint8_t pipeNum, uint8_t *p_dst);
 
 #ifdef __cplusplus
 }

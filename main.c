@@ -48,7 +48,7 @@
 
 #include "timestamp.h"
 
-#define CHANNEL_HOP_RESTART_DELAY 1200
+#define CHANNEL_HOP_RESTART_DELAY 1300
 
 // Scheduler settings
 #define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),MAX(sizeof(unifying_rf_record_set_t),sizeof(nrf_esb_evt_t))))))
@@ -352,8 +352,8 @@ void esb_process_valid_promiscuous() {
         nrf_esb_stop_rx();
         
         radioSetMode(RADIO_MODE_SNIFF);
-        radioSetBaseAddress1(RfAddress1);
-        radioUpdatePrefix(1, m_current_payload->data[6]);   
+        nrf_esb_set_base_address_1(RfAddress1);
+        nrf_esb_update_prefix(1, m_current_payload->data[6]);   
         while (nrf_esb_start_rx() != NRF_SUCCESS) {};
     } else {
         uint8_t RfAddress1[4] = {m_current_payload->data[5], m_current_payload->data[4], m_current_payload->data[3], m_current_payload->data[2]}; //prefix, addr3, addr2, addr1, addr0
@@ -424,7 +424,7 @@ void nrf_esb_process_rx() {
                 memset(report,0,REPORT_IN_MAXSIZE);
                 report[0] = rx_payload.pipe;
                 report[1] = rx_payload.length;
-                radioPipeNumToRFAddress(rx_payload.pipe, &report[2]);
+                nrf_esb_convert_pipe_to_address(rx_payload.pipe, &report[2]);
                 memcpy(&report[8], rx_payload.data, rx_payload.length);
                 
                 app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
@@ -507,11 +507,6 @@ static void fds_evt_handler(fds_evt_t const * p_evt)
 {
     // runs in thread mode
     //logPriority("fds_evt_handler");
-    /*
-    NRF_LOG_GREEN("Event: %s received (%s)",
-                  fds_evt_str[p_evt->id],
-                  fds_err_str[p_evt->result]);
-    */
     switch (p_evt->id)
     {
         case FDS_EVT_INIT:
@@ -740,7 +735,6 @@ int main(void)
     nrf_esb_start_rx();
     NRF_LOG_INFO("Start listening for devices in promiscuous mode");
 
-//    radio_start_channel_hopping(30,1,false);
     radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY);
     unifying_init(unifying_event_handler);
     //ret = nrf_esb_start_rx();

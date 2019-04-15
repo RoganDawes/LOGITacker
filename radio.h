@@ -40,7 +40,6 @@ typedef void (* radio_event_handler_t)(radio_evt_t const * p_event);
 
 
 typedef enum {
-    RADIO_MODE_DISABLED,
     RADIO_MODE_PTX,          // Primary transmitter mode
     RADIO_MODE_SNIFF,  // Primary receiver mode (no ACKS == sniffing).
     RADIO_MODE_PROMISCOUS,   // RX in pseudo promiscuous mode
@@ -61,46 +60,11 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t 
 uint32_t radioSetMode(radio_rf_mode_t mode);
 radio_rf_mode_t radioGetMode();
 
-uint32_t radioSetAddressLength(uint8_t length);
-uint32_t radioSetBaseAddress0(uint8_t const * p_addr);
-uint32_t radioSetBaseAddress1(uint8_t const * p_addr);
-uint32_t radioSetPrefixes(uint8_t const * p_prefixes, uint8_t num_pipes);
-uint32_t radioEnablePipes(uint8_t enable_mask);
-uint32_t radioUpdatePrefix(uint8_t pipe, uint8_t prefix);
-uint32_t radioSetRfChannel(uint32_t channel);
-uint32_t radioGetRfChannel(uint32_t * p_channel);
+
 uint32_t radioNextRfChannel();
 uint32_t radioSetRfChannelIndex(uint8_t channel_idx);
 uint32_t radioGetRfChannelIndex(uint8_t *channel_index_result);
 
-
-
-
-
-uint32_t radioPipeNumToRFAddress(uint8_t pipeNum, uint8_t *p_dst);
-/*
-uint32_t radioSetTxPower(nrf_esb_tx_power_t tx_output_power);
-uint32_t nrf_esb_set_retransmit_delay(uint16_t delay);
-uint32_t nrf_esb_set_retransmit_count(uint16_t count);
-uint32_t nrf_esb_set_bitrate(nrf_esb_bitrate_t bitrate);
-uint32_t nrf_esb_reuse_pid(uint8_t pipe);
-*/
-
-
-
-bool radioTransmit(nrf_esb_payload_t *p_tx_payload, bool blockTillResult);
-bool radioTransmitCollectAck(nrf_esb_payload_t *p_tx_payload, bool blockTillResult, bool *ack_payload_received, nrf_esb_payload_t *ack_payload);
-void radioTransmitDelayed(nrf_esb_payload_t *p_tx_payload, uint32_t delay_ms);
-
-uint32_t validate_esb_payload(nrf_esb_payload_t * p_payload);
-
-// helper
-bool check_crc16(uint8_t * p_array, uint8_t len);
-bool validate_esb_frame(uint8_t * p_array, uint8_t addrlen);
-void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits);
-
-bool radioPingPRX(uint8_t pipe_num);
-uint32_t radioPingSweepPRX(uint8_t pipe_num, uint8_t *channel_index_result);
 
 uint32_t radio_start_channel_hopping(uint32_t interval, uint32_t start_delay_ms, bool disable_on_rx);
 uint32_t radio_stop_channel_hopping();
