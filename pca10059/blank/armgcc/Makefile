@@ -77,6 +77,7 @@ SRC_FILES += \
   $(PROJ_DIR)/unifying.c \
   $(PROJ_DIR)/timestamp.c \
   $(PROJ_DIR)/radio.c \
+  $(PROJ_DIR)/cli_cmds.c \
   $(PROJ_DIR)/main.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
