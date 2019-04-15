@@ -11,7 +11,11 @@
 #include "timestamp.h"
 #include "app_scheduler.h"
 
+// replay actions
 APP_TIMER_DEF(m_timer_next_action);
+
+
+
 
 typedef enum {
     REPLAY_SUBSTATE_FRAME_WAIT_TX,
@@ -810,11 +814,21 @@ void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t kee
     
 }
 
+
+
 void unifying_init(unifying_event_handler_t event_handler){
     app_timer_create(&m_timer_next_action, APP_TIMER_MODE_SINGLE_SHOT, timer_next_action_handler);
+    
+
+    
     for (int i=0; i<NRF_ESB_PIPE_COUNT; i++) {
         m_state_local.record_sets[i].records = m_state_local.records_from_sets[i];
     }
     m_state_local.radio_mode_before_replay = RADIO_MODE_SNIFF;
     m_state_local.event_handler = event_handler;
+
+
+
 }
+
+

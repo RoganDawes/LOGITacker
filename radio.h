@@ -20,6 +20,24 @@ PROMISCOUS:     RX as much data as possible with invalid RF addresses, data coul
 #define RADIO_MIN_CHANNEL       5
 #define RADIO_MAX_CHANNEL       77
 
+#define RADIO_DEFAULT_CHANNEL_HOP_INTERVAL_MS 30
+
+
+typedef enum {
+    RADIO_EVENT_NO_RX_TIMEOUT,
+    RADIO_EVENT_CHANNEL_CHANGED,
+    RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX
+} radio_evt_id_t;
+
+typedef struct {
+    radio_evt_id_t   evt_id;
+    uint8_t          pipe;
+    uint8_t          channel;
+    uint8_t          channel_index;
+} radio_evt_t;
+
+typedef void (* radio_event_handler_t)(radio_evt_t const * p_event);
+
 
 typedef enum {
     RADIO_MODE_DISABLED,
@@ -39,7 +57,7 @@ typedef struct {
 }
 
 
-uint32_t radioInit(nrf_esb_event_handler_t event_handler);
+uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t radio_event_handler);
 uint32_t radioSetMode(radio_rf_mode_t mode);
 radio_rf_mode_t radioGetMode();
 
@@ -54,6 +72,8 @@ uint32_t radioGetRfChannel(uint32_t * p_channel);
 uint32_t radioNextRfChannel();
 uint32_t radioSetRfChannelIndex(uint8_t channel_idx);
 uint32_t radioGetRfChannelIndex(uint8_t *channel_index_result);
+
+
 
 
 
@@ -81,5 +101,13 @@ void array_shl(uint8_t *p_array, uint8_t len, uint8_t bits);
 
 bool radioPingPRX(uint8_t pipe_num);
 uint32_t radioPingSweepPRX(uint8_t pipe_num, uint8_t *channel_index_result);
+
+uint32_t radio_start_channel_hopping(uint32_t interval, uint32_t start_delay_ms, bool disable_on_rx);
+uint32_t radio_stop_channel_hopping();
+uint32_t radio_rx_timeout_event(uint32_t timeout_ms);
+
+uint32_t radio_enable_rx_timeout_event(uint32_t timeout_ms);
+uint32_t radio_disable_rx_timeout_event();
+
 
 #endif

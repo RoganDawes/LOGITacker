@@ -48,21 +48,14 @@
 
 #include "timestamp.h"
 
-
-#define CHANNEL_HOP_INTERVAL 30
 #define CHANNEL_HOP_RESTART_DELAY 1200
 
 // Scheduler settings
-//#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_TO_WORDS(MAX(MAX(sizeof(unifying_rf_record_set_t),MAX(MAX(sizeof(nrf_esb_evt_t), APP_TIMER_SCHED_EVENT_DATA_SIZE), sizeof(nrf_esb_payload_t))), NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE))
 #define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),MAX(sizeof(unifying_rf_record_set_t),sizeof(nrf_esb_evt_t))))))
 
 
 #define SCHED_QUEUE_SIZE            16
 
-// channel hop timer
-APP_TIMER_DEF(m_timer_channel_hop);
-static bool m_channel_hop_data_received = false;
-uint32_t m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
 
 
 /**
@@ -254,11 +247,8 @@ static void bsp_event_callback(bsp_event_t ev)
             while (nrf_esb_stop_rx() != NRF_SUCCESS) {};
 
             radioSetMode(RADIO_MODE_PROMISCOUS); //set back to promiscous
+            radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY); //produce event if there's no RX in given time
 
-            m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL; // set timey delay to channel hop interval
-            m_channel_hop_data_received = false;
-
-            app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop); //restart channel hopping timer
             nrf_esb_start_rx();
 
             // re-enable frame recording
@@ -355,9 +345,9 @@ void esb_process_valid_promiscuous() {
         NRF_LOG_INFO("Received valid frame from %02x:%02x:%02x:%02x:%02x, sniffing this address", RfAddress1[3], RfAddress1[2], RfAddress1[1], RfAddress1[0], m_current_payload->data[6])
 
         bsp_board_leds_off();
-        //m_channel_hop_data_received = true; //don't restart channel hop timer when called ...
-        app_timer_stop(m_timer_channel_hop); // stop channel hop timer
-        app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(1000), m_timer_channel_hop); //... and restart in 1000ms if no further data received
+
+        radio_stop_channel_hopping();
+        radio_enable_rx_timeout_event(1300);
 
         nrf_esb_stop_rx();
         
@@ -422,8 +412,6 @@ void nrf_esb_process_rx() {
                         break;
                 }
 
-                m_channel_hop_delay_ms = CHANNEL_HOP_RESTART_DELAY; // set restart timer interval (will start channel hopping, if no data received after this timeout)
-                m_channel_hop_data_received = true; //don't restart channel hop timer
                 bsp_board_led_off(m_channel_scan_led); //assure LED indicating channel hops is disabled
 
                 // hid report:
@@ -458,8 +446,6 @@ void nrf_esb_event_handler(nrf_esb_evt_t *p_event) {
             break;
         case NRF_ESB_EVENT_TX_FAILED:
             NRF_LOG_DEBUG("nrf_esb_event_handler TX_FAILED");
-            //(void) nrf_esb_flush_tx();
-            //(void) nrf_esb_start_tx();            
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
             if (nrf_esb_is_in_promiscuous_mode()) {
@@ -561,37 +547,6 @@ static void fds_evt_handler(fds_evt_t const * p_evt)
     }
 }
 
-
-// channel hop timer
-void timer_channel_hop_event_handler(void* p_context)
-{
-
-    if (!m_channel_hop_data_received) {
-        
-        radioNextRfChannel();
-        uint8_t currentChIdx;
-        radioGetRfChannelIndex(&currentChIdx);
-        if (currentChIdx == 0) bsp_board_led_invert(m_channel_scan_led); // toggle blue LED everytime we jumped through all channels (only noticable if no RX frames, as LED is toggled on received RF frame, too)
-
-        m_channel_hop_delay_ms = CHANNEL_HOP_INTERVAL;
-    }   
-    m_channel_hop_data_received = false;
-    //uint32_t err_code = app_timer_start(timer, APP_TIMER_TICKS(m_channel_hop_delay_ms), p_context); //restart timer
-    uint32_t err_code = app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), NULL); //restart timer
-    APP_ERROR_CHECK(err_code);
-}
-
-//Note: app_timer isn't configured to use scheduler, as we have timers which should run in interrupt mode,
-// For channel hop, we manually make the timer use the scheduler, to avoid channel hopping during ESB frame processing.
-// This works, as ESB frame processing is handled by the scheduler, too.
-void timer_channel_hop_event_handler_from_scheduler(void *p_event_data, uint16_t event_size) {
-    timer_channel_hop_event_handler((void*) p_event_data);
-}
-
-void timer_channel_hop_event_handler_to_scheduler(void* p_context) {
-    app_sched_event_put(p_context, sizeof(app_timer_id_t), timer_channel_hop_event_handler_from_scheduler);
-}
-
 bool m_auto_bruteforce_started = false;
 
 uint8_t m_replay_count;
@@ -601,7 +556,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
     {
         case UNIFYING_EVENT_REPLAY_RECORDS_FAILED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FAILED");
-            app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
+            radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY); // timeout event if no RX
 
             // restart failed replay bruteforce
             if (!unifying_replay_records_LED_bruteforce_done(p_event->pipe)) {
@@ -611,8 +566,6 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_FINISHED:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_FINISHED");
-            app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
-
 
             // restart replay with bruteforce iteration, if not all records result in LED reports for response
             if (!unifying_replay_records_LED_bruteforce_done(p_event->pipe)) {
@@ -624,17 +577,18 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
                 }
 
                 unifying_replay_records(p_event->pipe, false, UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX);
+            } else {
+                radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY); // timeout event if no RX
             }
             
             break;
         case UNIFYING_EVENT_REPLAY_RECORDS_STARTED:
             bsp_board_led_invert(LED_R);
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_REPLAY_RECORDS_STARTED");
-            app_timer_stop(m_timer_channel_hop);
+            radio_stop_channel_hopping();
             break;
         case UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES:
             NRF_LOG_INFO("Unifying event UNIFYING_EVENT_STORED_SUFFICIENT_ENCRYPTED_KEY_FRAMES");
-            app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
             bsp_board_led_invert(LED_R);
 
             enough_frames_recorded = true;
@@ -649,6 +603,31 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
                 m_auto_bruteforce_started = true;
             }
             break;
+    }
+}
+
+void radio_event_handler(radio_evt_t const *p_event) {
+    //logPriority("UNIFYING_event_handler");
+    switch (p_event->evt_id)
+    {
+        case RADIO_EVENT_NO_RX_TIMEOUT:
+        {
+            NRF_LOG_INFO("no rx timeout reached, start channel hopping");
+            radio_start_channel_hopping(30, 1, true);
+            break;
+        }
+        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
+        {
+            //NRF_LOG_INFO("new chanel index %d", p_event->pipe);
+            //toggle channel hop led, each time we hit the first channel again (channel index encoded in pipe parameter)
+            bsp_board_led_invert(m_channel_scan_led); // toggle scan LED everytime we jumped through all channels 
+            break;
+        }
+        case RADIO_EVENT_CHANNEL_CHANGED:
+        {
+            NRF_LOG_DEBUG("new chanel index %d", p_event->channel_index);
+            break;
+        }
     }
 }
 
@@ -753,7 +732,7 @@ int main(void)
 
     //ESB
     //ret = radioInit(nrf_esb_event_handler_to_scheduler);
-    ret = radioInit(nrf_esb_event_handler);
+    ret = radioInit(nrf_esb_event_handler, radio_event_handler);
     APP_ERROR_CHECK(ret);
 
     ret = radioSetMode(RADIO_MODE_PROMISCOUS);
@@ -761,6 +740,8 @@ int main(void)
     nrf_esb_start_rx();
     NRF_LOG_INFO("Start listening for devices in promiscuous mode");
 
+//    radio_start_channel_hopping(30,1,false);
+    radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY);
     unifying_init(unifying_event_handler);
     //ret = nrf_esb_start_rx();
     //if (ret == NRF_SUCCESS) bsp_board_led_on(BSP_BOARD_LED_3);
@@ -778,10 +759,6 @@ int main(void)
         // restore failed, update/create record on flash with current data
         updateDeviceInfoOnFlash(0, &m_current_device_info); //ignore errors
     } 
-
-    //app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler);
-    app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler_to_scheduler);
-    app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(m_channel_hop_delay_ms), m_timer_channel_hop);
 
     timestamp_init();
 

@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "nrf_esb_illegalmod.h"
 
+
+
 #define UNIFYING_SLEEP_MS_BETWEEN_TX                        4  //should be 8ms, but as keep-alives are inserted, could be halfed (see next param)
 #define UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX    3
 
@@ -133,5 +135,6 @@ bool unifying_replay_records_LED_bruteforce_done(uint8_t pipe_num);
 
 // returns true if the given esb event was consumed by unifying module
 bool unifying_process_esb_event(nrf_esb_evt_t *p_event);
+
 
 #endif
