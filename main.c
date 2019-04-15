@@ -62,7 +62,7 @@
  * @brief Enable USB power detection
  */
 #ifndef USBD_POWER_DETECTION
-#define USBD_POWER_DETECTION true
+#define USBD_POWER_DETECTION false
 #endif
 
 
@@ -192,19 +192,19 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
         case APP_USBD_EVT_DRV_SUSPEND:
             m_report_pending = false;
             app_usbd_suspend_req(); // Allow the library to put the peripheral into sleep mode
-            bsp_board_led_off(LED_G);
+            bsp_board_led_off(LED_R);
             break;
         case APP_USBD_EVT_DRV_RESUME:
             m_report_pending = false;
-            bsp_board_led_on(LED_G);
+            bsp_board_led_on(LED_R);
             break;
         case APP_USBD_EVT_STARTED:
             m_report_pending = false;
-            bsp_board_led_on(LED_G);
+            bsp_board_led_on(LED_R);
             break;
         case APP_USBD_EVT_STOPPED:
             app_usbd_disable();
-            bsp_board_led_off(LED_G);
+            bsp_board_led_off(LED_R);
             break;
         case APP_USBD_EVT_POWER_DETECTED:
             NRF_LOG_INFO("USB power detected");
@@ -743,9 +743,8 @@ int main(void)
 
     //FDS
 // ToDo: Debuf fds usage on pca10059
-//#ifndef BOARD_PCA10059    
+//#ifndef BOARD_PCA10059
     restoreStateFromFlash(&m_dongle_state);
-//#endif
 
     //Try to load first device info record from flash, create if not existing
     ret = restoreDeviceInfoFromFlash(0, &m_current_device_info);
@@ -753,6 +752,7 @@ int main(void)
         // restore failed, update/create record on flash with current data
         updateDeviceInfoOnFlash(0, &m_current_device_info); //ignore errors
     } 
+//#endif
 
     timestamp_init();
 
