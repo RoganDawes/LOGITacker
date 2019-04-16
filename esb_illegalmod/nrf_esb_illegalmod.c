@@ -10,10 +10,13 @@
 #include "nrf_delay.h"
 
 #include "bsp.h"
-#include "nrf_log.h"
 #include "helper.h"
 #include "unifying.h"
 #include "app_scheduler.h"
+
+#define NRF_LOG_MODULE_NAME ESB_ILLEGALMOD
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
 #define LOGITECH_FILTER
 
@@ -721,7 +724,8 @@ static bool schedule_frame_for_validation_before_pushing_to_rx_fifo(uint8_t pipe
     m_tmp_payload.pipe  = pipe;
     m_tmp_payload.rssi  = NRF_RADIO->RSSISAMPLE;
     m_tmp_payload.pid   = pid;
-    m_tmp_payload.rx_channel = m_esb_addr.rf_channel;
+    m_tmp_payload.rx_channel_index = m_esb_addr.rf_channel;
+    m_tmp_payload.rx_channel = m_esb_addr.channel_to_frequency[m_esb_addr.rf_channel];
     m_tmp_payload.noack = !(m_rx_payload_buffer[1] & 0x01);
     m_tmp_payload.validated_promiscuous_frame = false;
 
@@ -798,7 +802,8 @@ static bool rx_fifo_push_rfbuf(uint8_t pipe, uint8_t pid)
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->pipe  = pipe;
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->rssi  = NRF_RADIO->RSSISAMPLE;
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->pid   = pid;
-        m_rx_fifo.p_payload[m_rx_fifo.entry_point]->rx_channel = m_esb_addr.rf_channel;
+        m_rx_fifo.p_payload[m_rx_fifo.entry_point]->rx_channel_index = m_esb_addr.rf_channel;
+        m_rx_fifo.p_payload[m_rx_fifo.entry_point]->rx_channel = m_esb_addr.channel_to_frequency[ m_esb_addr.rf_channel];
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->noack = !(m_rx_payload_buffer[1] & 0x01);
         m_rx_fifo.p_payload[m_rx_fifo.entry_point]->validated_promiscuous_frame = false;
 
@@ -1527,6 +1532,7 @@ uint32_t nrf_esb_read_rx_payload(nrf_esb_payload_t * p_payload)
     p_payload->noack  = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->noack;
     p_payload->validated_promiscuous_frame = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->validated_promiscuous_frame;
     p_payload->rx_channel = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->rx_channel;
+    p_payload->rx_channel_index = m_rx_fifo.p_payload[m_rx_fifo.exit_point]->rx_channel_index;
 
     if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_PROMISCUOUS) {
         memcpy(p_payload->data, m_rx_fifo.p_payload[m_rx_fifo.exit_point]->data, 60);
@@ -2184,8 +2190,8 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
         p_payload->data[0] = p_payload->pipe; //encode rx pipe
         p_payload->data[1] = esb_len; //encode real ESB payload length
 
-        NRF_LOG_INFO("Validated payload %d", p_payload->length);
-        NRF_LOG_HEXDUMP_INFO(p_payload->data, p_payload->length);
+        NRF_LOG_DEBUG("Validated payload %d", p_payload->length);
+        NRF_LOG_HEXDUMP_DEBUG(p_payload->data, p_payload->length);
 
         return NRF_SUCCESS;
     } else {

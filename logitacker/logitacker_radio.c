@@ -1,12 +1,16 @@
 #include <string.h> //memcpy, memset
 #include <stddef.h> //NULL
 
-#include "radio.h"
+#include "logitacker_radio.h"
 #include "nrf_error.h"
 #include "nrf_esb_illegalmod.h"
 
-#include "nrf_log.h"
 #include "app_timer.h"
+
+#define NRF_LOG_MODULE_NAME LOGITACKER_RADIO
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
+
 
 // channel hop timer
 APP_TIMER_DEF(m_timer_channel_hop);
@@ -23,9 +27,6 @@ typedef struct
     bool initialized;
     nrf_esb_event_handler_t event_handler;
 
-    radio_channel_set_t channel_set;
-    uint8_t rf_channel_index;
-
     radio_event_handler_t radio_event_handler; //handler for unifying events
 
     uint32_t channel_hop_delay_ms;
@@ -39,9 +40,6 @@ typedef struct
 
 static radio_state_t m_radio_state = {
     .initialized = false,
-
-    .channel_set        = RADIO_DEFAULT_CHANNELS,                               \
-    .rf_channel_index   = 0,                                                    \
 
     .channel_hop_delay_ms = RADIO_DEFAULT_CHANNEL_HOP_INTERVAL_MS, \
     .channel_hop_enabled = false, \
@@ -84,12 +82,15 @@ void timer_channel_hop_event_handler(void* p_context)
 
         if (m_radio_state.radio_event_handler != NULL) {
             uint32_t currentChIdx;
+            uint32_t currentFreq;
             //radioGetRfChannelIndex(&currentChIdx);
             nrf_esb_get_rf_channel(&currentChIdx);
+            nrf_esb_get_rf_frequency(&currentFreq);
 
             // send event
             event.evt_id = RADIO_EVENT_CHANNEL_CHANGED;
             event.channel_index = currentChIdx; // encode channel index in pipe num
+            event.channel = currentFreq;
             m_radio_state.radio_event_handler(&event);
 
             if (currentChIdx == 0) {
@@ -111,12 +112,14 @@ void timer_no_rx_event_handler(void* p_context)
     nrf_esb_get_rf_channel(&currentChIdx);
 
     // send event
-    event.evt_id = RADIO_EVENT_NO_RX_TIMEOUT;
-    event.channel_index = currentChIdx; // encode channel index in pipe num
-    m_radio_state.radio_event_handler(&event);
+    if (m_radio_state.radio_event_handler != NULL) {
+        event.evt_id = RADIO_EVENT_NO_RX_TIMEOUT;
+        event.channel_index = currentChIdx; // encode channel index in pipe num
+        m_radio_state.radio_event_handler(&event);
+    }
 }
 
-uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t radio_event_handler) {
+uint32_t logitacker_radio_init(nrf_esb_event_handler_t event_handler, radio_event_handler_t radio_event_handler) {
     app_timer_create(&m_timer_channel_hop, APP_TIMER_MODE_SINGLE_SHOT, timer_channel_hop_event_handler);
     app_timer_create(&m_timer_no_rx_timeout, APP_TIMER_MODE_SINGLE_SHOT, timer_no_rx_event_handler);
 
@@ -126,6 +129,8 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t 
 
     m_radio_state.channel_hop_delay_ms = RADIO_DEFAULT_CHANNEL_HOP_INTERVAL_MS;
     m_radio_state.channel_hop_enabled = false;
+
+    m_radio_state.rx_timeout_enabled = false;
 
     m_radio_state.initialized = true;
 
@@ -147,11 +152,15 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t 
 uint32_t radio_start_channel_hopping(uint32_t interval, uint32_t start_delay_ms, bool disable_on_rx) {
     if (m_radio_state.channel_hop_enabled) return NRF_SUCCESS;
     m_radio_state.channel_hop_enabled = true;
-    if (start_delay_ms == 0) start_delay_ms++;
     m_radio_state.channel_hop_disable_on_rx = disable_on_rx;
-    app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(start_delay_ms), m_timer_channel_hop);
+    if (start_delay_ms == 0) {
+        //call handler directly, without timer
+        timer_channel_hop_event_handler(NULL);
+    } else {
+        // delay call to handler
+        app_timer_start(m_timer_channel_hop, APP_TIMER_TICKS(start_delay_ms), m_timer_channel_hop);    
+    }
     NRF_LOG_INFO("Channel hopping started");
-
     return NRF_SUCCESS;
 }
 
@@ -178,5 +187,4 @@ uint32_t radio_disable_rx_timeout_event() {
 
     NRF_LOG_DEBUG("RX timeout disabled");
     return NRF_SUCCESS;
-
 }

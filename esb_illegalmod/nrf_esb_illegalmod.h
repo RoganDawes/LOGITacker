@@ -254,6 +254,7 @@ typedef struct
     int8_t  rssi;                                   //!< RSSI for the received packet.
     uint8_t noack;                                  //!< Flag indicating that this packet will not be acknowledgement. Flag is ignored when selective auto ack is enabled.
     uint8_t pid;                                    //!< PID assigned during communication.
+    uint8_t rx_channel_index;
     uint8_t rx_channel;
     uint8_t data[NRF_ESB_MAX_PAYLOAD_LENGTH + 30];       //!< The payload data.
     bool    validated_promiscuous_frame;

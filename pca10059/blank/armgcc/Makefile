@@ -76,12 +76,14 @@ SRC_FILES += \
   $(PROJ_DIR)/state.c \
   $(PROJ_DIR)/unifying.c \
   $(PROJ_DIR)/timestamp.c \
-  $(PROJ_DIR)/radio.c \
   $(PROJ_DIR)/cli_cmds.c \
   $(PROJ_DIR)/main.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
+  $(PROJ_DIR)/logitacker/logitacker_radio.c \
+  $(PROJ_DIR)/logitacker/logitacker_bsp.c \
+  $(PROJ_DIR)/logitacker/logitacker.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
@@ -107,6 +109,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/kbd \
   $(SDK_ROOT)/components/libraries/balloc \
   $(PROJ_DIR)/esb_illegalmod \
+  $(PROJ_DIR)/logitacker \
   $(SDK_ROOT)/components/drivers_nrf/usbd \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/components/libraries/usbd/class/hid \

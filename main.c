@@ -41,11 +41,13 @@
 #include "state.h"
 #include "unifying.h"
 #include "hid.h"
-#include "radio.h"
+#include "logitacker_radio.h"
 
 #include "led_rgb.h"
 
 #include "timestamp.h"
+
+#include "logitacker.h"
 
 #define CHANNEL_HOP_RESTART_DELAY 1300
 
@@ -82,17 +84,12 @@ static bool continuo_redording_even_if_enough_frames = false;
 uint32_t m_act_led = LED_B;
 uint32_t m_channel_scan_led = LED_G;
 
-
-/**
- * @brief Additional key release events
- *
- * This example needs to process release events of used buttons
- */
+/*
 enum {
-    BSP_USER_EVENT_RELEASE_0 = BSP_EVENT_KEY_LAST + 1, /**< Button 0 released */
-    BSP_USER_EVENT_LONG_PRESS_0,                          /**< Button 1 released */
+    BSP_USER_EVENT_RELEASE_0 = BSP_EVENT_KEY_LAST + 1, 
+    BSP_USER_EVENT_LONG_PRESS_0,                          
 };
-
+*/
 
 // created HID report descriptor with vendor define output / input report of max size in raw_desc
 APP_USBD_HID_GENERIC_SUBCLASS_REPORT_DESC(raw_desc,APP_USBD_HID_RAW_REPORT_DSC_SIZE(REPORT_OUT_MAXSIZE));
@@ -216,6 +213,7 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event)
     }
 }
 
+/*
 // handle event (press of physical dongle button)
 static bool long_pushed;
 static void bsp_event_callback(bsp_event_t ev)
@@ -270,6 +268,7 @@ static void bsp_event_callback(bsp_event_t ev)
     }
 }
 
+
 static void init_bsp(void)
 {
     ret_code_t ret;
@@ -278,9 +277,10 @@ static void init_bsp(void)
     bsp_event_to_button_action_assign(BTN_TRIGGER_ACTION, BSP_BUTTON_ACTION_RELEASE, BSP_USER_EVENT_RELEASE_0);
     bsp_event_to_button_action_assign(BTN_TRIGGER_ACTION, BSP_BUTTON_ACTION_LONG_PUSH, BSP_USER_EVENT_LONG_PRESS_0);
 
-    /* Configure LEDs */
+    // Configure LEDs 
     bsp_board_init(BSP_INIT_LEDS);
 }
+*/
 
 static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t report_id)
 {
@@ -653,9 +653,10 @@ int main(void)
     ret = app_timer_init();
     APP_ERROR_CHECK(ret);
 
+    logitacker_init();
 
     //BSP
-    init_bsp();
+  //  init_bsp();
 
     //FDS
     // Register first to receive an event when initialization is complete.
@@ -716,9 +717,10 @@ int main(void)
     
     //ESB
     //ret = radioInit(nrf_esb_event_handler_to_scheduler);
+    /*
     ret = radioInit(nrf_esb_event_handler, radio_event_handler);
     APP_ERROR_CHECK(ret);
-
+    
     ret = nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS);
     APP_ERROR_CHECK(ret);
     nrf_esb_start_rx();
@@ -726,6 +728,9 @@ int main(void)
 
 
     radio_enable_rx_timeout_event(CHANNEL_HOP_RESTART_DELAY);
+    */
+
+    
     unifying_init(unifying_event_handler);
     //ret = nrf_esb_start_rx();
     //if (ret == NRF_SUCCESS) bsp_board_led_on(BSP_BOARD_LED_3);

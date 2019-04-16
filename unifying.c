@@ -6,7 +6,7 @@
 #include "nrf_esb_illegalmod.h"
 #include "nrf_log.h"
 #include "nrf_delay.h"
-#include "radio.h"
+#include "logitacker_radio.h"
 #include "app_timer.h"
 #include "timestamp.h"
 #include "app_scheduler.h"
