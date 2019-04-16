@@ -366,11 +366,11 @@ void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType
 
 #define UNIFYING_CLASSIFY_LOG_PREFIX "Unifying RF frame: "
 void unifying_frame_classify_log(nrf_esb_payload_t frame) {     
-    bool logKeepAliveEmpty = false;
+    bool logKeepAliveEmpty = true;
 
     //filter out frames < 5 byte length (likely ACKs)
     if (frame.length < 5) {
-        NRF_LOG_DEBUG("Invalid Unifying RF frame (wrong length or empty ack)");
+        NRF_LOG_INFO("Invalid Unifying RF frame (wrong length or empty ack)");
         return;
     }
 
