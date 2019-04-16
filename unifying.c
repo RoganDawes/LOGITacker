@@ -442,7 +442,7 @@ void process_next_replay_step(replay_event_t replay_event) {
             
             NRF_LOG_INFO("Replay: TX failed, trying next channel...");
             m_replay_state.keep_alives_needed = m_replay_state.keep_alives_to_insert;// change to next channel and transmit again (reset insert keep alive count, to avoid mis-alligned LED reports)
-            radioNextRfChannel();
+            nrf_esb_set_rf_channel_next();
             nrf_esb_start_tx();
             // if all channels failed, change state to replay failed
 /*

@@ -51,10 +51,6 @@ typedef struct {
 
 uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t radio_event_handler);
 
-uint32_t radioNextRfChannel();
-uint32_t radioSetRfChannelIndex(uint8_t channel_idx);
-uint32_t radioGetRfChannelIndex(uint8_t *channel_index_result);
-
 
 uint32_t radio_start_channel_hopping(uint32_t interval, uint32_t start_delay_ms, bool disable_on_rx);
 uint32_t radio_stop_channel_hopping();

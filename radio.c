@@ -78,12 +78,14 @@ void timer_channel_hop_event_handler(void* p_context)
 {
     if (m_radio_state.channel_hop_enabled) {
         
-        radioNextRfChannel(); // hop to next channel
+        //radioNextRfChannel(); // hop to next channel
+        nrf_esb_set_rf_channel_next();
 
 
         if (m_radio_state.radio_event_handler != NULL) {
-            uint8_t currentChIdx;
-            radioGetRfChannelIndex(&currentChIdx);
+            uint32_t currentChIdx;
+            //radioGetRfChannelIndex(&currentChIdx);
+            nrf_esb_get_rf_channel(&currentChIdx);
 
             // send event
             event.evt_id = RADIO_EVENT_CHANNEL_CHANGED;
@@ -104,8 +106,9 @@ void timer_channel_hop_event_handler(void* p_context)
 
 void timer_no_rx_event_handler(void* p_context)
 {
-    uint8_t currentChIdx;
-    radioGetRfChannelIndex(&currentChIdx);
+    uint32_t currentChIdx;
+    //radioGetRfChannelIndex(&currentChIdx);
+    nrf_esb_get_rf_channel(&currentChIdx);
 
     // send event
     event.evt_id = RADIO_EVENT_NO_RX_TIMEOUT;
@@ -131,37 +134,15 @@ uint32_t radioInit(nrf_esb_event_handler_t event_handler, radio_event_handler_t 
     nrf_esb_config_t esb_config = NRF_ESB_PROMISCUOUS_CONFIG;
     esb_config.event_handler = radio_esb_event_handler; // pass custom event handler with call through
     uint32_t err_code = nrf_esb_init(&esb_config);
+
+    nrf_esb_update_channel_frequency_table_unifying();
+
     VERIFY_SUCCESS(err_code);
 
     //nrf_esb_init_promiscuous_mode();
 
     return NRF_SUCCESS;
 }
-
-uint32_t radioSetRfChannelIndex(uint8_t channel_idx) {
-    uint8_t idx = channel_idx % m_radio_state.channel_set.channel_list_length;
-    if (idx != channel_idx) return NRF_ERROR_INVALID_PARAM;
-
-    m_radio_state.rf_channel_index = channel_idx;
-    //return radioSetRfChannel(m_radio_state.channel_set.channel_list[channel_idx]);
-    return nrf_esb_set_rf_channel(m_radio_state.channel_set.channel_list[channel_idx]);
-}
-
-uint32_t radioGetRfChannelIndex(uint8_t *channel_index_result) {
-    if (channel_index_result == NULL) return NRF_ERROR_INVALID_PARAM;
-    *channel_index_result = m_radio_state.rf_channel_index;
-    return NRF_SUCCESS;
-}
-
-
-uint32_t radioNextRfChannel() {
-    uint8_t new_idx = m_radio_state.rf_channel_index;
-    new_idx++;
-    new_idx %= m_radio_state.channel_set.channel_list_length;
-    //NRF_LOG_INFO("channel idx set to %d", new_idx);
-    return radioSetRfChannelIndex(new_idx);
-}
-
 
 uint32_t radio_start_channel_hopping(uint32_t interval, uint32_t start_delay_ms, bool disable_on_rx) {
     if (m_radio_state.channel_hop_enabled) return NRF_SUCCESS;

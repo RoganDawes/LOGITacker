@@ -107,6 +107,9 @@ typedef struct
     uint8_t addr_length;            /**< Length of the address including the prefix. */
     uint8_t rx_pipes_enabled;       /**< Bitfield for enabled pipes. */
     uint8_t rf_channel;             /**< Channel to use (must be between 0 and 100). */
+
+    uint8_t channel_to_frequency[101];
+    uint8_t channel_to_frequency_len;
 } nrf_esb_address_t;
 
 
@@ -895,7 +898,8 @@ static void start_tx_transaction()
     NRF_RADIO->TXADDRESS    = mp_current_payload->pipe;
     NRF_RADIO->RXADDRESSES  = 1 << mp_current_payload->pipe;
 
-    NRF_RADIO->FREQUENCY    = m_esb_addr.rf_channel;
+    //NRF_RADIO->FREQUENCY    = m_esb_addr.rf_channel;
+    NRF_RADIO->FREQUENCY    = m_esb_addr.channel_to_frequency[m_esb_addr.rf_channel];
     NRF_RADIO->PACKETPTR    = (uint32_t)m_tx_payload_buffer;
 
     NVIC_ClearPendingIRQ(RADIO_IRQn);
@@ -1589,7 +1593,8 @@ uint32_t nrf_esb_start_rx(void)
 
     if (m_config_local.protocol == NRF_ESB_PROTOCOL_ESB_PROMISCUOUS) NRF_RADIO->RXADDRESSES  = 0xff; //use all pipe addresses in promiscuous mode
     else NRF_RADIO->RXADDRESSES  = m_esb_addr.rx_pipes_enabled;
-    NRF_RADIO->FREQUENCY    = m_esb_addr.rf_channel;
+    //NRF_RADIO->FREQUENCY    = m_esb_addr.rf_channel;
+    NRF_RADIO->FREQUENCY    = m_esb_addr.channel_to_frequency[m_esb_addr.rf_channel];
     NRF_RADIO->PACKETPTR    = (uint32_t)m_rx_payload_buffer;
 
     NVIC_ClearPendingIRQ(RADIO_IRQn);
@@ -2000,8 +2005,8 @@ uint32_t nrf_esb_set_rf_channel(uint32_t channel)
 {
     //if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS || m_config_local.mode == NRF_ESB_MODE_SNIFF) {
     if ((m_config_local.mode == NRF_ESB_MODE_PROMISCOUS || m_config_local.mode == NRF_ESB_MODE_SNIFF) && (m_nrf_esb_mainstate == NRF_ESB_STATE_PRX)) {
-
-        VERIFY_TRUE(channel <= 100, NRF_ERROR_INVALID_PARAM);
+        //VERIFY_TRUE(channel <= 100, NRF_ERROR_INVALID_PARAM);
+        VERIFY_TRUE(channel < m_esb_addr.channel_to_frequency_len, NRF_ERROR_INVALID_PARAM);
 
         nrf_esb_stop_rx();
         m_esb_addr.rf_channel = channel;
@@ -2011,7 +2016,8 @@ uint32_t nrf_esb_set_rf_channel(uint32_t channel)
 
     } else {
         VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
-        VERIFY_TRUE(channel <= 100, NRF_ERROR_INVALID_PARAM);
+        //VERIFY_TRUE(channel <= 100, NRF_ERROR_INVALID_PARAM);
+        VERIFY_TRUE(channel < m_esb_addr.channel_to_frequency_len, NRF_ERROR_INVALID_PARAM);
 
         m_esb_addr.rf_channel = channel;
 
@@ -2210,6 +2216,44 @@ uint32_t nrf_esb_convert_pipe_to_address(uint8_t pipeNum, uint8_t *p_dst) {
     }
 
     p_dst[4] = m_esb_addr.pipe_prefixes[pipeNum];
+
+    return NRF_SUCCESS;
+}
+
+uint32_t nrf_esb_update_channel_frequency_table(uint8_t * values, uint8_t length) {
+    VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
+    VERIFY_TRUE(length <= 100, NRF_ERROR_INVALID_PARAM);
+    memcpy(m_esb_addr.channel_to_frequency, values, length);
+    m_esb_addr.channel_to_frequency_len = length;
+
+    // reset frequency to first channel
+    m_esb_addr.rf_channel = 0;
+
+    return NRF_SUCCESS;
+}
+
+uint32_t nrf_esb_update_channel_frequency_table_unifying() {
+    uint8_t unifying_frequencies[25] = { 5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59,62,65,68,71,74,77 };
+    uint8_t unifying_frequencies_len = 25;
+    return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
+}
+
+uint32_t nrf_esb_update_channel_frequency_table_all() {
+    uint8_t all_frequencies[101] = { 0 };
+    for (uint8_t i; i<sizeof(all_frequencies); i++) all_frequencies[i] = i;
+    return nrf_esb_update_channel_frequency_table(all_frequencies, sizeof(all_frequencies));
+}
+
+uint32_t nrf_esb_set_rf_channel_next() {
+    uint32_t next_channel = (m_esb_addr.rf_channel + 1) % m_esb_addr.channel_to_frequency_len;
+    return nrf_esb_set_rf_channel(next_channel);
+}
+
+uint32_t nrf_esb_get_rf_frequency(uint32_t * p_frequency)
+{
+    VERIFY_PARAM_NOT_NULL(p_frequency);
+
+    *p_frequency = m_esb_addr.channel_to_frequency[m_esb_addr.rf_channel];
 
     return NRF_SUCCESS;
 }
