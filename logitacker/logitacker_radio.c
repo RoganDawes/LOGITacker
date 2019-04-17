@@ -188,3 +188,22 @@ uint32_t radio_disable_rx_timeout_event() {
     NRF_LOG_DEBUG("RX timeout disabled");
     return NRF_SUCCESS;
 }
+
+
+uint32_t logitacker_radio_convert_promiscuous_frame_to_default_frame(nrf_esb_payload_t *p_out_payload, nrf_esb_payload_t const in_promiscuous_payload) {
+    if (p_out_payload == NULL) return NRF_ERROR_INVALID_PARAM;
+    int min_len = 10; // pipe 1 byte, len 1 byte, addr 5 bytes, pcf 1 byte (8 highest bits), crc16 2 bytes
+
+    if (in_promiscuous_payload.length < min_len) return NRF_ERROR_DATA_SIZE;
+    p_out_payload->length = in_promiscuous_payload.length - min_len;
+    memcpy(p_out_payload->data, &in_promiscuous_payload.data[8], p_out_payload->length);
+    p_out_payload->pid = in_promiscuous_payload.data[7] & 0x03; //mask PID bits of PCF remainder
+    p_out_payload->rssi = in_promiscuous_payload.rssi;
+    p_out_payload->rx_channel = in_promiscuous_payload.rx_channel;
+    p_out_payload->rx_channel_index = in_promiscuous_payload.rx_channel_index;
+    
+
+    //Note: correct pipe couldn't be assigned, as promiscuous mode has no valid addresses
+    //Note: no_ack couldn't be assigned, as promiscuous mode PCF field has last bit stripped
+    return NRF_SUCCESS;
+}

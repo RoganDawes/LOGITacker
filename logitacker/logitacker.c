@@ -1,10 +1,12 @@
 #include "logitacker.h"
 #include "logitacker_bsp.h"
 #include "logitacker_radio.h"
+#include "logitacker_devices.h"
 #include "nrf.h"
 #include "nrf_esb_illegalmod.h"
 #include "bsp.h"
 #include "unifying.h"
+#include "helper.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
@@ -18,11 +20,13 @@ typedef enum {
     LOGITACKER_DEVICE_PASSIVE_ENUMERATION   // radio in SNIFF mode, collecting device frames to determin caps
 } logitacker_mainstate_t;
 
+/*
 typedef enum {
     LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING,   // continues in discovery mode, when new address has been found
     LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION,   // continues in passive enumeration mode when address found
     LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION   // continues in active enumeration mode when address found
 } logitacker_discovery_on_new_address_t;
+*/
 
 typedef struct {
     logitacker_discovery_on_new_address_t on_new_address_action;
@@ -39,9 +43,8 @@ typedef struct {
     uint8_t base_addr[4];
     uint8_t known_prefix;
     uint8_t current_channel_index;
-    bool mouse_reports;
-    bool keyboard_reports;
-    bool encrypted_keyboard_reports;
+
+    logitacker_device_t devices[NRF_ESB_PIPE_COUNT];
 } logitacker_substate_passive_enumeration_t;
 
 
@@ -82,7 +85,9 @@ void esb_event_handler_main(nrf_esb_evt_t * p_event)
     if (m_state_local.current_esb_event_handler != 0) m_state_local.current_esb_event_handler(p_event);
 }
 
-static char strbuf[20] = {0};
+static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
+static nrf_esb_payload_t tmp_payload = {0};
+
 void radio_process_rx_discovery_mode() {
     static nrf_esb_payload_t rx_payload;
     static nrf_esb_payload_t * p_rx_payload = &rx_payload;
@@ -94,15 +99,47 @@ void radio_process_rx_discovery_mode() {
             uint8_t addr[5];
             memcpy(addr, &p_rx_payload->data[2], 5);
 
-            sprintf(strbuf, "%.2x:%.2x:%.2x:%.2x:%.2x", addr[0], addr[1], addr[2], addr[3], addr[4]);
-            strbuf[16] = 0x00;
-            NRF_LOG_INFO("received valid ESB frame in discovery mode (addr %s, len: %d, ch idx %d, raw ch %d)", strbuf, len, ch_idx, ch);
+            helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, addr);
+            NRF_LOG_INFO("DISCOVERY: received valid ESB frame (addr %s, len: %d, ch idx %d, raw ch %d)", addr_str_buff, len, ch_idx, ch);
            
-            NRF_LOG_HEXDUMP_INFO(p_rx_payload->data, p_rx_payload->length);
+            NRF_LOG_HEXDUMP_DEBUG(p_rx_payload->data, p_rx_payload->length);
 
+            // retrieve device entry if existent
+            logitacker_device_t *p_device = logitacker_device_list_get_by_addr(addr);
+            if (p_device == NULL) {
+                // device doesn't exist, add to list
+                logitacker_device_t new_device = {0};
+                helper_addr_to_base_and_prefix(new_device.base_addr, &new_device.addr_prefix, addr, 5); //convert device addr to base+prefix and update device
+                p_device = logitacker_device_list_add(new_device); // add device to device list
+                if (p_device != NULL) {
+                    NRF_LOG_INFO("DISCOVERY: added new device entry for %s", addr_str_buff);
+                } else {
+                    NRF_LOG_WARNING("DISCOVERY: failed to add new device entry for %s! device list full ?", addr_str_buff);
+                }
+            } else {
+                // existing device
+                NRF_LOG_INFO("DISCOVERY: device %s already known", addr_str_buff);
+            }
 
-            // ToDo: this is a test of changing to passive enumeration, introduce a condition
-            logitacker_enter_state_passive_enumeration(addr);
+            // update device counters
+            if (p_device != NULL) {
+                logitacker_radio_convert_promiscuous_frame_to_default_frame(&tmp_payload, rx_payload);
+                logitacker_device_update_counters_from_frame(p_device, tmp_payload);
+            }
+
+            switch (m_state_local.substate_discovery.on_new_address_action) {
+                case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
+                    break;
+                case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
+                    //ToDo implement
+                    break;
+                case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
+                    logitacker_enter_state_passive_enumeration(addr);
+                    break;
+                default:
+                    // do nothing, stay in discovery
+                    break;
+            }
         } else {
             NRF_LOG_WARNING("invalid promiscuous frame in discovery mode, shouldn't happen because of filtering");
         }
@@ -132,14 +169,17 @@ void radio_process_rx_passive_enum_mode() {
             bool unifying_is_keep_alive;
             unifying_frame_classify(rx_payload, &unifying_report_type, &unifying_is_keep_alive);
 
+            logitacker_device_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
+
+            logitacker_device_update_counters_from_frame(p_device, rx_payload); //update device data
+
             if (!(unifying_report_type == 0x00 && unifying_is_keep_alive) && len != 0) { //ignore keep-alive only frames and empty frames
                 uint8_t ch_idx = p_rx_payload->rx_channel_index;
                 uint8_t ch = p_rx_payload->rx_channel;
                 uint8_t addr[5];
                 nrf_esb_convert_pipe_to_address(p_rx_payload->pipe, addr);
-                sprintf(strbuf, "%.2x:%.2x:%.2x:%.2x:%.2x", addr[0], addr[1], addr[2], addr[3], addr[4]);
-                strbuf[16] = 0x00;
-                NRF_LOG_INFO("frame RX in passive enumeration mode (addr %s, len: %d, ch idx %d, raw ch %d)", strbuf, len, ch_idx, ch);
+                helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, addr);
+                NRF_LOG_INFO("frame RX in passive enumeration mode (addr %s, len: %d, ch idx %d, raw ch %d)", addr_str_buff, len, ch_idx, ch);
                 unifying_frame_classify_log(rx_payload);
                 NRF_LOG_HEXDUMP_INFO(p_rx_payload->data, p_rx_payload->length);
             }
@@ -292,7 +332,8 @@ void logitacker_enter_state_discovery() {
     radio_stop_channel_hopping(); // disable channel hopping
 
     m_state_local.mainstate = LOGITACKER_DEVICE_DISCOVERY;
-    m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
+//    m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
+
     m_state_local.current_bsp_event_handler = bsp_event_handler_discovery;
     m_state_local.current_esb_event_handler = esb_event_handler_discovery; // process RX_RECEIVED
     m_state_local.current_radio_event_handler = radio_event_handler_discovery; //restarts channel hopping on rx timeout
@@ -318,17 +359,38 @@ void logitacker_enter_state_passive_enumeration(uint8_t * rf_address) {
     m_state_local.current_radio_event_handler = radio_event_handler_passive_enum;
     m_state_local.current_esb_event_handler = esb_event_handler_passive_enum;    
 
-    uint8_t base_addr[4] = { rf_address[3], rf_address[2], rf_address[1], rf_address[0] };
-    memcpy(m_state_local.substate_active_enumeration.base_addr, base_addr, 4);
-    m_state_local.substate_active_enumeration.known_prefix = rf_address[4];
+    //reset device state
+    memset(m_state_local.substate_passive_enumeration.devices, 0, sizeof(m_state_local.substate_passive_enumeration.devices));
+
+    uint8_t base_addr[4] = { 0 };
+    uint8_t prefix = 0;
+    helper_addr_to_base_and_prefix(base_addr, &prefix, rf_address, 5);
+    memcpy(m_state_local.substate_passive_enumeration.base_addr, base_addr, 4);
+    m_state_local.substate_passive_enumeration.known_prefix = prefix;
+    
+
+    bsp_board_leds_off(); //disable all LEDs
+
 
     
     nrf_esb_set_mode(NRF_ESB_MODE_SNIFF);
-    nrf_esb_set_base_address_1(base_addr); // set base addr1
-    nrf_esb_update_prefix(1, m_state_local.substate_active_enumeration.known_prefix); // set known suffix for pipe 1
+    nrf_esb_set_base_address_1(m_state_local.substate_passive_enumeration.base_addr); // set base addr1
+    nrf_esb_update_prefix(1, 0x00); // set suffix 0x00 for pipe 1 (dongle address)
+    nrf_esb_update_prefix(2, m_state_local.substate_passive_enumeration.known_prefix); // set known suffix for pipe 2
+    //set neighbouring prefixes
+    nrf_esb_update_prefix(3, m_state_local.substate_passive_enumeration.known_prefix-1); // set known suffix for pipe 2
+    nrf_esb_update_prefix(4, m_state_local.substate_passive_enumeration.known_prefix-2); // set known suffix for pipe 2
+    nrf_esb_update_prefix(6, m_state_local.substate_passive_enumeration.known_prefix+1); // set known suffix for pipe 2
+    nrf_esb_update_prefix(7, m_state_local.substate_passive_enumeration.known_prefix+2); // set known suffix for pipe 2
+    nrf_esb_update_prefix(8, m_state_local.substate_passive_enumeration.known_prefix+3); // set known suffix for pipe 2
+
+    // add global pairing address to pipe 0
+    helper_addr_to_base_and_prefix(base_addr, &prefix, UNIFYING_GLOBAL_PAIRING_ADDRESS, 5);
+    nrf_esb_set_base_address_0(base_addr);
+    nrf_esb_update_prefix(0, prefix);
+
     while (nrf_esb_start_rx() != NRF_SUCCESS) {};
 
-    nrf_esb_start_rx(); //start rx
     radio_enable_rx_timeout_event(LOGITACKER_PASSIVE_ENUM_STAY_ON_CHANNEL_AFTER_RX_MS); //set RX timeout, the eventhandler starts channel hopping once this timeout is reached    
 }
 
@@ -348,8 +410,15 @@ void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
 }
 
 uint32_t logitacker_init() {
+    m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
     logitacker_bsp_init(bsp_event_handler_main);
     logitacker_radio_init(esb_event_handler_main, radio_event_handler_main);
     logitacker_enter_state_discovery();
+
+
     return NRF_SUCCESS;
+}
+
+void logitacker_discover_on_new_address_action(logitacker_discovery_on_new_address_t on_new_address_action) {
+    m_state_local.substate_discovery.on_new_address_action = on_new_address_action;
 }

@@ -44,5 +44,6 @@ uint32_t radio_stop_channel_hopping();
 uint32_t radio_enable_rx_timeout_event(uint32_t timeout_ms);
 uint32_t radio_disable_rx_timeout_event();
 
+uint32_t logitacker_radio_convert_promiscuous_frame_to_default_frame(nrf_esb_payload_t *p_out_payload, nrf_esb_payload_t const in_promiscuous_payload);
 
 #endif

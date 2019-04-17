@@ -37,6 +37,8 @@
 #define UNIFYING_MIN_STORED_REPORTS_WITH_SUCCESSIVE_LED_TOGGLE_KEY_DOWNS 13     //required number of key down reports which toggle LED during bruteforce (not less than 13, not more than UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE/2)
 
 
+static const uint8_t UNIFYING_GLOBAL_PAIRING_ADDRESS[] = {0xbb, 0x0a, 0xdc, 0xa5, 0x75 };
+
 typedef struct
 {
     uint8_t     RfAddress[5];

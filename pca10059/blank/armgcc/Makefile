@@ -81,6 +81,7 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
+  $(PROJ_DIR)/logitacker/logitacker_devices.c \
   $(PROJ_DIR)/logitacker/logitacker_radio.c \
   $(PROJ_DIR)/logitacker/logitacker_bsp.c \
   $(PROJ_DIR)/logitacker/logitacker.c \
