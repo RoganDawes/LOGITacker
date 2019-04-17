@@ -27,6 +27,7 @@ typedef enum
 typedef struct {
     uint8_t typed[LOGITACKER_COUNTER_TYPE_LENGTH]; //frame count of each known type
     uint32_t overal; //overall frame count
+    uint32_t logitech_chksm;
 } logitacker_device_frame_counter_t;
 
 typedef struct {

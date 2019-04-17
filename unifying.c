@@ -174,6 +174,7 @@ uint8_t unifying_calculate_checksum(uint8_t * p_array, uint8_t paylen) {
     return checksum;
 }
 
+/*
 bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen) {
     if (paylen < 1) return false;
     uint8_t chksum = unifying_calculate_checksum(p_array, paylen);
@@ -181,6 +182,7 @@ bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen) {
 
     return true;
 }
+*/
 
 bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen) {
     if (paylen < 1) return false;
@@ -188,6 +190,12 @@ bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen) {
     p_array[paylen-1] = chksum;
 
     return true;
+}
+
+bool unifying_payload_validate_checksum(uint8_t * p_array, uint8_t paylen) {
+    if (paylen < 1) return false;
+    uint8_t chksum = unifying_calculate_checksum(p_array, paylen-1);
+    return p_array[paylen-1] == chksum;
 }
 
 uint32_t unifyingExtractCounterFromEncKbdFrame(nrf_esb_payload_t frame, uint32_t *p_counter) {

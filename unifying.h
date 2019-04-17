@@ -118,8 +118,9 @@ uint32_t restoreDeviceInfoFromFlash(uint16_t deviceRecordIndex, device_info_t *d
 uint32_t restoreDeviceWhitenedReportsFromFlash(uint16_t deviceRecordIndex, whitened_replay_frames_t *reports);
 uint32_t updateDeviceInfoOnFlash(uint16_t deviceRecordIndex, device_info_t *deviceInfo);
 uint32_t updateDeviceWhitenedReportsOnFlash(uint16_t deviceRecordIndex, whitened_replay_frames_t *reports);
-bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen);
+//bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen); 
 bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen);
+bool unifying_payload_validate_checksum(uint8_t * p_array, uint8_t paylen);
 void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType, bool *p_outHasKeepAliveSet);
 void unifying_frame_classify_log(nrf_esb_payload_t frame);
 /*

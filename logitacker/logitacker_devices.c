@@ -20,8 +20,17 @@ void logitacker_device_update_counters_from_frame(logitacker_device_t *device, n
     bool unifying_is_keep_alive;
     unifying_frame_classify(frame, &unifying_report_type, &unifying_is_keep_alive);
 
-    device->frame_counters.overal++;
+
     if (len == 0) return; //ignore empty frames (ack)
+
+    device->frame_counters.overal++; //overall counter ignores empty frames
+
+    //test if frame has valid logitech checksum
+    bool logitech_cksm = unifying_payload_validate_checksum(frame.data, frame.length);
+    if (logitech_cksm) {
+        device->is_logitech = true;
+        device->frame_counters.logitech_chksm++;
+    }
 
     if (len == 5 && unifying_report_type == 0x00 && unifying_is_keep_alive) {
         //keep alive frame, set respective device to be unifying
@@ -30,21 +39,21 @@ void logitacker_device_update_counters_from_frame(logitacker_device_t *device, n
         switch (unifying_report_type) {
             case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
                 if (len != 22) return;
-                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_ENCRYPTED_KEYBOARD] > 2) {
+                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_ENCRYPTED_KEYBOARD] > 2 || logitech_cksm) {
                     device->is_logitech = true;
                     device->is_encrypted_keyboard = true;
                 }
                 break;
             case UNIFYING_RF_REPORT_HIDPP_LONG:
                 if (len != 22) return;
-                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_HIDPP_LONG] > 2) {
+                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_HIDPP_LONG] > 2 || logitech_cksm) {
                     device->is_logitech = true;
                     device->is_unifying_compatible = true;
                 }
                 break;
             case UNIFYING_RF_REPORT_HIDPP_SHORT:
                 if (len != 10) return;
-                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_HIDPP_SHORT] > 2) {
+                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_HIDPP_SHORT] > 2 || logitech_cksm) {
                     device->is_logitech = true;
                     device->is_unifying_compatible = true;
                 }
@@ -56,11 +65,14 @@ void logitacker_device_update_counters_from_frame(logitacker_device_t *device, n
                 device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PAIRING]++;
                 break;
             case UNIFYING_RF_REPORT_PLAIN_KEYBOARD:
-                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_KEYBOARD] > 2) device->is_plain_keyboard = true;
+                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_KEYBOARD] > 2 || logitech_cksm) {
+                    device->is_logitech = true;
+                    device->is_plain_keyboard = true;
+                } 
                 break;
             case UNIFYING_RF_REPORT_PLAIN_MOUSE:
                 if (len != 10) return;
-                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_MOUSE] > 2) {
+                if (++device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_MOUSE] > 2 || logitech_cksm) {
                     device->is_logitech = true;
                     device->is_mouse = true;
                 }
@@ -80,7 +92,12 @@ void logitacker_device_update_counters_from_frame(logitacker_device_t *device, n
         }
         
 
-        NRF_LOG_INFO("device (frames %d): logitech %d, unifying %d, mouse %d, enc_key %d, plain_key %d", device->frame_counters.overal, device->is_logitech, device->is_unifying_compatible, device->is_mouse, device->is_encrypted_keyboard, device->is_plain_keyboard);
+        NRF_LOG_INFO("device (frames %d): logitech %d, mouse %d, enc_key %d, plain_key %d", \
+            device->frame_counters.overal, \
+            device->frame_counters.logitech_chksm, \
+            device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_MOUSE], \
+            device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_ENCRYPTED_KEYBOARD], \
+            device->frame_counters.typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_KEYBOARD]);
     }
 }
 
