@@ -22,5 +22,6 @@ uint32_t logitacker_init();
 void logitacker_enter_state_discovery();
 void logitacker_discover_on_new_address_action(logitacker_discovery_on_new_address_t on_new_address_action);
 void logitacker_enter_state_passive_enumeration(uint8_t * rf_address);
+void logitacker_enter_state_active_enumeration(uint8_t * rf_address);
 
 #endif

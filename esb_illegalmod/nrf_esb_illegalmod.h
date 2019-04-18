@@ -238,6 +238,7 @@ typedef enum
     NRF_ESB_EVENT_TX_SUCCESS,   /**< Event triggered on TX success.     */
     NRF_ESB_EVENT_TX_FAILED,    /**< Event triggered on TX failure.     */
     NRF_ESB_EVENT_RX_RECEIVED,   /**< Event triggered on RX received.    */
+    NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY, // TX success with ack pay len > 0
     //NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED   /**< Event triggered on RX in PROMISCUOUS mode.    */
 } nrf_esb_evt_id_t;
 
@@ -296,6 +297,9 @@ typedef struct
     uint8_t                 radio_irq_priority;     //!< nRF radio interrupt priority.
     uint8_t                 event_irq_priority;     //!< ESB event interrupt priority.
     uint8_t                 payload_length;         //!< Length of the payload (maximum length depends on the platforms that are used on each side).
+
+    bool                    retransmit_on_all_channels; //if enabled, TX_FAILED event is only fired, if TX was tried on all channels, radio remains on last channel in use 
+    uint8_t                 retransmit_on_all_channels_loop_count; //how often retransmission should iterate over channels
 
     bool                    selective_auto_ack;     //!< Enable or disable selective auto acknowledgement. When this feature is disabled, all packets will be acknowledged ignoring the noack field.
     bool                    disallow_auto_ack;      //!< If enabled nor ack is sent back in PRX mode, even if the noack field of received frame was not set.
@@ -618,6 +622,8 @@ uint32_t nrf_esb_update_channel_frequency_table_all();
 uint32_t nrf_esb_set_rf_channel_next();
 uint32_t nrf_esb_get_rf_frequency(uint32_t * p_frequency);
 
+uint32_t nrf_esb_enable_all_channel_tx_failover(bool enabled);
+uint32_t nrf_esb_set_all_channel_tx_failover_loop_count(uint8_t loop_count); //how often re-transmission should loop over available channels
 
 #ifdef __cplusplus
 }

@@ -149,6 +149,9 @@ static volatile uint32_t            m_retransmits_remaining;
 static volatile uint32_t            m_last_tx_attempts;
 static volatile uint32_t            m_wait_for_ack_timeout_us;
 
+static volatile uint32_t            m_retransmit_all_channels_remaining_channel_hop_count;
+static volatile bool                m_retransmit_all_channels_running;
+
 static volatile uint32_t            m_radio_shorts_common = _RADIO_SHORTS_COMMON;
 
 // These function pointers are changed dynamically, depending on protocol configuration and state.
@@ -289,7 +292,10 @@ uint32_t nrf_esb_init_ptx_mode() {
     esb_config.event_handler = m_event_handler;    
     esb_config.crc = NRF_ESB_CRC_16BIT;
     esb_config.retransmit_count = 1;
-    esb_config.retransmit_delay = 5*250;
+    esb_config.retransmit_delay = 3*250;
+//    esb_config.retransmit_on_all_channels = true;
+//    esb_config.retransmit_on_all_channels_loop_count = 1;
+    
 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
@@ -881,6 +887,18 @@ static void start_tx_transaction()
                 NRF_RADIO->SHORTS   = m_radio_shorts_common | RADIO_SHORTS_DISABLED_RXEN_Msk;
                 NRF_RADIO->INTENSET = RADIO_INTENSET_DISABLED_Msk | RADIO_INTENSET_READY_Msk;
 
+                //Configure retransmit with channel hopping
+                if (m_config_local.retransmit_on_all_channels) {
+                    // maximum channel hop count is size of channel table * loop count (only set for first transmission)
+                    if (!m_retransmit_all_channels_running) {
+                        m_retransmit_all_channels_remaining_channel_hop_count = (uint32_t) m_config_local.retransmit_on_all_channels_loop_count *  m_esb_addr.channel_to_frequency_len;
+                        m_retransmit_all_channels_running = true;
+                    }
+                } else {
+                    m_retransmit_all_channels_remaining_channel_hop_count = 0;
+                }
+                
+
                 // Configure the retransmit counter
                 m_retransmits_remaining = m_config_local.retransmit_count;
                 on_radio_disabled = on_radio_disabled_tx;
@@ -976,12 +994,16 @@ static void on_radio_disabled_tx_wait_for_ack()
     // If the radio has received a packet and the CRC status is OK
     if (NRF_RADIO->EVENTS_END && NRF_RADIO->CRCSTATUS != 0)
     {
+        m_retransmit_all_channels_running = false;
+
         NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1;
         NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START);
         m_interrupt_flags |= NRF_ESB_INT_TX_SUCCESS_MSK;
         m_last_tx_attempts = m_config_local.retransmit_count - m_retransmits_remaining + 1;
 
         (void) nrf_esb_skip_tx();
+        m_retransmit_all_channels_remaining_channel_hop_count = 0; // reset multi_channel retransmit counter
+        m_retransmit_all_channels_running = false;
 
         if (m_rx_payload_buffer[0] > 0)
         {
@@ -1005,16 +1027,37 @@ static void on_radio_disabled_tx_wait_for_ack()
     }
     else
     {
+        // if here, TX end was reached, but no ack arrived in time
+
         if (m_retransmits_remaining-- == 0)
         {
-            NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1;
-            NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START);
-            // All retransmits are expended, and the TX operation is suspended
-            m_last_tx_attempts = m_config_local.retransmit_count + 1;
-            m_interrupt_flags |= NRF_ESB_INT_TX_FAILED_MSK;
+            bool tx_failed = true;
+            // no retransmissions left
+            if (m_config_local.retransmit_on_all_channels) {
+                if (m_retransmit_all_channels_remaining_channel_hop_count > 0) tx_failed=false;                
+            } 
 
-            m_nrf_esb_mainstate = NRF_ESB_STATE_IDLE;
-            NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+            if (tx_failed) {
+                m_retransmit_all_channels_running = false;
+                NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1;
+                NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START);
+                // All retransmits are expended, and the TX operation is suspended
+                m_last_tx_attempts = m_config_local.retransmit_count + 1;
+                m_interrupt_flags |= NRF_ESB_INT_TX_FAILED_MSK;
+
+                m_nrf_esb_mainstate = NRF_ESB_STATE_IDLE;
+                NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+            } else {
+                // transfer state back to idle
+                m_nrf_esb_mainstate = NRF_ESB_STATE_IDLE;
+                //jump to next channel
+                nrf_esb_set_rf_channel_next();
+                // decrease remaining channel hops
+                m_retransmit_all_channels_remaining_channel_hop_count--;
+                NRF_LOG_DEBUG("Re-TX on channel %d, remaining hops %d", m_esb_addr.channel_to_frequency[m_esb_addr.rf_channel], m_retransmit_all_channels_remaining_channel_hop_count);
+                // restart transmission
+                if (nrf_esb_start_tx() != NRF_SUCCESS) tx_failed = true; // we failed restarting TX
+            }
         }
         else
         {
@@ -1448,27 +1491,37 @@ void ESB_EVT_IRQHandler(void)
     err_code = nrf_esb_get_clear_interrupts(&interrupts);
     if (err_code == NRF_SUCCESS && m_event_handler != 0)
     {
-        if (interrupts & NRF_ESB_INT_TX_SUCCESS_MSK)
-        {
-            event.evt_id = NRF_ESB_EVENT_TX_SUCCESS;
-            m_event_handler(&event);
-        }
-        if (interrupts & NRF_ESB_INT_TX_FAILED_MSK)
-        {
-            event.evt_id = NRF_ESB_EVENT_TX_FAILED;
-            m_event_handler(&event);
-        }
-        if (interrupts & NRF_ESB_INT_RX_DATA_RECEIVED_MSK)
-        {
-            event.evt_id = NRF_ESB_EVENT_RX_RECEIVED;
-            m_event_handler(&event);
-        }
-        if (interrupts & NRF_ESB_INT_RX_PROMISCUOUS_DATA_RECEIVED_MSK)
-        {
-            /*
-            event.evt_id = NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED;
-            m_event_handler(&event);
-            */
+        //NRF_LOG_INFO("RF INT %.8X", interrupts);
+
+        
+        if (interrupts == (NRF_ESB_INT_TX_SUCCESS_MSK | NRF_ESB_INT_RX_DATA_RECEIVED_MSK)) {
+            // TX success and RX_RECEIVED --> means ACK payload with len > 0 in RX queue
+                event.evt_id = NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY;
+                m_event_handler(&event);
+
+        } else {
+            if (interrupts & NRF_ESB_INT_TX_SUCCESS_MSK)
+            {
+                event.evt_id = NRF_ESB_EVENT_TX_SUCCESS;
+                m_event_handler(&event);
+            }
+            if (interrupts & NRF_ESB_INT_TX_FAILED_MSK)
+            {
+                event.evt_id = NRF_ESB_EVENT_TX_FAILED;
+                m_event_handler(&event);
+            }
+            if (interrupts & NRF_ESB_INT_RX_DATA_RECEIVED_MSK)
+            {
+                event.evt_id = NRF_ESB_EVENT_RX_RECEIVED;
+                m_event_handler(&event);
+            }
+            if (interrupts & NRF_ESB_INT_RX_PROMISCUOUS_DATA_RECEIVED_MSK)
+            {
+                /*
+                event.evt_id = NRF_ESB_EVENT_RX_RECEIVED_PROMISCUOUS_UNVALIDATED;
+                m_event_handler(&event);
+                */
+            }
         }
     }
 }
@@ -2261,5 +2314,17 @@ uint32_t nrf_esb_get_rf_frequency(uint32_t * p_frequency)
 
     *p_frequency = m_esb_addr.channel_to_frequency[m_esb_addr.rf_channel];
 
+    return NRF_SUCCESS;
+}
+
+
+uint32_t nrf_esb_enable_all_channel_tx_failover(bool enabled) {
+    VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
+    m_config_local.retransmit_on_all_channels = enabled;
+    return NRF_SUCCESS;
+}
+uint32_t nrf_esb_set_all_channel_tx_failover_loop_count(uint8_t loop_count) {
+    VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
+    m_config_local.retransmit_on_all_channels_loop_count = loop_count;
     return NRF_SUCCESS;
 }
