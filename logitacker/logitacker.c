@@ -20,23 +20,23 @@ typedef enum {
     LOGITACKER_DEVICE_PASSIVE_ENUMERATION   // radio in SNIFF mode, collecting device frames to determin caps
 } logitacker_mainstate_t;
 
-/*
-typedef enum {
-    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING,   // continues in discovery mode, when new address has been found
-    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION,   // continues in passive enumeration mode when address found
-    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION   // continues in active enumeration mode when address found
-} logitacker_discovery_on_new_address_t;
-*/
 
 typedef struct {
-    logitacker_discovery_on_new_address_t on_new_address_action;
+    logitacker_discovery_on_new_address_t on_new_address_action; //not only state, persistent config
 } logitacker_substate_discovery_t;
+
+typedef enum {
+    LOGITACKER_ACTIVE_ENUM_PHASE_PING_DONGLE,   // try to reach dongle RF address for device
+    LOGITACKER_ACTIVE_ENUM_PHASE_DISCOVER_NEIGHBOURS,   // !! should be own substate !!
+    LOGITACKER_ACTIVE_ENUM_PHASE_TEST_PLAIN_KEYSTROKE_INJECTION   // tests if plain keystrokes could be injected (press CAPS, listen for LED reports)
+} logitacker_active_enumeration_phase_t;
 
 typedef struct {
     uint8_t base_addr[4];
     uint8_t known_prefix;
     uint8_t prefixes_under_test[8];
     uint8_t current_channel_index;
+    logitacker_active_enumeration_phase_t phase;
 } logitacker_substate_active_enumeration_t;
 
 typedef struct {
