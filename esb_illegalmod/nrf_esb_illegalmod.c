@@ -291,8 +291,8 @@ uint32_t nrf_esb_init_ptx_mode() {
     nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
     esb_config.event_handler = m_event_handler;    
     esb_config.crc = NRF_ESB_CRC_16BIT;
-    esb_config.retransmit_count = 1;
-    esb_config.retransmit_delay = 3*250;
+    esb_config.retransmit_count = 2;
+    esb_config.retransmit_delay = 6*250;
 //    esb_config.retransmit_on_all_channels = true;
 //    esb_config.retransmit_on_all_channels_loop_count = 1;
     
