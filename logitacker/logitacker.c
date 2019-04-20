@@ -226,10 +226,38 @@ void esb_event_handler_passive_enum(nrf_esb_evt_t * p_event) {
     
 }
 
-#define ACTIVE_ENUM_INNER_LOOP_MAX 6
+#define ACTIVE_ENUM_INNER_LOOP_MAX 4 //how many CAPS presses / key releases get send
 uint8_t m_active_enum_inner_loop_count = 0;
-bool m_active_enum_key_press = false;
+bool m_active_enum_key_press = false; // indicates if next active enum TX payload is a key down (CAPS) or key release
 uint8_t m_active_enum_led_count = 0;
+static uint8_t m_active_enum_current_address[5];
+static logitacker_device_t m_active_enum_tmp_device;
+
+// increments pipe 1 address prefix (neighbour discovery)
+bool active_enumeration_set_next_prefix(logitacker_substate_active_enumeration_t * p_state) {
+    // all possible prefixes (neighbours) tested? 
+    if (p_state->next_prefix == p_state->known_prefix) {
+        p_state->phase = LOGITACKER_ACTIVE_ENUM_PHASE_FINISHED;
+        NRF_LOG_INFO("Tested all possible neighbours");
+        return true;
+    }
+
+    // update temp device
+    m_active_enum_tmp_device.addr_prefix = p_state->next_prefix;
+
+    nrf_esb_enable_pipes(0x00); //disable all pipes
+    nrf_esb_update_prefix(1, p_state->next_prefix); // set prefix and enable pipe 1
+    m_active_enum_current_address[4] = p_state->next_prefix;
+    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, m_active_enum_current_address);
+    //NRF_LOG_INFO("Testing next device address prefix %.2x", p_state->next_prefix);
+    NRF_LOG_INFO("Test next neighbour address %s", addr_str_buff);
+    p_state->next_prefix++;
+    m_active_enum_inner_loop_count = 0;
+    m_active_enum_led_count = 0;
+
+
+    return false;
+}
 
 void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_subevent) {
     logitacker_substate_active_enumeration_t * p_state = &m_state_local.substate_active_enumeration;
@@ -238,6 +266,7 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
         NRF_LOG_WARNING("Active enumeration event, while active enumeration finished");
         return;
     }
+
 
     uint32_t channel_freq;
     nrf_esb_get_rf_frequency(&channel_freq);
@@ -264,22 +293,11 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
                 NRF_LOG_INFO("Failed to reach receiver in first transmission, aborting active enumeration");
                 return;
             }
+         
+            // continue with next prefix, return if first prefixe has been reached again
+            if (active_enumeration_set_next_prefix(p_state)) return;
 
-            // all possible prefixes (neighbours) tested? 
-            if (p_state->next_prefix == p_state->known_prefix) {
-                p_state->phase = LOGITACKER_ACTIVE_ENUM_PHASE_FINISHED;
-                NRF_LOG_INFO("Tested all possible neighbours");
-                return;
-            }
-
-            // continue with next prefix
-            nrf_esb_enable_pipes(0x00); //disable all pipes
-            nrf_esb_update_prefix(1, p_state->next_prefix); // set prefix and enable pipe 1
-            NRF_LOG_INFO("Testing next device address prefix %.2x after TX fail", p_state->next_prefix);
-            p_state->next_prefix++;
-            m_active_enum_inner_loop_count = 0;
-
-            //re start TX (payload still enqued)
+            //re-transmit last frame (payload still enqued)
             nrf_esb_start_tx();
             
 
@@ -307,6 +325,21 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
         {
             NRF_LOG_INFO("ACTIVE ENUMERATION TX_SUCCESS channel: %d", channel_freq);
 
+            
+            // hit, try to add the device if not dongle address (prefix 0x00)
+            if (m_active_enum_tmp_device.addr_prefix != 0x00) {
+                if (logitacker_device_list_get_by_base_prefix(m_active_enum_tmp_device.base_addr, m_active_enum_tmp_device.addr_prefix) == NULL) {
+                    if (logitacker_device_list_add(m_active_enum_tmp_device) != NULL) {
+                        // new device
+                        NRF_LOG_INFO("active enum: address %s accepted by dongle, added as new device", addr_str_buff);
+                    } else {
+                        NRF_LOG_WARNING("active enum: address %s accepted by dongle, but device couldn't be added ... list full?!" , addr_str_buff);
+                    }
+                } else {
+                    NRF_LOG_DEBUG("active enum: device already known: %s", addr_str_buff);    
+                }
+            }
+
             if (m_active_enum_key_press) {
                 memcpy (tmp_tx_payload.data, key_report_caps, sizeof(key_report_caps));
             } else {
@@ -322,15 +355,11 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
             } else {
                 // we are done with this device
                             
-                // continue with next prefix
-                nrf_esb_enable_pipes(0x00); //disable all pipes
-                nrf_esb_update_prefix(1, p_state->next_prefix); // set prefix and enable pipe 1
-                NRF_LOG_INFO("Testing next device address prefix %.2x after TX success", p_state->next_prefix);
-                p_state->next_prefix++;
-                m_active_enum_inner_loop_count = 0;
+                // continue with next prefix, return if first prefixe has been reached again
+                if (active_enumeration_set_next_prefix(p_state)) return;
 
+                // schedule next transmission
                 app_timer_start(m_timer_next_tx_action, APP_TIMER_TICKS(1), p_subevent);
-
             }
             break;
         }
@@ -590,6 +619,7 @@ void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
     m_state_local.substate_active_enumeration.tx_delay_ms = 8;
 
     helper_addr_to_base_and_prefix(m_state_local.substate_active_enumeration.base_addr, &m_state_local.substate_active_enumeration.known_prefix, rf_address, LOGITACKER_DEVICE_ADDR_LEN);
+    memcpy(m_active_enum_current_address, rf_address, 5);
     m_state_local.substate_active_enumeration.next_prefix = m_state_local.substate_active_enumeration.known_prefix + 1;
 
     /*
@@ -601,6 +631,10 @@ void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
     nrf_esb_stop_rx(); //stop rx in case running
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
+
+    //update temporary device
+    memcpy(m_active_enum_tmp_device.base_addr, m_state_local.substate_active_enumeration.base_addr, 4);
+    m_active_enum_tmp_device.addr_prefix = m_state_local.substate_active_enumeration.known_prefix;
 
     // set current address for pipe 1
     nrf_esb_enable_pipes(0x00); //disable all pipes
@@ -620,6 +654,11 @@ void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
     nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
 
     m_state_local.substate_active_enumeration.phase = LOGITACKER_ACTIVE_ENUM_PHASE_STARTED;
+
+    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, m_active_enum_current_address);
+    //NRF_LOG_INFO("Testing next device address prefix %.2x", p_state->next_prefix);
+    NRF_LOG_INFO("Start active enumeration for address %s", addr_str_buff);
+
 
     // write payload (autostart TX is enabled for PTX mode)
     nrf_esb_write_payload(&tmp_tx_payload);
