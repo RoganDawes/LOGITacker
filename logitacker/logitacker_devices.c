@@ -54,67 +54,6 @@ int find_entry_by_base_prefix(uint8_t *base_addr, uint8_t prefix) {
 }
 
 
-/*
-logitacker_device_t* logitacker_device_list_add(logitacker_device_t device) {
-    // find first free entry
-    int pos = find_free_entry();
-    if (pos < 0) return NULL;
-
-    memcpy(&m_dev_list[pos], &device, sizeof(device));
-    m_dev_list_state[pos].is_used = true;
-    return &m_dev_list[pos];
-};
-
-
-logitacker_device_t* logitacker_device_list_get_by_base(uint8_t *base_addr) {
-    int pos = find_entry_by_base(base_addr);
-    if (pos < 0) return NULL;
-    return &m_dev_list[pos];
-}
-
-logitacker_device_t* logitacker_device_list_get_by_base_prefix(uint8_t *base_addr, uint8_t prefix) {
-    int pos = find_entry_by_base_prefix(base_addr, prefix);
-    if (pos < 0) return NULL;
-    return &m_dev_list[pos];
-}
-
-logitacker_device_t* logitacker_device_list_get_by_addr(uint8_t *addr) {
-    uint8_t base_addr[4] = {0};
-    uint8_t prefix = 0;
-    helper_addr_to_base_and_prefix(base_addr, &prefix, addr, 5);
-    return logitacker_device_list_get_by_base_prefix(base_addr, prefix);
-}
-
-uint32_t logitacker_device_list_remove_by_base_prefix(uint8_t *base_addr, uint8_t prefix) {
-    int pos = find_entry_by_base_prefix(base_addr, prefix);
-    if (pos < 0) return NRF_ERROR_INVALID_ADDR;
-    m_dev_list_state[pos].is_used = false; // mark as unused
-    return NRF_SUCCESS;    
-}
-
-uint32_t logitacker_device_list_remove_by_base(uint8_t *base_addr) {
-    int pos = find_entry_by_base(base_addr);
-    if (pos < 0) return NRF_ERROR_INVALID_ADDR;
-    m_dev_list_state[pos].is_used = false; // mark as unused
-    return NRF_SUCCESS;    
-}
-
-
-uint32_t logitacker_device_list_remove_by_addr(uint8_t *addr) {
-    uint8_t base_addr[4] = {0};
-    uint8_t prefix = 0;
-    helper_addr_to_base_and_prefix(base_addr, &prefix, addr, 5);
-    return logitacker_device_list_remove_by_base_prefix(base_addr, prefix);
-}
-
-uint32_t logitacker_device_list_remove(logitacker_device_t device) {
-    //return logitacker_device_list_remove_by_base_prefix(device.base_addr, device.addr_prefix);
-    return logitacker_device_list_remove_by_base(device.base_addr);
-}
-
-*/
-
-
 
 uint32_t logitacker_device_get_prefix_index(int *out_index, logitacker_device_t const * const in_device, uint8_t prefix) {
     ASSERT(in_device);
@@ -183,7 +122,32 @@ logitacker_device_t* logitacker_device_list_add_addr(uint8_t const * const rf_ad
     return p_device;
 }
 
-logitacker_device_t* logitacker_device_list_get_by_addr(uint8_t *addr);
+logitacker_device_t* logitacker_device_list_get_by_addr(uint8_t const * const addr) {
+    if (addr == NULL) return NULL;
+
+    // resolve base address / prefix
+    uint8_t base[4] = {0};
+    uint8_t prefix = 0;
+    helper_addr_to_base_and_prefix(base, &prefix, addr, LOGITACKER_DEVICE_ADDR_LEN);
+
+    //retrieve device
+    int entry = find_entry_by_base(base);
+    if (entry < 0) {
+        NRF_LOG_ERROR("logitacker_device_list_get_by_addr: no entry for base address")
+        return NULL;
+    }
+
+    logitacker_device_t * p_device = &m_dev_list[entry];
+
+    int prefix_index = -1;
+    uint32_t err_res = logitacker_device_get_prefix_index(&prefix_index, p_device, prefix);
+    if (err_res != NRF_SUCCESS) {
+        NRF_LOG_ERROR("logitacker_device_list_get_by_addr: no entry for given prefix")
+        return NULL;
+    }
+
+    return p_device;
+}
 
 logitacker_device_t* logitacker_device_list_get(uint32_t pos) {
     if (pos >= LOGITACKER_DEVICES_MAX_LIST_ENTRIES) return NULL;
@@ -196,6 +160,21 @@ uint32_t logitacker_device_list_remove_by_base(uint8_t const * const base_addr);
 
 void logitacker_device_list_flush() {
     for (uint32_t i=0; i < LOGITACKER_DEVICES_MAX_LIST_ENTRIES; i++) m_dev_list_state[i].is_used = false;
+}
+
+logitacker_device_capabilities_t * logitacker_device_get_caps_pointer(uint8_t const * const rf_addr) {
+    logitacker_device_t * p_dev = logitacker_device_list_get_by_addr(rf_addr);
+    if (p_dev == NULL) return NULL;
+
+    int prefix_index = -1;
+    uint32_t err_res = logitacker_device_get_prefix_index(&prefix_index, p_dev, rf_addr[4]);
+    if (err_res != NRF_SUCCESS) {
+        NRF_LOG_ERROR("logitacker_device_get_caps_pointer: no entry for given prefix")
+        return NULL;
+    }
+
+
+    return &p_dev->capabilities[prefix_index];
 }
 
 void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr, nrf_esb_payload_t frame) {
@@ -271,6 +250,7 @@ void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr,
                 }
                 break;
             case UNIFYING_RF_REPORT_LED:
+                if (len != 10) return;
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_LED]++;
                 break;
             case UNIFYING_RF_REPORT_PAIRING:

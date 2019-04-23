@@ -51,29 +51,10 @@ typedef struct {
     logitacker_device_capabilities_t capabilities[LOGITACKER_DEVICE_MAX_PREFIX];
 } logitacker_device_t;
 
-/*
-void logitacker_device_update_counters_from_frame(logitacker_device_t *device, uint8_t prefix, nrf_esb_payload_t frame);
-
-logitacker_device_t* logitacker_device_list_add(logitacker_device_t device);
-
-logitacker_device_t* logitacker_device_list_get(uint32_t pos); //returns NULL if position is unused or invalid
-//logitacker_device_t* logitacker_device_list_get_by_addr(uint8_t *addr);
-//logitacker_device_t* logitacker_device_list_get_by_base_prefix(uint8_t *base_addr, uint8_t prefix);
-logitacker_device_t* logitacker_device_list_get_by_base(uint8_t *base_addr);
-
-uint32_t logitacker_device_list_remove_by_addr(uint8_t *addr);
-//uint32_t logitacker_device_list_remove_by_base_prefix(uint8_t *base_addr, uint8_t prefix);
-uint32_t logitacker_device_list_remove_by_base(uint8_t *base_addr);
-uint32_t logitacker_device_list_remove(logitacker_device_t device);
-void logitacker_device_list_flush();
-
-uint32_t logitacker_device_add_prefix(logitacker_device_t *in_device, uint8_t prefix);
-uint32_t logitacker_device_get_prefix_index(int *out_index, logitacker_device_t *in_device, uint8_t prefix);
-*/
 
 void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr, nrf_esb_payload_t frame);
 logitacker_device_t* logitacker_device_list_add_addr(uint8_t const * const rf_addr);
-logitacker_device_t* logitacker_device_list_get_by_addr(uint8_t *addr);
+logitacker_device_t* logitacker_device_list_get_by_addr(uint8_t const * const addr);
 logitacker_device_t* logitacker_device_list_get(uint32_t pos); //returns NULL if position is unused or invalid
 
 uint32_t logitacker_device_list_remove_by_addr(uint8_t const * const rf_addr);
@@ -83,7 +64,7 @@ void logitacker_device_list_flush();
 uint32_t logitacker_device_add_prefix(logitacker_device_t * out_device, uint8_t prefix);
 uint32_t logitacker_device_get_prefix_index(int *out_index, logitacker_device_t const * const in_device, uint8_t prefix);
 
-
+logitacker_device_capabilities_t * logitacker_device_get_caps_pointer(uint8_t const * const rf_addr);
 
 
 #endif
