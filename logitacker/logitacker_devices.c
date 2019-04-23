@@ -140,9 +140,6 @@ uint32_t logitacker_device_add_prefix(logitacker_device_t * out_device, uint8_t 
 
     out_device->prefixes[out_device->num_prefixes++] = prefix; //add the new prefiy and inc num_prefixes
 
-NRF_LOG_INFO("PREFIXES");
-NRF_LOG_HEXDUMP_INFO(out_device->prefixes, out_device->num_prefixes);
-
     return NRF_SUCCESS;
 }
 

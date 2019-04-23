@@ -242,9 +242,8 @@ void esb_event_handler_passive_enum(nrf_esb_evt_t * p_event) {
     
 }
 
-#define ACTIVE_ENUM_INNER_LOOP_MAX 4 //how many CAPS presses / key releases get send
+#define ACTIVE_ENUM_INNER_LOOP_MAX 5 //how many CAPS presses / key releases get send
 uint8_t m_active_enum_inner_loop_count = 0;
-bool m_active_enum_key_press = false; // indicates if next active enum TX payload is a key down (CAPS) or key release
 uint8_t m_active_enum_led_count = 0;
 static uint8_t m_active_enum_current_address[5];
 static uint8_t m_active_enum_current_prefix;
@@ -277,39 +276,11 @@ bool active_enumeration_set_next_prefix(logitacker_substate_active_enumeration_t
     return false;
 }
 
-void active_enum_add_or_update_device(uint8_t *base_add, uint8_t addr_prefix) {
-    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, m_active_enum_current_address);
-    //NRF_LOG_INFO("Testing next device address prefix %.2x", p_state->next_prefix);
-    NRF_LOG_INFO("Adding address %s", addr_str_buff);
-
-/*
-    //logitacker_device_t *p_device = logitacker_device_list_get_by_base(m_active_enum_tmp_device.base_addr);
-    logitacker_device_t *p_device = logitacker_device_list_get_by_addr(m_active_enum_current_address);
-    if (p_device == NULL) {
-        // add prefix to temporary device
-        logitacker_device_add_prefix(&m_active_enum_tmp_device, m_active_enum_current_prefix);
-        
-        // add temporary device to device list
-        if (logitacker_device_list_add(m_active_enum_tmp_device) != NULL) {
-            // new device
-            NRF_LOG_INFO("active enum: address %s accepted by dongle, added as new device", addr_str_buff);
-        } else {
-            NRF_LOG_WARNING("active enum: address %s accepted by dongle, but device couldn't be added ... list full?!" , addr_str_buff);
-        }
-    } else {
-        NRF_LOG_INFO("active enum: device with base part of addr %s already known, adding prefix ...", addr_str_buff);    
-
-        if (logitacker_device_add_prefix(p_device, m_active_enum_current_prefix) == NRF_SUCCESS) {
-            NRF_LOG_INFO("active enum: ... prefix added for device %s", addr_str_buff);    
-        } else {
-            NRF_LOG_INFO("active enum: ... failed to add for device %s", addr_str_buff);                
-        }
-    }
-*/
+void active_enum_add_device_address_to_list() {
     if (logitacker_device_list_add_addr(m_active_enum_current_address) != NULL) {
-        NRF_LOG_INFO("device address %s updated", addr_str_buff);
+        NRF_LOG_INFO("device address %s added/updated", addr_str_buff);
     } else {
-        NRF_LOG_INFO("failed to update device address %s", addr_str_buff);
+        NRF_LOG_INFO("failed to add/update device address %s", addr_str_buff);
     }
 }
 
@@ -347,7 +318,7 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
                 NRF_LOG_INFO("Failed to reach receiver in first transmission, aborting active enumeration");
                 goto ACTIVE_ENUM_FINISHED;
             }
-         
+
             // continue with next prefix, return if first prefixe has been reached again
             if (active_enumeration_set_next_prefix(p_state)) goto ACTIVE_ENUM_FINISHED;
 
@@ -358,64 +329,51 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
             break;
         }
         case LOGITACKER_SUBEVENT_ESB_TX_SUCCESS_ACK_PAY:
-        {
-            NRF_LOG_INFO("ACTIVE ENUMERATION TX_SUCCESS_ACK_PAY channel: %d", channel_freq);
-            while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
-                NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
-
-                //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
-                // test if LED report
-                if ((tmp_payload.data[1] & 0x1f) == 0x0e) {
-                    m_active_enum_led_count++;
-
-                    //device supports plain injection
-                    NRF_LOG_INFO("LED test succeeded .. devices accepts plain injection");
-                }
-            }
-        }
         case LOGITACKER_SUBEVENT_ESB_TX_SUCCESS:
         {
-            NRF_LOG_INFO("ACTIVE ENUMERATION TX_SUCCESS channel: %d", channel_freq);
+            NRF_LOG_INFO("ACTIVE ENUMERATION TX_SUCCESS channel: %d (loop %d)", channel_freq, m_active_enum_inner_loop_count);
 
+            // if first successful TX to this address, add to list
+            if (m_active_enum_inner_loop_count == 0) active_enum_add_device_address_to_list();
+
+            // update TX loop count
+            m_active_enum_inner_loop_count++;
             
-            // hit, try to add the device if not dongle address (prefix 0x00)
-/*
-            if (m_active_enum_tmp_device.addr_prefix != 0x00) {
-                if (logitacker_device_list_get_by_base_prefix(m_active_enum_tmp_device.base_addr, m_active_enum_tmp_device.addr_prefix) == NULL) {
-                    if (logitacker_device_list_add(m_active_enum_tmp_device) != NULL) {
-                        // new device
-                        NRF_LOG_INFO("active enum: address %s accepted by dongle, added as new device", addr_str_buff);
-                    } else {
-                        NRF_LOG_WARNING("active enum: address %s accepted by dongle, but device couldn't be added ... list full?!" , addr_str_buff);
-                    }
-                } else {
-                    NRF_LOG_DEBUG("active enum: device already known: %s", addr_str_buff);    
-                }
-            }
-*/
-            active_enum_add_or_update_device(m_active_enum_tmp_device.base_addr, m_active_enum_current_prefix);
-
-            if (m_active_enum_key_press) {
+            // update payload for next 
+            if ((m_active_enum_inner_loop_count % 2) == 0) {
                 memcpy (tmp_tx_payload.data, key_report_caps, sizeof(key_report_caps));
             } else {
                 memcpy (tmp_tx_payload.data, key_report_release, sizeof(key_report_release));
             }
 
             if (m_active_enum_inner_loop_count < ACTIVE_ENUM_INNER_LOOP_MAX) {
-                // schedule next transmission
-                //NRF_LOG_INFO("start active enum timer");
                 app_timer_start(m_timer_next_tx_action, APP_TIMER_TICKS(8), p_subevent);
-                m_active_enum_key_press = !m_active_enum_key_press;
-                m_active_enum_inner_loop_count++;
             } else {
                 // we are done with this device
                             
                 // continue with next prefix, return if first prefixe has been reached again
                 if (active_enumeration_set_next_prefix(p_state)) goto ACTIVE_ENUM_FINISHED;
 
-                // schedule next transmission
-                app_timer_start(m_timer_next_tx_action, APP_TIMER_TICKS(1), p_subevent);
+                // start next transmission
+                if (nrf_esb_write_payload(&tmp_tx_payload) != NRF_SUCCESS) {
+                    NRF_LOG_INFO("Error writing payload");
+                }         
             }
+
+            if (se_type == LOGITACKER_SUBEVENT_ESB_TX_SUCCESS_ACK_PAY) {
+                NRF_LOG_INFO("ACK_PAY channel (loop %d)", m_active_enum_inner_loop_count);
+                while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
+                    NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
+                    //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
+                    // test if LED report
+                    if ((tmp_payload.data[1] & 0x1f) == 0x0e) {
+                        m_active_enum_led_count++;
+                        //device supports plain injection
+                        NRF_LOG_INFO("LED test succeeded .. devices accepts plain injection");
+                    }
+                }
+            }
+
             break;
         }
         case LOGITACKER_SUBEVENT_ESB_RX_RECEIVED:
