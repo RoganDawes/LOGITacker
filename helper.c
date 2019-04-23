@@ -49,7 +49,7 @@ void helper_base_and_prefix_to_addr(uint8_t *out_addr, uint8_t const *in_base_ad
     for (int i=in_addr_len-2; i >= 0; i--) {
         out_addr[i] = in_base_addr[pos++];
     }
-    out_addr[in_addr_len-1] = in_base_addr[pos++];
+    out_addr[in_addr_len-1] = in_prefix;
 
 }
 

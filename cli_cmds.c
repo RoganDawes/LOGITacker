@@ -230,16 +230,24 @@ static void cmd_discover(nrf_cli_t const * p_cli, size_t argc, char **argv)
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: unknown parameter: %s\r\n", argv[0], argv[1]);
 }
 
+static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
+static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN];
 static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     for (int i=0; i<LOGITACKER_DEVICES_MAX_LIST_ENTRIES; i++) {
         logitacker_device_t *p_device = logitacker_device_list_get(i);
         if (p_device != NULL) {
-            uint8_t addr[5] = {0};
-            char addr_str[16] = {0};
-            helper_base_and_prefix_to_addr(addr, p_device->base_addr, p_device->addr_prefix, 5);
-            helper_addr_to_hex_str(addr_str, 5, addr);
 
-            nrf_cli_fprintf(p_cli, p_device->is_plain_keyboard ? NRF_CLI_VT100_COLOR_GREEN : NRF_CLI_VT100_COLOR_DEFAULT, "%s (frames %d, logitech: %d, plain keys %d)\r\n", addr_str, p_device->frame_counters.overal, p_device->is_logitech, p_device->is_plain_keyboard);
+            for (int prefix_index=0; prefix_index < p_device->num_prefixes; prefix_index++) {
+                uint8_t prefix = p_device->prefixes[prefix_index];
+                logitacker_device_capabilities_t * p_caps = &p_device->capabilities[prefix_index];
+                logitacker_device_frame_counter_t * p_counters = &p_device->frame_counters[prefix_index];
+
+                helper_base_and_prefix_to_addr(tmp_addr, p_device->base_addr, prefix, 5);
+                helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, tmp_addr);
+                
+                nrf_cli_fprintf(p_cli, p_caps->is_plain_keyboard ? NRF_CLI_VT100_COLOR_GREEN : NRF_CLI_VT100_COLOR_DEFAULT, "%s (frames %d, logitech: %d, plain keys %d)\r\n", addr_str_buff, p_counters->overal, p_caps->is_logitech, p_caps->is_plain_keyboard);
+
+            }
         }
     }
     
