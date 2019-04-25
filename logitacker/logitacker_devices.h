@@ -36,6 +36,10 @@ typedef struct {
     bool is_plain_keyboard;
     bool is_encrypted_keyboard;
     bool is_mouse;
+    bool forced_pairing_allowed;
+    uint16_t dongle_WPID;
+    bool dongle_is_texas_instruments;
+    bool dongle_is_nordic;
 } logitacker_device_capabilities_t;
 
 #define LOGITACKER_DEVICE_MAX_PREFIX 7

