@@ -164,6 +164,7 @@ static void (*update_rf_payload_format)(uint32_t payload_length) = 0;
 static void on_radio_disabled_tx_noack(void);
 static void on_radio_disabled_tx(void);
 static void on_radio_disabled_tx_wait_for_ack(void);
+static void on_radio_disabled_tx_wait_for_ack_continue_rx(void);
 static void on_radio_disabled_rx(void);
 static void on_radio_disabled_rx_ack(void);
 
@@ -287,20 +288,41 @@ uint32_t nrf_esb_init_ptx_mode() {
     if (!m_esb_initialized) return NRF_ERROR_INVALID_STATE;
 
     uint32_t err_code;
-    
+
     nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
-    esb_config.event_handler = m_event_handler;    
+    esb_config.event_handler = m_event_handler;
     esb_config.crc = NRF_ESB_CRC_16BIT;
     esb_config.retransmit_count = 2;
     esb_config.retransmit_delay = 3*250; // enough room to receive a full length ack payload before re-transmit timeout occurs
 //    esb_config.retransmit_on_all_channels = true;
 //    esb_config.retransmit_on_all_channels_loop_count = 1;
-    
+
 
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
 
     m_config_local.mode = NRF_ESB_MODE_PTX;
+    return NRF_SUCCESS;
+}
+
+uint32_t nrf_esb_init_ptx_stay_rx_mode() {
+    if (!m_esb_initialized) return NRF_ERROR_INVALID_STATE;
+
+    uint32_t err_code;
+
+    nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
+    esb_config.event_handler = m_event_handler;
+    esb_config.crc = NRF_ESB_CRC_16BIT;
+    esb_config.retransmit_count = 1;
+    esb_config.retransmit_delay = 250; // enough room to receive a full length ack payload before re-transmit timeout occurs
+    esb_config.mode = NRF_ESB_MODE_PTX_STAY_RX;
+//    esb_config.retransmit_on_all_channels = true;
+//    esb_config.retransmit_on_all_channels_loop_count = 1;
+
+
+    err_code = nrf_esb_init(&esb_config);
+    VERIFY_SUCCESS(err_code);
+
     return NRF_SUCCESS;
 }
 
@@ -318,6 +340,10 @@ uint32_t nrf_esb_set_mode(nrf_esb_mode_t mode) {
     switch (mode) {
         case NRF_ESB_MODE_PTX:
             err_code = nrf_esb_init_ptx_mode();
+            VERIFY_SUCCESS(err_code);
+            break;
+        case NRF_ESB_MODE_PTX_STAY_RX:
+            err_code = nrf_esb_init_ptx_stay_rx_mode();
             VERIFY_SUCCESS(err_code);
             break;
         case NRF_ESB_MODE_SNIFF:
@@ -867,6 +893,11 @@ static void start_tx_transaction()
     // Prepare the payload
     mp_current_payload = m_tx_fifo.p_payload[m_tx_fifo.exit_point];
 
+    if (m_config_local.mode == NRF_ESB_MODE_PTX_STAY_RX) {
+        nrf_esb_stop_rx();
+    }
+
+
 
     switch (m_config_local.protocol)
     {
@@ -938,6 +969,7 @@ static void start_tx_transaction()
 
 static void on_radio_disabled_tx_noack()
 {
+//    NRF_LOG_INFO("NRF_ESB_INT_TX_SUCCESS_MSK in on_radio_disabled_tx_noack");
     m_interrupt_flags |= NRF_ESB_INT_TX_SUCCESS_MSK;
     (void) nrf_esb_skip_tx();
 
@@ -953,12 +985,12 @@ static void on_radio_disabled_tx_noack()
     }
 }
 
-
+//Called after disable of transmission
 static void on_radio_disabled_tx()
 {
     // Remove the DISABLED -> RXEN shortcut, to make sure the radio stays
     // disabled after the RX window
-    NRF_RADIO->SHORTS           = m_radio_shorts_common;
+    NRF_RADIO->SHORTS = m_radio_shorts_common;
 
     // Make sure the timer is started the next time the radio is ready,
     // and that it will disable the radio automatically if no packet is
@@ -977,10 +1009,126 @@ static void on_radio_disabled_tx()
 
 
     NRF_RADIO->PACKETPTR        = (uint32_t)m_rx_payload_buffer;
-    on_radio_disabled           = on_radio_disabled_tx_wait_for_ack;
-    m_nrf_esb_mainstate         = NRF_ESB_STATE_PTX_RX_ACK;
+    if (m_config_local.mode == NRF_ESB_MODE_PTX_STAY_RX) {
+        on_radio_disabled           = on_radio_disabled_tx_wait_for_ack_continue_rx;
+        m_nrf_esb_mainstate         = NRF_ESB_STATE_PTX_RX_ACK;
+    } else {
+        on_radio_disabled           = on_radio_disabled_tx_wait_for_ack;
+        m_nrf_esb_mainstate         = NRF_ESB_STATE_PTX_RX_ACK;
+    }
+
+
 }
 
+// called after disable for the RX immediately following a TX which awaits an ACK
+// disable could be tasked by timer via PPI (if no ADDRESS event occurs before m_wait_for_ack_timeout_us)
+// or could happen, if a full ack payload is received in RX mode
+static void on_radio_disabled_tx_wait_for_ack_continue_rx()
+{
+    // This marks the completion of a TX_RX sequence (TX with ACK)
+
+    // Make sure the timer will not deactivate the radio while ACK packet is received
+    NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TIMER_START) |
+                       (1 << NRF_ESB_PPI_RX_TIMEOUT)  |
+                       (1 << NRF_ESB_PPI_TIMER_STOP);
+
+    // If the radio has received a packet and the CRC status is OK
+    if (NRF_RADIO->EVENTS_END && NRF_RADIO->CRCSTATUS != 0)
+    {
+        m_retransmit_all_channels_running = false;
+
+        NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1; // stop timer for re-transmit
+        NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START); //stop PPI channel, which tasks TXEN after TIMER->EVENTS_COMPARE[1] (which is retransmit delay)
+//        NRF_LOG_INFO("NRF_ESB_INT_TX_SUCCESS_MSK in on_radio_disabled_tx_wait_for_ack_continue_rx");
+        m_interrupt_flags |= NRF_ESB_INT_TX_SUCCESS_MSK; //prepare Soft IRQ to report TX_SUCCESS
+        m_last_tx_attempts = m_config_local.retransmit_count - m_retransmits_remaining + 1;
+
+        (void) nrf_esb_skip_tx(); //pop TX payload from TX queue
+        m_retransmit_all_channels_remaining_channel_hop_count = 0; // reset multi_channel retransmit counter
+        m_retransmit_all_channels_running = false;
+
+        if (m_rx_payload_buffer[0] > 0)
+        {
+            if (rx_fifo_push_rfbuf((uint8_t)NRF_RADIO->TXADDRESS, m_rx_payload_buffer[1] >> 1))
+            {
+//                NRF_LOG_INFO("pushed ack RF frame to FIFO");
+//                NRF_LOG_INFO("DATA_RECEIVED_MSK in on_radio_disabled_tx_wait_for_ack_continue_rx");
+                m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
+            }
+        }
+
+        if ((m_tx_fifo.count == 0) || (m_config_local.tx_mode == NRF_ESB_TXMODE_MANUAL))
+        {
+            // return to IDLE if TX queue is empty (or TX mode isn't auto), but if we are in PTX_STAY_RX, we start PRX
+            // mode
+
+            m_nrf_esb_mainstate = NRF_ESB_STATE_IDLE;
+            NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+
+
+            if (m_config_local.mode == NRF_ESB_MODE_PTX_STAY_RX) {
+                // move from disable to RX mode
+                nrf_esb_start_rx();
+            }
+        }
+        else
+        {
+            NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+            start_tx_transaction();
+        }
+    }
+    else
+    {
+        // if here, TX end was reached, but no ack arrived in time
+
+        if (m_retransmits_remaining-- == 0)
+        {
+            bool tx_failed = true;
+            // no retransmissions left
+            if (m_config_local.retransmit_on_all_channels) {
+                if (m_retransmit_all_channels_remaining_channel_hop_count > 0) tx_failed=false;
+            }
+
+            if (tx_failed) {
+                m_retransmit_all_channels_running = false;
+                NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1;
+                NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START);
+                // All retransmits are expended, and the TX operation is suspended
+                m_last_tx_attempts = m_config_local.retransmit_count + 1;
+                m_interrupt_flags |= NRF_ESB_INT_TX_FAILED_MSK;
+
+                m_nrf_esb_mainstate = NRF_ESB_STATE_IDLE;
+                NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+            } else {
+                // transfer state back to idle
+                m_nrf_esb_mainstate = NRF_ESB_STATE_IDLE;
+                //jump to next channel
+                nrf_esb_set_rf_channel_next();
+                // decrease remaining channel hops
+                m_retransmit_all_channels_remaining_channel_hop_count--;
+                NRF_LOG_DEBUG("Re-TX on channel %d, remaining hops %d", m_esb_addr.channel_to_frequency[m_esb_addr.rf_channel], m_retransmit_all_channels_remaining_channel_hop_count);
+                // restart transmission
+                if (nrf_esb_start_tx() != NRF_SUCCESS) tx_failed = true; // we failed restarting TX
+            }
+        }
+        else
+        {
+            // There are still more retransmits left, TX mode should be
+            // entered again as soon as the system timer reaches CC[1].
+            NRF_RADIO->SHORTS = m_radio_shorts_common | RADIO_SHORTS_DISABLED_RXEN_Msk;
+            update_rf_payload_format(mp_current_payload->length);
+            NRF_RADIO->PACKETPTR = (uint32_t)m_tx_payload_buffer;
+            on_radio_disabled = on_radio_disabled_tx;
+            m_nrf_esb_mainstate = NRF_ESB_STATE_PTX_TX_ACK;
+            NRF_ESB_SYS_TIMER->TASKS_START = 1;
+            NRF_PPI->CHENSET = (1 << NRF_ESB_PPI_TX_START);
+            if (NRF_ESB_SYS_TIMER->EVENTS_COMPARE[1])
+            {
+                NRF_RADIO->TASKS_TXEN = 1;
+            }
+        }
+    }
+}
 
 static void on_radio_disabled_tx_wait_for_ack()
 {
@@ -998,6 +1146,7 @@ static void on_radio_disabled_tx_wait_for_ack()
 
         NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1;
         NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START);
+//        NRF_LOG_INFO("NRF_ESB_INT_TX_SUCCESS_MSK in on_radio_disabled_tx_wait_for_ack");
         m_interrupt_flags |= NRF_ESB_INT_TX_SUCCESS_MSK;
         m_last_tx_attempts = m_config_local.retransmit_count - m_retransmits_remaining + 1;
 
@@ -1010,6 +1159,7 @@ static void on_radio_disabled_tx_wait_for_ack()
             if (rx_fifo_push_rfbuf((uint8_t)NRF_RADIO->TXADDRESS, m_rx_payload_buffer[1] >> 1))
             {
 //                NRF_LOG_INFO("pushed ack RF frame to FIFO");
+//                NRF_LOG_INFO("DATA_RECEIVED_MSK in on_radio_disabled_tx_wait_for_ack");
                 m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
             }
         }
@@ -1077,6 +1227,7 @@ static void on_radio_disabled_tx_wait_for_ack()
         }
     }
 }
+
 
 static void clear_events_restart_rx(void)
 {
@@ -1182,6 +1333,7 @@ static void on_radio_disabled_rx(void)
 
                             // ACK payloads also require TX_DS
                             // (page 40 of the 'nRF24LE1_Product_Specification_rev1_6.pdf').
+//                            NRF_LOG_INFO("NRF_ESB_INT_TX_SUCCESS_MSK in on_radio_disabled_rx");
                             m_interrupt_flags |= NRF_ESB_INT_TX_SUCCESS_MSK;
                         }
 
@@ -1238,6 +1390,7 @@ static void on_radio_disabled_rx(void)
             if (NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER_ENQUEUE_INVALID) {
                 if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
                 {
+//                    NRF_LOG_INFO("DATA_RECEIVED_MSK in on_radio_disabled_rx promiscuous branch");
                     m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
                     NVIC_SetPendingIRQ(ESB_EVT_IRQ);
                 }
@@ -1247,6 +1400,7 @@ static void on_radio_disabled_rx(void)
             // successful.
             if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
             {
+//                NRF_LOG_INFO("DATA_RECEIVED_MSK in on_radio_disabled_rx non promiscuous branch");
                 m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
                 NVIC_SetPendingIRQ(ESB_EVT_IRQ);
             }
@@ -1256,7 +1410,7 @@ static void on_radio_disabled_rx(void)
 
 static void on_radio_end_rx(void)
 {
-    //NRF_LOG_INFO("on_rx_end");
+//    NRF_LOG_INFO("on_rx_end");
 
     bool            send_rx_event      = true;
     pipe_info_t *   p_pipe_info;
@@ -1289,6 +1443,19 @@ static void on_radio_end_rx(void)
     p_pipe_info->crc = NRF_RADIO->RXCRC;
 
 
+
+    if (m_config_local.mode == NRF_ESB_MODE_PTX_STAY_RX && (m_interrupt_flags & NRF_ESB_INT_TX_SUCCESS_MSK) != 0) {
+        // we switched to PRX after succesfull TX and have the TX_SUCCESS interrupt event still pending, thus we don't
+        // add an RX event, as it should be only present, if the on_radio_disabled_tx_wait_for_ack_continue_rx has
+        // enabled NRF_ESB_INT_RX_DATA_RECEIVED_MSK (only happens if the ACK frame was with payload)
+
+        // for successive RX data, TX_SUCCESS mask should already be cleared by the ISR and thus we are fine to report
+        // RX events
+
+        if (m_rx_payload_buffer[0] == 0) send_rx_event = false; // IF PAYLOAD length is > 0 we report anyways
+    }
+
+
     if (send_rx_event)
     {
         if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS && NRF_ESB_CHECK_PROMISCUOUS_CRC_WITH_APP_SCHEDULER) {
@@ -1299,6 +1466,7 @@ static void on_radio_end_rx(void)
             // successful.
             if (rx_fifo_push_rfbuf(NRF_RADIO->RXMATCH, p_pipe_info->pid))
             {
+//                NRF_LOG_INFO("DATA_RECEIVED_MSK in on_radio_end_rx promiscuous");
                 m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
                 NVIC_SetPendingIRQ(ESB_EVT_IRQ);
             }
@@ -1524,6 +1692,8 @@ void ESB_EVT_IRQHandler(void)
             }
         }
     }
+//    NRF_LOG_INFO("ISR consumed NRF_ESB_INT_RX_DATA_RECEIVED_MSK and NRF_ESB_INT_TX_SUCCESS_MSK");
+
 }
 
 uint32_t nrf_esb_write_payload(nrf_esb_payload_t const * p_payload)
@@ -1551,9 +1721,11 @@ uint32_t nrf_esb_write_payload(nrf_esb_payload_t const * p_payload)
     ENABLE_RF_IRQ();
 
 
-    if (m_config_local.mode == NRF_ESB_MODE_PTX &&
+    if ((m_config_local.mode == NRF_ESB_MODE_PTX &&
         m_config_local.tx_mode == NRF_ESB_TXMODE_AUTO &&
-        m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE)
+        m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE) ||
+        (m_config_local.mode == NRF_ESB_MODE_PTX_STAY_RX &&
+        m_config_local.tx_mode == NRF_ESB_TXMODE_AUTO))
     {
         start_tx_transaction();
     }
@@ -1626,13 +1798,15 @@ uint32_t nrf_esb_start_rx(void)
 {
     VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
 
+//    NRF_LOG_INFO("start RX");
+
     NRF_RADIO->INTENCLR = 0xFFFFFFFF;
     NRF_RADIO->EVENTS_DISABLED = 0;
     on_radio_disabled = on_radio_disabled_rx;
     on_radio_end = on_radio_end_rx;
     
 
-    if (m_config_local.mode == NRF_ESB_MODE_SNIFF || m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) {
+    if (m_config_local.mode == NRF_ESB_MODE_SNIFF || m_config_local.mode == NRF_ESB_MODE_PTX_STAY_RX || m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) {
         // don't use END->DISABLE shortcut, but END->start
         NRF_RADIO->SHORTS = RADIO_SHORTS_READY_START_Msk | RADIO_SHORTS_ADDRESS_RSSISTART_Msk | RADIO_SHORTS_DISABLED_RSSISTOP_Msk | RADIO_SHORTS_END_START_Msk | RADIO_SHORTS_DISABLED_RXEN_Msk;
     } else {
@@ -1642,6 +1816,7 @@ uint32_t nrf_esb_start_rx(void)
     switch (m_config_local.mode) {
         case NRF_ESB_MODE_SNIFF:
         case NRF_ESB_MODE_PROMISCOUS:
+        case NRF_ESB_MODE_PTX_STAY_RX:
             NRF_RADIO->INTENSET    = RADIO_INTENSET_DISABLED_Msk | RADIO_INTENSET_END_Msk;        
             break;
         default:    
@@ -1665,6 +1840,8 @@ uint32_t nrf_esb_start_rx(void)
 
     NRF_RADIO->TASKS_RXEN  = 1;
 
+
+//    NRF_LOG_INFO("RXEN");
     return NRF_SUCCESS;
 }
 

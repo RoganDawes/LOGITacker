@@ -178,6 +178,7 @@ typedef enum {
 /**@brief Enhanced ShockBurst modes. */
 typedef enum {
     NRF_ESB_MODE_PTX,          /**< Primary transmitter mode. */
+    NRF_ESB_MODE_PTX_STAY_RX,  // Works like PTX but stays in RX mode after successful TX (and reports RX_RECEIVED events)
     NRF_ESB_MODE_PRX,           /**< Primary receiver mode.    */
     NRF_ESB_MODE_PROMISCOUS,
     NRF_ESB_MODE_SNIFF

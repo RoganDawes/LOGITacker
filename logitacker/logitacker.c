@@ -253,53 +253,81 @@ void esb_event_handler_passive_enum(nrf_esb_evt_t * p_event) {
     
 }
 
+bool m_pair_sniff_data_rx = false;
+uint32_t m_pair_sniff_ticks = APP_TIMER_TICKS(3);
+bool m_pair_sniff_dongle_in_range = false;
 void esb_event_handler_sniff_pair(nrf_esb_evt_t * p_event) {
     uint32_t freq;
     nrf_esb_get_rf_frequency(&freq);
 
     switch (p_event->evt_id) {
         case NRF_ESB_EVENT_RX_RECEIVED:
-            NRF_LOG_DEBUG("ESB EVENT HANDLER SNIFF PAIR RX_RECEIVED");
+        {
+            NRF_LOG_INFO("ESB EVENT HANDLER SNIFF PAIR RX_RECEIVED");
             //radio_process_rx_passive_enum_mode();
             while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
+                m_pair_sniff_data_rx = true;
                 NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
                 //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
                 // test if LED report
             }
 
             break;
+        }
         case NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY:
             NRF_LOG_INFO("ACK PAY on channel %d", freq);
             while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
+                m_pair_sniff_data_rx = true;
+
                 NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
                 //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
                 // test if LED report
             }
-            // fall through
+            break;
         case NRF_ESB_EVENT_TX_SUCCESS:
         {
-            uint32_t ticks = APP_TIMER_TICKS(1);
-            NRF_LOG_INFO("TX_SUCCESS on channel %d (restart in %d ticks)", freq, ticks);
+            if (!m_pair_sniff_dongle_in_range) {
+                NRF_LOG_INFO("Spotted dongle in pairing mode, follow while channel hopping");
+                m_pair_sniff_dongle_in_range = true;
+            }
+            NRF_LOG_DEBUG("TX_SUCCESS on channel %d (restart in %d ticks)", freq, m_pair_sniff_ticks);
             // write payload again and start rx
-            app_timer_start(m_timer_next_tx_action, ticks, NULL);
+            m_pair_sniff_data_rx = false;
+            app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
             //nrf_esb_write_payload(&tmp_tx_payload);
             break;
         }
         case NRF_ESB_EVENT_TX_FAILED:
         {
-            NRF_LOG_INFO("TX_FAILED on all channels, retry %d ...", freq);
+            if (m_pair_sniff_dongle_in_range) {
+                NRF_LOG_INFO("Lost dongle in pairing mode, restart channel hopping");
+                m_pair_sniff_dongle_in_range = false;
+                app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
+            }
+
+            NRF_LOG_DEBUG("TX_FAILED on all channels, retry %d ...", freq);
             // write payload again and start rx
             nrf_esb_start_tx();
         }
         default:
             break;
     }
-    
+
+    if (m_pair_sniff_data_rx) {
+        app_timer_stop(m_timer_next_tx_action);
+        app_timer_start(m_timer_next_tx_action, APP_TIMER_TICKS(500), NULL);
+    }
 }
 
 // Transfers execution to active_enumeration_subevent_process
 void timer_next_tx_action_handler_sniff_pair(void* p_context) {
-    nrf_esb_write_payload(&tmp_tx_payload);
+    if (m_pair_sniff_data_rx) {
+        //restart timer
+        app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
+
+    } else {
+        nrf_esb_write_payload(&tmp_tx_payload);
+    }
 }
 
 
@@ -848,7 +876,7 @@ void logitacker_enter_state_sniff_pairing() {
     tmp_tx_payload.noack = false; // we need an ack
 
     // setup radio as PTX
-    nrf_esb_set_mode(NRF_ESB_MODE_PTX);
+    nrf_esb_set_mode(NRF_ESB_MODE_PTX_STAY_RX);
     nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
     nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
 
