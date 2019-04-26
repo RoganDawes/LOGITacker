@@ -14,6 +14,8 @@
 
 #define LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_NONCE 3
 #define LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_SERIAL 7
+#define LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_REPORT_TYPES_LE 11 //little endian 32bit uint
+#define LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_USABILITY_INFO 15
 
 #define LOGITACKER_UNIFYING_PAIRING_RSP2_OFFSET_DONGLE_NONCE 3
 
@@ -32,6 +34,8 @@ typedef struct {
     // req 2
     uint8_t device_nonce[4];    //3..6
     uint8_t device_serial[4];   //7..10
+    uint32_t device_report_types; //11..14
+    uint8_t device_usability_info; // 15
     // rsp 2
     uint8_t dongle_nonce[4];    //3..6
     // req3

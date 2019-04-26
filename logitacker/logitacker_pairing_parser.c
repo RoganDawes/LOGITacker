@@ -107,6 +107,11 @@ uint32_t logitacker_pairing_parser_req1(logitacker_pairing_info_t * pi, nrf_esb_
 uint32_t logitacker_pairing_parser_req2(logitacker_pairing_info_t * pi, nrf_esb_payload_t const * const rx_payload) {
     memcpy(pi->device_nonce, &rx_payload->data[LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_NONCE], 4);
     memcpy(pi->device_serial, &rx_payload->data[LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_SERIAL], 4);
+    pi->device_report_types = rx_payload->data[LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_REPORT_TYPES_LE] +
+            (rx_payload->data[LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_REPORT_TYPES_LE+1] << 8) +
+            (rx_payload->data[LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_REPORT_TYPES_LE+2] << 16) +
+            (rx_payload->data[LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_REPORT_TYPES_LE+3] << 24);
+    pi->device_usability_info = rx_payload->data[LOGITACKER_UNIFYING_PAIRING_REQ2_OFFSET_DEVICE_USABILITY_INFO];
     pi->has_req2 = true;
 
     return NRF_SUCCESS;
@@ -153,8 +158,11 @@ uint32_t logitacker_pairing_parser_rsp_final(logitacker_pairing_info_t * pi, nrf
 
 uint32_t logitacker_pairing_parser_print(logitacker_pairing_info_t * pi) {
     NRF_LOG_INFO("Device name: %s", pi->device_name);
-    NRF_LOG_INFO("Device WPID: 0x%.2x%.2x", pi->device_wpid[0], pi->device_wpid[1]);
     NRF_LOG_INFO("Device RF address: %.2x:%.2x:%.2x:%.2x:%.2x", pi->device_rf_address[0], pi->device_rf_address[1], pi->device_rf_address[2], pi->device_rf_address[3], pi->device_rf_address[4]);
+    NRF_LOG_INFO("Device serial: %.2x:%.2x:%.2x:%.2x", pi->device_serial[0], pi->device_serial[1], pi->device_serial[2], pi->device_serial[3]);
+    NRF_LOG_INFO("Device WPID: 0x%.2x%.2x", pi->device_wpid[0], pi->device_wpid[1]);
+    NRF_LOG_INFO("Device report types: 0x%.8x", pi->device_report_types);
+    NRF_LOG_INFO("Device usability info: 0x%.2x", pi->device_usability_info);
     NRF_LOG_INFO("Dongle WPID: 0x%.2x%.2x", pi->dongle_wpid[0], pi->dongle_wpid[1]);
     if (pi->key_material_complete) {
         NRF_LOG_INFO("Device raw key material:")
