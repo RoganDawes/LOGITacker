@@ -8,10 +8,12 @@
 #include "unifying.h"
 #include "helper.h"
 #include "app_timer.h"
+#include "logitacker_pairing_parser.h"
 
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 APP_TIMER_DEF(m_timer_next_tx_action);
@@ -254,55 +256,108 @@ void esb_event_handler_passive_enum(nrf_esb_evt_t * p_event) {
 }
 
 bool m_pair_sniff_data_rx = false;
-uint32_t m_pair_sniff_ticks = APP_TIMER_TICKS(3);
+uint32_t m_pair_sniff_ticks = APP_TIMER_TICKS(8);
+uint32_t m_pair_sniff_ticks_long = APP_TIMER_TICKS(20);
 bool m_pair_sniff_dongle_in_range = false;
+static logitacker_pairing_info_t m_device_pair_info;
+
+
+void sniff_pair_reset_timer() {
+    app_timer_stop(m_timer_next_tx_action);
+    if (m_pair_sniff_data_rx) {
+        app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks_long, NULL);
+        m_pair_sniff_data_rx = false;
+    } else {
+        app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
+    }
+
+
+}
+
+void sniff_pair_assign_addr_to_pipe1(uint8_t const * const rf_address) {
+    uint8_t base[4] = { 0 };
+    uint8_t prefix = 0;
+    helper_addr_to_base_and_prefix(base, &prefix, rf_address, 5);
+
+    //stop time to prevent rewriting payloads
+    app_timer_stop(m_timer_next_tx_action);
+    while (nrf_esb_stop_rx() != NRF_SUCCESS) {}
+    nrf_esb_set_base_address_1(base);
+    nrf_esb_update_prefix(1, prefix);
+    nrf_esb_enable_pipes(0x03);
+    app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL); // restart timer
+}
+
+void sniff_pair_disable_pipe1() {
+    //stop time to prevent rewriting payloads
+    app_timer_stop(m_timer_next_tx_action);
+    while (nrf_esb_stop_rx() != NRF_SUCCESS) {}
+    nrf_esb_enable_pipes(0x01);
+    app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL); // restart timer
+}
+
 void esb_event_handler_sniff_pair(nrf_esb_evt_t * p_event) {
     uint32_t freq;
     nrf_esb_get_rf_frequency(&freq);
 
     switch (p_event->evt_id) {
+        // happens when PTX_stay_RX is in sub state PRX and receives data
         case NRF_ESB_EVENT_RX_RECEIVED:
-        {
-            NRF_LOG_INFO("ESB EVENT HANDLER SNIFF PAIR RX_RECEIVED");
-            //radio_process_rx_passive_enum_mode();
-            while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
-                m_pair_sniff_data_rx = true;
-                NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
-                //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
-                // test if LED report
-            }
-
-            break;
-        }
         case NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY:
-            NRF_LOG_INFO("ACK PAY on channel %d", freq);
+            // we received data
+            NRF_LOG_INFO("PAIR SNIFF data received on channel %d", freq);
             while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
                 m_pair_sniff_data_rx = true;
-
                 NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
-                //Note: LED testing doesn't work on presenters like "R400", because no HID led ouput reports are sent
-                // test if LED report
+
+                // check if pairing response phase 1, with new address
+                if (tmp_payload.length == 22 && tmp_payload.data[1] == 0x1f && tmp_payload.data[2] == 0x01) {
+                    /*
+                     * <info> LOGITACKER:  BC 1F 01 BD BA 92 24 27|......$'
+                     * <info> LOGITACKER:  08 88 08 04 01 01 07 00|........
+                     * <info> LOGITACKER:  00 00 00 00 00 2B
+                     */
+
+                    uint8_t new_address[LOGITACKER_DEVICE_ADDR_LEN] = { 0 };
+                    memcpy(new_address, &tmp_payload.data[3], LOGITACKER_DEVICE_ADDR_LEN);
+                    sniff_pair_assign_addr_to_pipe1(new_address);
+
+                    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, new_address);
+                    NRF_LOG_INFO("PAIR SNIFF assigned %s as new sniffing address", addr_str_buff);
+                }
+
+                // clear pairing info when new pairing request 1 is spotted
+                if (tmp_payload.length == 22 && tmp_payload.data[1] == 0x5f && tmp_payload.data[2] == 0x01) {
+                    memset(&m_device_pair_info, 0, sizeof(m_device_pair_info));
+                }
+
+                // parse pairing data
+                if (logitacker_pairing_parser(&m_device_pair_info, &tmp_payload) == NRF_SUCCESS) {
+                    // full pairing parsed (no frames missing)
+                    sniff_pair_disable_pipe1();
+                }
             }
+            sniff_pair_reset_timer();
             break;
         case NRF_ESB_EVENT_TX_SUCCESS:
         {
+            // we hit the dongle, but no data was received on the channel so far, we start a timer for ping re-transmission
             if (!m_pair_sniff_dongle_in_range) {
                 NRF_LOG_INFO("Spotted dongle in pairing mode, follow while channel hopping");
                 m_pair_sniff_dongle_in_range = true;
             }
-            NRF_LOG_DEBUG("TX_SUCCESS on channel %d (restart in %d ticks)", freq, m_pair_sniff_ticks);
-            // write payload again and start rx
-            m_pair_sniff_data_rx = false;
-            app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
-            //nrf_esb_write_payload(&tmp_tx_payload);
+            NRF_LOG_INFO("dongle on channel %d ", freq);
+            sniff_pair_reset_timer();
             break;
         }
         case NRF_ESB_EVENT_TX_FAILED:
         {
+            // missed dongle, re-transmit ping payload
+
             if (m_pair_sniff_dongle_in_range) {
+                // if dongle was in range before, notify tha we lost track
                 NRF_LOG_INFO("Lost dongle in pairing mode, restart channel hopping");
                 m_pair_sniff_dongle_in_range = false;
-                app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
             }
 
             NRF_LOG_DEBUG("TX_FAILED on all channels, retry %d ...", freq);
@@ -312,45 +367,16 @@ void esb_event_handler_sniff_pair(nrf_esb_evt_t * p_event) {
         default:
             break;
     }
-
-    if (m_pair_sniff_data_rx) {
-        app_timer_stop(m_timer_next_tx_action);
-        app_timer_start(m_timer_next_tx_action, APP_TIMER_TICKS(500), NULL);
-    }
 }
 
 // Transfers execution to active_enumeration_subevent_process
 void timer_next_tx_action_handler_sniff_pair(void* p_context) {
-    if (m_pair_sniff_data_rx) {
-        //restart timer
-        app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
-
-    } else {
+        // if we haven't received data after last ping, ping again
+    //NRF_LOG_INFO("re-ping");
+        nrf_esb_flush_tx();
         nrf_esb_write_payload(&tmp_tx_payload);
-    }
 }
 
-
-void radio_event_handler_sniff_pair(radio_evt_t const *p_event) {
-    //helper_log_priority("UNIFYING_event_handler");
-    switch (p_event->evt_id)
-    {
-        case RADIO_EVENT_NO_RX_TIMEOUT:
-        {
-            NRF_LOG_INFO("SNIFF PAIRING MODE: no RX on current channel for %d ms ... restart channel hopping ...", LOGITACKER_SNIFF_PAIR_STAY_ON_CHANNEL_AFTER_RX_MS);
-            radio_start_channel_hopping(LOGITACKER_SNIFF_PAIR_CHANNEL_HOP_INTERVAL_MS, 0, true); //start channel hopping directly (0ms delay) with 30ms hop interval, automatically stop hopping on RX
-            break;
-        }
-        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
-        {
-            NRF_LOG_DEBUG("SNIFF PAIRING MODE channel hop reached first channel");
-            bsp_board_led_invert(LED_B); // toggle scan LED everytime we jumped through all channels 
-            break;
-        }
-        default:
-            break;
-    }
-}
 
 
 
@@ -845,7 +871,7 @@ void logitacker_enter_state_sniff_pairing() {
     
     m_state_local.mainstate = LOGITACKER_DEVICE_SNIFF_PAIRING;
     m_state_local.current_bsp_event_handler = NULL;
-    m_state_local.current_radio_event_handler = radio_event_handler_sniff_pair;
+    m_state_local.current_radio_event_handler = NULL;
     m_state_local.current_esb_event_handler = esb_event_handler_sniff_pair;    
     m_state_local.current_timer_event_handler = timer_next_tx_action_handler_sniff_pair;
 
@@ -878,13 +904,16 @@ void logitacker_enter_state_sniff_pairing() {
     // setup radio as PTX
     nrf_esb_set_mode(NRF_ESB_MODE_PTX_STAY_RX);
     nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
-    nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
+    nrf_esb_set_all_channel_tx_failover_loop_count(4); //iterate over channels two times before failing
 
     m_state_local.mainstate = LOGITACKER_DEVICE_SNIFF_PAIRING;
 
+    // use special channel lookup table for pairing mode
+    nrf_esb_update_channel_frequency_table_unifying_pairing();
 
     // write payload (autostart TX is enabled for PTX mode)
     nrf_esb_write_payload(&tmp_tx_payload);
+    app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
 
 }
 

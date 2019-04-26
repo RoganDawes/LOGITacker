@@ -323,6 +323,17 @@ uint32_t nrf_esb_init_ptx_stay_rx_mode() {
     err_code = nrf_esb_init(&esb_config);
     VERIFY_SUCCESS(err_code);
 
+    // stays in idle mode, as no nrf_esb_start_tx() or nrf_esb_start_rx() was called
+
+    // nrf_esb_start_tx would set on_radio_disable ISR
+    // - to on_radio_disabled_tx (if payload needs an ack)
+    // - to on_radio_disabled_tx_noack (if payload needs no ack)
+
+    // nrf_esb_start_rx would set
+    //    on_radio_disabled = on_radio_disabled_rx;
+    //    on_radio_end = on_radio_end_rx;
+
+
     return NRF_SUCCESS;
 }
 
@@ -897,7 +908,7 @@ static void start_tx_transaction()
         nrf_esb_stop_rx();
     }
 
-
+    on_radio_end = NULL;
 
     switch (m_config_local.protocol)
     {
@@ -985,7 +996,7 @@ static void on_radio_disabled_tx_noack()
     }
 }
 
-//Called after disable of transmission
+//Called after disable of initial transmission
 static void on_radio_disabled_tx()
 {
     // Remove the DISABLED -> RXEN shortcut, to make sure the radio stays
@@ -1022,11 +1033,12 @@ static void on_radio_disabled_tx()
 
 // called after disable for the RX immediately following a TX which awaits an ACK
 // disable could be tasked by timer via PPI (if no ADDRESS event occurs before m_wait_for_ack_timeout_us)
-// or could happen, if a full ack payload is received in RX mode
+// or could happen, if a full ack payload is received in RX mode (END event before disable)
 static void on_radio_disabled_tx_wait_for_ack_continue_rx()
 {
     // This marks the completion of a TX_RX sequence (TX with ACK)
 
+    // deactivate all enabled PPI channels
     // Make sure the timer will not deactivate the radio while ACK packet is received
     NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TIMER_START) |
                        (1 << NRF_ESB_PPI_RX_TIMEOUT)  |
@@ -1039,7 +1051,6 @@ static void on_radio_disabled_tx_wait_for_ack_continue_rx()
 
         NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1; // stop timer for re-transmit
         NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START); //stop PPI channel, which tasks TXEN after TIMER->EVENTS_COMPARE[1] (which is retransmit delay)
-//        NRF_LOG_INFO("NRF_ESB_INT_TX_SUCCESS_MSK in on_radio_disabled_tx_wait_for_ack_continue_rx");
         m_interrupt_flags |= NRF_ESB_INT_TX_SUCCESS_MSK; //prepare Soft IRQ to report TX_SUCCESS
         m_last_tx_attempts = m_config_local.retransmit_count - m_retransmits_remaining + 1;
 
@@ -1052,7 +1063,6 @@ static void on_radio_disabled_tx_wait_for_ack_continue_rx()
             if (rx_fifo_push_rfbuf((uint8_t)NRF_RADIO->TXADDRESS, m_rx_payload_buffer[1] >> 1))
             {
 //                NRF_LOG_INFO("pushed ack RF frame to FIFO");
-//                NRF_LOG_INFO("DATA_RECEIVED_MSK in on_radio_disabled_tx_wait_for_ack_continue_rx");
                 m_interrupt_flags |= NRF_ESB_INT_RX_DATA_RECEIVED_MSK;
             }
         }
@@ -1781,7 +1791,9 @@ uint32_t nrf_esb_read_rx_payload(nrf_esb_payload_t * p_payload)
 
 uint32_t nrf_esb_start_tx(void)
 {
-    VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
+    if (m_config_local.mode != NRF_ESB_MODE_PTX_STAY_RX) {
+        VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
+    }
 
     if (m_tx_fifo.count == 0)
     {
@@ -1800,10 +1812,10 @@ uint32_t nrf_esb_start_rx(void)
 
 //    NRF_LOG_INFO("start RX");
 
-    NRF_RADIO->INTENCLR = 0xFFFFFFFF;
-    NRF_RADIO->EVENTS_DISABLED = 0;
-    on_radio_disabled = on_radio_disabled_rx;
-    on_radio_end = on_radio_end_rx;
+    NRF_RADIO->INTENCLR = 0xFFFFFFFF; //disable all radio IRQs
+    NRF_RADIO->EVENTS_DISABLED = 0; //enable RADIO events
+    on_radio_disabled = on_radio_disabled_rx; //set ISR for radio DISABLE event
+    on_radio_end = on_radio_end_rx; // set ISR for radio END event
     
 
     if (m_config_local.mode == NRF_ESB_MODE_SNIFF || m_config_local.mode == NRF_ESB_MODE_PTX_STAY_RX || m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) {
@@ -1831,12 +1843,13 @@ uint32_t nrf_esb_start_rx(void)
     NRF_RADIO->FREQUENCY    = m_esb_addr.channel_to_frequency[m_esb_addr.rf_channel];
     NRF_RADIO->PACKETPTR    = (uint32_t)m_rx_payload_buffer;
 
-    NVIC_ClearPendingIRQ(RADIO_IRQn);
+    NVIC_ClearPendingIRQ(RADIO_IRQn); //clear all pending IRQs
     NVIC_EnableIRQ(RADIO_IRQn);
 
     NRF_RADIO->EVENTS_ADDRESS = 0;
     NRF_RADIO->EVENTS_PAYLOAD = 0;
     NRF_RADIO->EVENTS_DISABLED = 0;
+    NRF_RADIO->EVENTS_END = 0;
 
     NRF_RADIO->TASKS_RXEN  = 1;
 
@@ -2471,6 +2484,12 @@ uint32_t nrf_esb_update_channel_frequency_table(uint8_t * values, uint8_t length
 uint32_t nrf_esb_update_channel_frequency_table_unifying() {
     uint8_t unifying_frequencies[25] = { 5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59,62,65,68,71,74,77 };
     uint8_t unifying_frequencies_len = 25;
+    return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
+}
+
+uint32_t nrf_esb_update_channel_frequency_table_unifying_pairing() {
+    uint8_t unifying_frequencies[11] = { 62,8,35,65,14,41,71,17,44,74,5 };
+    uint8_t unifying_frequencies_len = 11;
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 

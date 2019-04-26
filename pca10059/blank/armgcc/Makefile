@@ -84,6 +84,7 @@ SRC_FILES += \
   $(PROJ_DIR)/logitacker/logitacker_devices.c \
   $(PROJ_DIR)/logitacker/logitacker_radio.c \
   $(PROJ_DIR)/logitacker/logitacker_bsp.c \
+  $(PROJ_DIR)/logitacker/logitacker_pairing_parser.c \
   $(PROJ_DIR)/logitacker/logitacker.c \
 
 # Include folders common to all targets
