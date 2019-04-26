@@ -18,6 +18,8 @@ NRF_LOG_MODULE_REGISTER();
 
 APP_TIMER_DEF(m_timer_next_tx_action);
 
+static uint8_t m_test_device_key[] = { 0x08, 0x38, 0xE2, 0xF2, 0xBC, 0x6B, 0x1A, 0x72, 0xFF, 0x88, 0xEC, 0x4D, 0x07, 0x6D, 0x40, 0x5E };
+
 typedef enum {
     LOGITACKER_SUBEVENT_TIMER,
     LOGITACKER_SUBEVENT_ESB_TX_SUCCESS,
@@ -209,6 +211,7 @@ void esb_event_handler_discovery(nrf_esb_evt_t * p_event) {
     
 }
 
+static uint8_t m_local_key_decrypt[8] = { 0 };
 void radio_process_rx_passive_enum_mode() {
     static nrf_esb_payload_t rx_payload;
     static nrf_esb_payload_t * p_rx_payload = &rx_payload;
@@ -238,6 +241,13 @@ void radio_process_rx_passive_enum_mode() {
                 NRF_LOG_INFO("frame RX in passive enumeration mode (addr %s, len: %d, ch idx %d, raw ch %d)", addr_str_buff, len, ch_idx, ch);
                 unifying_frame_classify_log(rx_payload);
                 NRF_LOG_HEXDUMP_INFO(p_rx_payload->data, p_rx_payload->length);
+
+                if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
+                    if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_local_key_decrypt, m_test_device_key, p_rx_payload) == NRF_SUCCESS) {
+                        NRF_LOG_INFO("Test decryption of keyboard payload:");
+                        NRF_LOG_HEXDUMP_INFO(m_local_key_decrypt, 8);
+                    }
+                }
             }
     }
 
@@ -914,13 +924,6 @@ void logitacker_enter_state_sniff_pairing() {
     // write payload (autostart TX is enabled for PTX mode)
     nrf_esb_write_payload(&tmp_tx_payload);
     app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
-
-    //Crypto test
-    uint8_t aes_key[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F };
-    uint8_t aes_plain[] = { 0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0 };
-    uint8_t aes_cipher[16] = { 0 };
-    logitacker_unifying_crypto_aes_ecb_encrypt(aes_cipher, aes_key, aes_plain);
-
 }
 
 
