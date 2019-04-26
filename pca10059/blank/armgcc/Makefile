@@ -72,6 +72,17 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crc16/crc16.c \
   $(SDK_ROOT)/components/libraries/fds/fds.c \
   $(SDK_ROOT)/modules/nrfx/hal/nrf_nvmc.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_init.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_aes.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_mutex.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_shared.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_rng.c \
+  $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_aes.c \
+  $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_aes_shared.c \
+  $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_error.c \
+  $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_init.c \
+  $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_shared.c \
+  $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_rng.c \
   $(PROJ_DIR)/helper.c \
   $(PROJ_DIR)/state.c \
   $(PROJ_DIR)/unifying.c \
@@ -85,6 +96,7 @@ SRC_FILES += \
   $(PROJ_DIR)/logitacker/logitacker_radio.c \
   $(PROJ_DIR)/logitacker/logitacker_bsp.c \
   $(PROJ_DIR)/logitacker/logitacker_pairing_parser.c \
+  $(PROJ_DIR)/logitacker/logitacker_unifying_crypto.c \
   $(PROJ_DIR)/logitacker/logitacker.c \
 
 # Include folders common to all targets
@@ -142,10 +154,22 @@ INC_FOLDERS += \
   $(SDK_ROOT)/modules/nrfx/hal \
   $(SDK_ROOT)/external/fprintf \
   $(SDK_ROOT)/components/libraries/log/src \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310_bl \
+  $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls \
+  $(SDK_ROOT)/components/libraries/crypto/backend/oberon \
+  $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc \
+  $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cifra \
+  $(SDK_ROOT)/components/libraries/stack_info \
+  $(SDK_ROOT)/components/libraries/crypto \
+  $(SDK_ROOT)/external/nrf_cc310/include \
+  $(SDK_ROOT)/components/libraries/crypto/backend/nrf_hw \
 
 
 # Libraries common to all targets
 LIB_FILES += \
+  $(SDK_ROOT)/external/nrf_cc310/lib/libnrf_cc310_0.9.10.a \
 
 # Optimization flags
 OPT = -O3 -g3

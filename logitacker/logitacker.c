@@ -9,7 +9,7 @@
 #include "helper.h"
 #include "app_timer.h"
 #include "logitacker_pairing_parser.h"
-
+#include "logitacker_unifying_crypto.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
@@ -914,6 +914,12 @@ void logitacker_enter_state_sniff_pairing() {
     // write payload (autostart TX is enabled for PTX mode)
     nrf_esb_write_payload(&tmp_tx_payload);
     app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
+
+    //Crypto test
+    uint8_t aes_key[] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F };
+    uint8_t aes_plain[] = { 0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0 };
+    uint8_t aes_cipher[16] = { 0 };
+    logitacker_unifying_crypto_aes_ecb_encrypt(aes_cipher, aes_key, aes_plain);
 
 }
 

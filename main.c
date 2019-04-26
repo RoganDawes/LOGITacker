@@ -45,6 +45,8 @@
 #include "logitacker_radio.h"
 #include "logitacker.h"
 
+//crypto
+#include "nrf_crypto.h"
 //#include "timestamp.h"
 
 
@@ -60,8 +62,18 @@
  * @brief Enable USB power detection
  */
 #ifndef USBD_POWER_DETECTION
+
+#ifdef NRF52840_MDK_DONGLE
+#define USBD_POWER_DETECTION false
+#elif NRF52840_MDK
+#define USBD_POWER_DETECTION true
+#elif BOARD_PCA10059
+#define USBD_POWER_DETECTION false
+#else
 #define USBD_POWER_DETECTION false
 #endif
+
+#endif //POWER_DETECTION
 
 
 #define BTN_TRIGGER_ACTION   0
@@ -553,6 +565,15 @@ int main(void)
     } 
 #endif
 
+/*
+    ret = nrf_crypto_init();
+    if (ret == NRF_SUCCESS) {
+        NRF_LOG_ERROR("nrf_crypto_init error: 0x%x", ret);
+        return ret;
+    }
+*/
+    ret = nrf_crypto_init();
+    APP_ERROR_CHECK(ret);
 
 //    timestamp_init();
 
