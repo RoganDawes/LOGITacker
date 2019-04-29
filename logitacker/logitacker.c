@@ -104,13 +104,57 @@ static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static nrf_esb_payload_t tmp_payload = {0};
 static nrf_esb_payload_t tmp_tx_payload = {0};
 
+static bool m_main_event_handler_bsp_long_pushed;
 
-void timer_next_tx_action_handler_main(void* p_context) {
+static uint8_t m_keyboard_report_decryption_buffer[8] = { 0 };
+
+
+void main_event_handler_timer_next_action(void *p_context);
+void main_event_handler_esb(nrf_esb_evt_t *p_event);
+void main_event_handler_radio(radio_evt_t const *p_event);
+static void main_event_handler_bsp(bsp_event_t ev);
+
+//void logitacker_enter_mode_discovery();
+void discovery_event_handler_esb(nrf_esb_evt_t *p_event);
+void discovery_event_handler_radio(radio_evt_t const *p_event);
+static void discovery_event_handler_bsp(bsp_event_t ev);
+void discovery_process_rx();
+
+//void logitacker_enter_mode_passive_enum(uint8_t * rf_address);
+void passive_enum_event_handler_esb(nrf_esb_evt_t *p_event);
+void passive_enum_event_handler_radio(radio_evt_t const *p_event);
+static void passive_enum_event_handler_bsp(bsp_event_t ev);
+void passive_enum_process_rx();
+
+
+void active_enum_event_handler_timer_next_action(void *p_context);
+void active_enum_event_handler_esb(nrf_esb_evt_t *p_event);
+static void active_enum_event_handler_bsp(bsp_event_t ev);
+void active_enum_update_tx_payload(uint8_t iteration_count);
+bool active_enum_advance_to_next_addr_prefix(logitacker_substate_active_enumeration_t *p_state);
+void active_enum_add_device_address_to_list();
+void active_enum_process_sub_event(logitacker_subevent_t se_type, void *p_subevent);
+
+
+void pairing_sniff_reset_timer();
+void pairing_sniff_assign_addr_to_pipe1(uint8_t const *const rf_address);
+void pairing_sniff_disable_pipe1();
+void pairing_sniff_event_handler_esb(nrf_esb_evt_t *p_event);
+void pairing_sniff_event_handler_timer_next_action(void *p_context);
+
+
+/*
+void logitacker_enter_mode_pairing_sniff();
+void logitacker_enter_mode_active_enum(uint8_t * rf_address);
+void logitacker_discovery_mode_set_on_new_address_action(logitacker_discovery_on_new_address_t on_new_address_action);
+*/
+
+/* main/master event handler */
+void main_event_handler_timer_next_action(void *p_context) {
     if (m_state_local.current_timer_event_handler != NULL) m_state_local.current_timer_event_handler(p_context);
 }
 
-
-void esb_event_handler_main(nrf_esb_evt_t * p_event) {
+void main_event_handler_esb(nrf_esb_evt_t *p_event) {
     switch (p_event->evt_id)
     {
         case NRF_ESB_EVENT_TX_SUCCESS:
@@ -129,8 +173,123 @@ void esb_event_handler_main(nrf_esb_evt_t * p_event) {
     if (m_state_local.current_esb_event_handler != 0) m_state_local.current_esb_event_handler(p_event);
 }
 
+void main_event_handler_radio(radio_evt_t const *p_event) {
+    //helper_log_priority("UNIFYING_event_handler");
+    switch (p_event->evt_id)
+    {
+        case RADIO_EVENT_NO_RX_TIMEOUT:
+        {
+            NRF_LOG_DEBUG("RADIO EVENT HANDLER MAIN: RX TIMEOUT");
+            break;
+        }
+        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
+        {
+            NRF_LOG_DEBUG("RADIO EVENT HANDLER MAIN: CHANNEL CHANGED FIRST INDEX");
+            break;
+        }
+        case RADIO_EVENT_CHANNEL_CHANGED:
+        {
+            NRF_LOG_DEBUG("RADIO EVENT HANDLER MAIN: CHANNEL CHANGED (index %d, channel freq %d)", p_event->channel_index, p_event->channel);
+            break;
+        }
+    }
 
-void radio_process_rx_discovery_mode() {
+    if (m_state_local.current_radio_event_handler != 0) m_state_local.current_radio_event_handler(p_event);
+}
+
+static void main_event_handler_bsp(bsp_event_t ev)
+{
+    // runs in interrupt mode
+    //helper_log_priority("bsp_event_callback");
+    //uint32_t ret;
+    switch ((unsigned int)ev)
+    {
+        case CONCAT_2(BSP_EVENT_KEY_, BTN_TRIGGER_ACTION):
+            //Toggle radio back to promiscous mode
+            NRF_LOG_INFO("ACTION button pushed");
+            bsp_board_led_on(LED_B);
+            break;
+
+        case BSP_USER_EVENT_LONG_PRESS_0:
+            m_main_event_handler_bsp_long_pushed = true;
+            NRF_LOG_INFO("ACTION BUTTON PUSHED LONG");
+            break;
+
+        case BSP_USER_EVENT_RELEASE_0:
+            if (m_main_event_handler_bsp_long_pushed) {
+                m_main_event_handler_bsp_long_pushed = false;
+                break; // don't act if there was already a long press event
+            }
+            NRF_LOG_INFO("ACTION BUTTON RELEASED");
+            break;
+
+        default:
+            break; // no implementation needed
+    }
+
+    if (m_state_local.current_bsp_event_handler != 0) m_state_local.current_bsp_event_handler(ev);
+}
+
+/* methods for discovery mode */
+void logitacker_enter_mode_discovery() {
+    NRF_LOG_INFO("Entering discovery mode");
+
+    nrf_esb_stop_rx(); //stop rx in case running
+    radio_disable_rx_timeout_event(); // disable RX timeouts
+    radio_stop_channel_hopping(); // disable channel hopping
+
+    m_state_local.mainstate = LOGITACKER_DEVICE_DISCOVERY;
+
+    m_state_local.current_bsp_event_handler = discovery_event_handler_bsp;
+    m_state_local.current_esb_event_handler = discovery_event_handler_esb; // process RX_RECEIVED
+    m_state_local.current_radio_event_handler = discovery_event_handler_radio; //restarts channel hopping on rx timeout
+    m_state_local.current_timer_event_handler = NULL;
+
+    bsp_board_leds_off(); //disable all LEDs
+
+    //set radio to promiscuous mode and start RX
+    nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS); //use promiscuous mode
+    nrf_esb_start_rx(); //start rx
+    radio_enable_rx_timeout_event(LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS); //set RX timeout, the eventhandler starts channel hopping once this timeout is reached
+}
+
+void discovery_event_handler_esb(nrf_esb_evt_t *p_event) {
+    switch (p_event->evt_id) {
+        case NRF_ESB_EVENT_RX_RECEIVED:
+            NRF_LOG_DEBUG("ESB EVENT HANDLER DISCOVERY RX_RECEIVED");
+            discovery_process_rx(); //replace by processing of frames
+            break;
+        default:
+            break;
+    }
+}
+
+void discovery_event_handler_radio(radio_evt_t const *p_event) {
+    //helper_log_priority("UNIFYING_event_handler");
+    switch (p_event->evt_id)
+    {
+        case RADIO_EVENT_NO_RX_TIMEOUT:
+        {
+            NRF_LOG_INFO("Discovery: no RX on current channel for %d ms ... restart channel hopping ...", LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS);
+            radio_start_channel_hopping(LOGITACKER_DISCOVERY_CHANNEL_HOP_INTERVAL_MS, 0, true); //start channel hopping directly (0ms delay) with 30ms hop interval, automatically stop hopping on RX
+            break;
+        }
+        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
+        {
+            NRF_LOG_DEBUG("DISCOVERY MODE channel hop reached first channel");
+            bsp_board_led_invert(LED_B); // toggle scan LED everytime we jumped through all channels
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void discovery_event_handler_bsp(bsp_event_t ev) {
+    NRF_LOG_INFO("Discovery BSP event: %d", (unsigned int)ev);
+}
+
+void discovery_process_rx() {
     static nrf_esb_payload_t rx_payload;
     static nrf_esb_payload_t * p_rx_payload = &rx_payload;
     while (nrf_esb_read_rx_payload(p_rx_payload) == NRF_SUCCESS) {
@@ -182,10 +341,10 @@ void radio_process_rx_discovery_mode() {
                 case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
                     break;
                 case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
-                    logitacker_enter_state_active_enumeration(addr);
+                    logitacker_enter_mode_active_enum(addr);
                     break;
                 case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
-                    logitacker_enter_state_passive_enumeration(addr);
+                    logitacker_enter_mode_passive_enum(addr);
                     break;
                 default:
                     // do nothing, stay in discovery
@@ -199,20 +358,53 @@ void radio_process_rx_discovery_mode() {
 
 }
 
-void esb_event_handler_discovery(nrf_esb_evt_t * p_event) {
+/* methods for passive enumeration mode */
+void passive_enum_event_handler_esb(nrf_esb_evt_t *p_event) {
     switch (p_event->evt_id) {
         case NRF_ESB_EVENT_RX_RECEIVED:
-            NRF_LOG_DEBUG("ESB EVENT HANDLER DISCOVERY RX_RECEIVED");
-            radio_process_rx_discovery_mode(); //replace by processing of frames
+            NRF_LOG_DEBUG("ESB EVENT HANDLER PASSIVE ENUMERATION RX_RECEIVED");
+            passive_enum_process_rx();
             break;
         default:
             break;
     }
-    
 }
 
-static uint8_t m_local_key_decrypt[8] = { 0 };
-void radio_process_rx_passive_enum_mode() {
+void passive_enum_event_handler_radio(radio_evt_t const *p_event) {
+    //helper_log_priority("UNIFYING_event_handler");
+    switch (p_event->evt_id)
+    {
+        case RADIO_EVENT_NO_RX_TIMEOUT:
+        {
+            NRF_LOG_INFO("Passive enumeration: no RX on current channel for %d ms ... restart channel hopping ...", LOGITACKER_PASSIVE_ENUM_STAY_ON_CHANNEL_AFTER_RX_MS);
+            radio_start_channel_hopping(LOGITACKER_PASSIVE_ENUM_CHANNEL_HOP_INTERVAL_MS, 0, true); //start channel hopping directly (0ms delay) with 30ms hop interval, automatically stop hopping on RX
+            break;
+        }
+        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
+        {
+            NRF_LOG_DEBUG("DISCOVERY MODE channel hop reached first channel");
+            bsp_board_led_invert(LED_B); // toggle scan LED everytime we jumped through all channels
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+static void passive_enum_event_handler_bsp(bsp_event_t ev) {
+    NRF_LOG_INFO("Passive enumeration BSP event: %d", (unsigned int)ev);
+    switch ((unsigned int)ev)
+    {
+        case BSP_USER_EVENT_RELEASE_0:
+            NRF_LOG_INFO("ACTION BUTTON RELEASED in passive enumeration mode, changing back to discovery...");
+            logitacker_enter_mode_discovery();
+            break;
+        default:
+            break; // no implementation needed
+    }
+}
+
+void passive_enum_process_rx() {
     static nrf_esb_payload_t rx_payload;
     static nrf_esb_payload_t * p_rx_payload = &rx_payload;
     while (nrf_esb_read_rx_payload(p_rx_payload) == NRF_SUCCESS) {
@@ -243,9 +435,9 @@ void radio_process_rx_passive_enum_mode() {
                 NRF_LOG_HEXDUMP_INFO(p_rx_payload->data, p_rx_payload->length);
 
                 if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
-                    if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_local_key_decrypt, m_test_device_key, p_rx_payload) == NRF_SUCCESS) {
+                    if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_keyboard_report_decryption_buffer, m_test_device_key, p_rx_payload) == NRF_SUCCESS) {
                         NRF_LOG_INFO("Test decryption of keyboard payload:");
-                        NRF_LOG_HEXDUMP_INFO(m_local_key_decrypt, 8);
+                        NRF_LOG_HEXDUMP_INFO(m_keyboard_report_decryption_buffer, 8);
                     }
                 }
             }
@@ -253,142 +445,48 @@ void radio_process_rx_passive_enum_mode() {
 
 }
 
-void esb_event_handler_passive_enum(nrf_esb_evt_t * p_event) {
-    switch (p_event->evt_id) {
-        case NRF_ESB_EVENT_RX_RECEIVED:
-            NRF_LOG_DEBUG("ESB EVENT HANDLER PASSIVE ENUMERATION RX_RECEIVED");
-            radio_process_rx_passive_enum_mode();
-            break;
-        default:
-            break;
-    }
-    
+/* methods for passive enumeration mode */
+// Transfers execution to active_enum_process_sub_event
+void active_enum_event_handler_timer_next_action(void *p_context) {
+    active_enum_process_sub_event(LOGITACKER_SUBEVENT_TIMER, p_context);
 }
 
-bool m_pair_sniff_data_rx = false;
-uint32_t m_pair_sniff_ticks = APP_TIMER_TICKS(8);
-uint32_t m_pair_sniff_ticks_long = APP_TIMER_TICKS(20);
-bool m_pair_sniff_dongle_in_range = false;
-static logitacker_pairing_info_t m_device_pair_info;
-
-
-void sniff_pair_reset_timer() {
-    app_timer_stop(m_timer_next_tx_action);
-    if (m_pair_sniff_data_rx) {
-        app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks_long, NULL);
-        m_pair_sniff_data_rx = false;
-    } else {
-        app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
-    }
-
-
-}
-
-void sniff_pair_assign_addr_to_pipe1(uint8_t const * const rf_address) {
-    uint8_t base[4] = { 0 };
-    uint8_t prefix = 0;
-    helper_addr_to_base_and_prefix(base, &prefix, rf_address, 5);
-
-    //stop time to prevent rewriting payloads
-    app_timer_stop(m_timer_next_tx_action);
-    while (nrf_esb_stop_rx() != NRF_SUCCESS) {}
-    nrf_esb_set_base_address_1(base);
-    nrf_esb_update_prefix(1, prefix);
-    nrf_esb_enable_pipes(0x03);
-    app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL); // restart timer
-}
-
-void sniff_pair_disable_pipe1() {
-    //stop time to prevent rewriting payloads
-    app_timer_stop(m_timer_next_tx_action);
-    while (nrf_esb_stop_rx() != NRF_SUCCESS) {}
-    nrf_esb_enable_pipes(0x01);
-    app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL); // restart timer
-}
-
-void esb_event_handler_sniff_pair(nrf_esb_evt_t * p_event) {
-    uint32_t freq;
-    nrf_esb_get_rf_frequency(&freq);
+// Transfers execution to active_enum_process_sub_event
+void active_enum_event_handler_esb(nrf_esb_evt_t *p_event) {
 
     switch (p_event->evt_id) {
-        // happens when PTX_stay_RX is in sub state PRX and receives data
-        case NRF_ESB_EVENT_RX_RECEIVED:
-        case NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY:
-            // we received data
-            NRF_LOG_INFO("PAIR SNIFF data received on channel %d", freq);
-            while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
-                m_pair_sniff_data_rx = true;
-                NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
-
-                // check if pairing response phase 1, with new address
-                if (tmp_payload.length == 22 && tmp_payload.data[1] == 0x1f && tmp_payload.data[2] == 0x01) {
-                    /*
-                     * <info> LOGITACKER:  BC 1F 01 BD BA 92 24 27|......$'
-                     * <info> LOGITACKER:  08 88 08 04 01 01 07 00|........
-                     * <info> LOGITACKER:  00 00 00 00 00 2B
-                     */
-
-                    uint8_t new_address[LOGITACKER_DEVICE_ADDR_LEN] = { 0 };
-                    memcpy(new_address, &tmp_payload.data[3], LOGITACKER_DEVICE_ADDR_LEN);
-                    sniff_pair_assign_addr_to_pipe1(new_address);
-
-                    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, new_address);
-                    NRF_LOG_INFO("PAIR SNIFF assigned %s as new sniffing address", addr_str_buff);
-                }
-
-                // clear pairing info when new pairing request 1 is spotted
-                if (tmp_payload.length == 22 && tmp_payload.data[1] == 0x5f && tmp_payload.data[2] == 0x01) {
-                    memset(&m_device_pair_info, 0, sizeof(m_device_pair_info));
-                }
-
-                // parse pairing data
-                if (logitacker_pairing_parser(&m_device_pair_info, &tmp_payload) == NRF_SUCCESS) {
-                    // full pairing parsed (no frames missing)
-                    sniff_pair_disable_pipe1();
-                }
-            }
-            sniff_pair_reset_timer();
-            break;
         case NRF_ESB_EVENT_TX_SUCCESS:
-        {
-            // we hit the dongle, but no data was received on the channel so far, we start a timer for ping re-transmission
-            if (!m_pair_sniff_dongle_in_range) {
-                NRF_LOG_INFO("Spotted dongle in pairing mode, follow while channel hopping");
-                m_pair_sniff_dongle_in_range = true;
-            }
-            NRF_LOG_INFO("dongle on channel %d ", freq);
-            sniff_pair_reset_timer();
+            active_enum_process_sub_event(LOGITACKER_SUBEVENT_ESB_TX_SUCCESS, p_event);
             break;
-        }
+        case NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY:
+            active_enum_process_sub_event(LOGITACKER_SUBEVENT_ESB_TX_SUCCESS_ACK_PAY, p_event);
+            break;
         case NRF_ESB_EVENT_TX_FAILED:
-        {
-            // missed dongle, re-transmit ping payload
-
-            if (m_pair_sniff_dongle_in_range) {
-                // if dongle was in range before, notify tha we lost track
-                NRF_LOG_INFO("Lost dongle in pairing mode, restart channel hopping");
-                m_pair_sniff_dongle_in_range = false;
-            }
-
-            NRF_LOG_DEBUG("TX_FAILED on all channels, retry %d ...", freq);
-            // write payload again and start rx
-            nrf_esb_start_tx();
-        }
+            active_enum_process_sub_event(LOGITACKER_SUBEVENT_ESB_TX_FAILED, p_event);
+            break;
+        case NRF_ESB_EVENT_RX_RECEIVED:
+            active_enum_process_sub_event(LOGITACKER_SUBEVENT_ESB_RX_RECEIVED, p_event);
+            break;
         default:
             break;
     }
 }
 
-// Transfers execution to active_enumeration_subevent_process
-void timer_next_tx_action_handler_sniff_pair(void* p_context) {
-        // if we haven't received data after last ping, ping again
-    //NRF_LOG_INFO("re-ping");
-        nrf_esb_flush_tx();
-        nrf_esb_write_payload(&tmp_tx_payload);
+static void active_enum_event_handler_bsp(bsp_event_t ev) {
+    NRF_LOG_INFO("active enumeration BSP event: %d", (unsigned int)ev);
+    switch ((unsigned int)ev)
+    {
+        case BSP_USER_EVENT_RELEASE_0:
+            NRF_LOG_INFO("ACTION BUTTON RELEASED in active enumeration mode, retransmit frame...");
+            nrf_esb_flush_tx();
+            nrf_esb_write_payload(&tmp_tx_payload);
+            break;
+
+        default:
+            break; // no implementation needed
+    }
+
 }
-
-
-
 
 void active_enum_update_tx_payload(uint8_t iteration_count) {
     uint8_t iter_mod_4 = iteration_count & 0x03;
@@ -442,10 +540,9 @@ void active_enum_update_tx_payload(uint8_t iteration_count) {
 
 }
 
-
 // increments pipe 1 address prefix (neighbour discovery)
-bool active_enumeration_set_next_prefix(logitacker_substate_active_enumeration_t * p_state) {
-    // all possible prefixes (neighbours) tested? 
+bool active_enum_advance_to_next_addr_prefix(logitacker_substate_active_enumeration_t *p_state) {
+    // all possible prefixes (neighbours) tested?
     if (p_state->next_prefix == p_state->known_prefix) {
         p_state->phase = LOGITACKER_ACTIVE_ENUM_PHASE_FINISHED;
         NRF_LOG_INFO("Tested all possible neighbours");
@@ -478,8 +575,7 @@ void active_enum_add_device_address_to_list() {
     }
 }
 
-
-void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_subevent) {
+void active_enum_process_sub_event(logitacker_subevent_t se_type, void *p_subevent) {
     logitacker_substate_active_enumeration_t * p_state = &m_state_local.substate_active_enumeration;
 
     if (p_state->phase == LOGITACKER_ACTIVE_ENUM_PHASE_FINISHED) {
@@ -493,7 +589,7 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
 
     switch (se_type) {
         case LOGITACKER_SUBEVENT_TIMER:
-        {           
+        {
             // setup radio as PTX
             m_state_local.substate_active_enumeration.phase = LOGITACKER_ACTIVE_ENUM_PHASE_TEST_PLAIN_KEYSTROKE_INJECTION;
 
@@ -515,11 +611,11 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
             }
 
             // continue with next prefix, return if first prefixe has been reached again
-            if (active_enumeration_set_next_prefix(p_state)) goto ACTIVE_ENUM_FINISHED;
+            if (active_enum_advance_to_next_addr_prefix(p_state)) goto ACTIVE_ENUM_FINISHED;
 
             //re-transmit last frame (payload still enqued)
             nrf_esb_start_tx();
-            
+
 
             break;
         }
@@ -578,7 +674,7 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
                 // we are done with this device
 
                 // continue with next prefix, return if first prefixe has been reached again
-                if (active_enumeration_set_next_prefix(p_state)) goto ACTIVE_ENUM_FINISHED;
+                if (active_enum_advance_to_next_addr_prefix(p_state)) goto ACTIVE_ENUM_FINISHED;
 
                 // start next transmission
                 if (nrf_esb_write_payload(&tmp_tx_payload) != NRF_SUCCESS) {
@@ -598,201 +694,148 @@ void active_enumeration_subevent_process(logitacker_subevent_t se_type, void *p_
     ACTIVE_ENUM_FINISHED:
     if (p_state->phase == LOGITACKER_ACTIVE_ENUM_PHASE_FINISHED) {
         NRF_LOG_WARNING("Active enumeration finished, continue with passive enumeration");
-        
+
         uint8_t rf_addr[5] = { 0 };
         helper_base_and_prefix_to_addr(rf_addr, p_state->base_addr, p_state->known_prefix, 5);
-        logitacker_enter_state_passive_enumeration(rf_addr);
+        logitacker_enter_mode_passive_enum(rf_addr);
         return;
     }
 
 }
 
-// Transfers execution to active_enumeration_subevent_process
-void esb_event_handler_active_enum(nrf_esb_evt_t * p_event) {
-    
+
+
+
+
+
+
+bool m_pair_sniff_data_rx = false;
+uint32_t m_pair_sniff_ticks = APP_TIMER_TICKS(8);
+uint32_t m_pair_sniff_ticks_long = APP_TIMER_TICKS(20);
+bool m_pair_sniff_dongle_in_range = false;
+static logitacker_pairing_info_t m_device_pair_info;
+
+
+void pairing_sniff_reset_timer() {
+    app_timer_stop(m_timer_next_tx_action);
+    if (m_pair_sniff_data_rx) {
+        app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks_long, NULL);
+        m_pair_sniff_data_rx = false;
+    } else {
+        app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL);
+    }
+
+
+}
+
+void pairing_sniff_assign_addr_to_pipe1(uint8_t const *const rf_address) {
+    uint8_t base[4] = { 0 };
+    uint8_t prefix = 0;
+    helper_addr_to_base_and_prefix(base, &prefix, rf_address, 5);
+
+    //stop time to prevent rewriting payloads
+    app_timer_stop(m_timer_next_tx_action);
+    while (nrf_esb_stop_rx() != NRF_SUCCESS) {}
+    nrf_esb_set_base_address_1(base);
+    nrf_esb_update_prefix(1, prefix);
+    nrf_esb_enable_pipes(0x03);
+    app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL); // restart timer
+}
+
+void pairing_sniff_disable_pipe1() {
+    //stop time to prevent rewriting payloads
+    app_timer_stop(m_timer_next_tx_action);
+    while (nrf_esb_stop_rx() != NRF_SUCCESS) {}
+    nrf_esb_enable_pipes(0x01);
+    app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL); // restart timer
+}
+
+void pairing_sniff_event_handler_esb(nrf_esb_evt_t *p_event) {
+    uint32_t freq;
+    nrf_esb_get_rf_frequency(&freq);
+
     switch (p_event->evt_id) {
-        case NRF_ESB_EVENT_TX_SUCCESS:
-            active_enumeration_subevent_process(LOGITACKER_SUBEVENT_ESB_TX_SUCCESS, p_event);
-            break;
-        case NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY:
-            active_enumeration_subevent_process(LOGITACKER_SUBEVENT_ESB_TX_SUCCESS_ACK_PAY, p_event);
-            break;
-        case NRF_ESB_EVENT_TX_FAILED:
-            active_enumeration_subevent_process(LOGITACKER_SUBEVENT_ESB_TX_FAILED, p_event);
-            break;
+        // happens when PTX_stay_RX is in sub state PRX and receives data
         case NRF_ESB_EVENT_RX_RECEIVED:
-            active_enumeration_subevent_process(LOGITACKER_SUBEVENT_ESB_RX_RECEIVED, p_event);
-            break;
-        default:
-            break;
-    }
-}
+        case NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY:
+            // we received data
+            NRF_LOG_INFO("PAIR SNIFF data received on channel %d", freq);
+            while (nrf_esb_read_rx_payload(&tmp_payload) == NRF_SUCCESS) {
+                m_pair_sniff_data_rx = true;
+                NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
 
-// Transfers execution to active_enumeration_subevent_process
-void timer_next_tx_action_handler_active_enum(void* p_context) {
-    active_enumeration_subevent_process(LOGITACKER_SUBEVENT_TIMER, p_context);
-}
+                // check if pairing response phase 1, with new address
+                if (tmp_payload.length == 22 && tmp_payload.data[1] == 0x1f && tmp_payload.data[2] == 0x01) {
+                    /*
+                     * <info> LOGITACKER:  BC 1F 01 BD BA 92 24 27|......$'
+                     * <info> LOGITACKER:  08 88 08 04 01 01 07 00|........
+                     * <info> LOGITACKER:  00 00 00 00 00 2B
+                     */
 
-void radio_event_handler_discovery(radio_evt_t const *p_event) {
-    //helper_log_priority("UNIFYING_event_handler");
-    switch (p_event->evt_id)
-    {
-        case RADIO_EVENT_NO_RX_TIMEOUT:
-        {
-            NRF_LOG_INFO("Discovery: no RX on current channel for %d ms ... restart channel hopping ...", LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS);
-            radio_start_channel_hopping(LOGITACKER_DISCOVERY_CHANNEL_HOP_INTERVAL_MS, 0, true); //start channel hopping directly (0ms delay) with 30ms hop interval, automatically stop hopping on RX
-            break;
-        }
-        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
-        {
-            NRF_LOG_DEBUG("DISCOVERY MODE channel hop reached first channel");
-            bsp_board_led_invert(LED_B); // toggle scan LED everytime we jumped through all channels 
-            break;
-        }
-        default:
-            break;
-    }
-}
+                    uint8_t new_address[LOGITACKER_DEVICE_ADDR_LEN] = { 0 };
+                    memcpy(new_address, &tmp_payload.data[3], LOGITACKER_DEVICE_ADDR_LEN);
+                    pairing_sniff_assign_addr_to_pipe1(new_address);
 
+                    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, new_address);
+                    NRF_LOG_INFO("PAIR SNIFF assigned %s as new sniffing address", addr_str_buff);
+                }
 
-void radio_event_handler_passive_enum(radio_evt_t const *p_event) {
-    //helper_log_priority("UNIFYING_event_handler");
-    switch (p_event->evt_id)
-    {
-        case RADIO_EVENT_NO_RX_TIMEOUT:
-        {
-            NRF_LOG_INFO("Passive enumeration: no RX on current channel for %d ms ... restart channel hopping ...", LOGITACKER_PASSIVE_ENUM_STAY_ON_CHANNEL_AFTER_RX_MS);
-            radio_start_channel_hopping(LOGITACKER_PASSIVE_ENUM_CHANNEL_HOP_INTERVAL_MS, 0, true); //start channel hopping directly (0ms delay) with 30ms hop interval, automatically stop hopping on RX
-            break;
-        }
-        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
-        {
-            NRF_LOG_DEBUG("DISCOVERY MODE channel hop reached first channel");
-            bsp_board_led_invert(LED_B); // toggle scan LED everytime we jumped through all channels 
-            break;
-        }
-        default:
-            break;
-    }
-}
+                // clear pairing info when new pairing request 1 is spotted
+                if (tmp_payload.length == 22 && tmp_payload.data[1] == 0x5f && tmp_payload.data[2] == 0x01) {
+                    memset(&m_device_pair_info, 0, sizeof(m_device_pair_info));
+                }
 
-void radio_event_handler_main(radio_evt_t const *p_event) {
-    //helper_log_priority("UNIFYING_event_handler");
-    switch (p_event->evt_id)
-    {
-        case RADIO_EVENT_NO_RX_TIMEOUT:
-        {
-            NRF_LOG_DEBUG("RADIO EVENT HANDLER MAIN: RX TIMEOUT");
-            break;
-        }
-        case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
-        {
-            NRF_LOG_DEBUG("RADIO EVENT HANDLER MAIN: CHANNEL CHANGED FIRST INDEX");
-            break;
-        }
-        case RADIO_EVENT_CHANNEL_CHANGED:
-        {
-            NRF_LOG_DEBUG("RADIO EVENT HANDLER MAIN: CHANNEL CHANGED (index %d, channel freq %d)", p_event->channel_index, p_event->channel);
-            break;
-        }
-    }
-
-    if (m_state_local.current_radio_event_handler != 0) m_state_local.current_radio_event_handler(p_event);
-}
-
-static bool long_pushed;
-static void bsp_event_handler_main(bsp_event_t ev)
-{
-    // runs in interrupt mode
-    //helper_log_priority("bsp_event_callback");
-    //uint32_t ret;
-    switch ((unsigned int)ev)
-    {
-        case CONCAT_2(BSP_EVENT_KEY_, BTN_TRIGGER_ACTION):
-            //Toggle radio back to promiscous mode
-            NRF_LOG_INFO("ACTION button pushed");
-            bsp_board_led_on(LED_B);
-            break;
-
-        case BSP_USER_EVENT_LONG_PRESS_0:
-            long_pushed = true;
-            NRF_LOG_INFO("ACTION BUTTON PUSHED LONG");          
-            break;
-
-        case BSP_USER_EVENT_RELEASE_0:
-            if (long_pushed) {
-                long_pushed = false;
-                break; // don't act if there was already a long press event
+                // parse pairing data
+                if (logitacker_pairing_parser(&m_device_pair_info, &tmp_payload) == NRF_SUCCESS) {
+                    // full pairing parsed (no frames missing)
+                    pairing_sniff_disable_pipe1();
+                }
             }
-            NRF_LOG_INFO("ACTION BUTTON RELEASED");
+            pairing_sniff_reset_timer();
             break;
-
-        default:
-            break; // no implementation needed
-    }
-
-    if (m_state_local.current_bsp_event_handler != 0) m_state_local.current_bsp_event_handler(ev);
-}
-
-static void bsp_event_handler_discovery(bsp_event_t ev) {
-    NRF_LOG_INFO("Discovery BSP event: %d", (unsigned int)ev);
-}
-
-static void bsp_event_handler_passive_enumeration(bsp_event_t ev) {
-    NRF_LOG_INFO("Passive enumeration BSP event: %d", (unsigned int)ev);
-    switch ((unsigned int)ev)
-    {
-        case BSP_USER_EVENT_RELEASE_0:
-            NRF_LOG_INFO("ACTION BUTTON RELEASED in passive enumeration mode, changing back to discovery...");
-            logitacker_enter_state_discovery();
+        case NRF_ESB_EVENT_TX_SUCCESS:
+        {
+            // we hit the dongle, but no data was received on the channel so far, we start a timer for ping re-transmission
+            if (!m_pair_sniff_dongle_in_range) {
+                NRF_LOG_INFO("Spotted dongle in pairing mode, follow while channel hopping");
+                m_pair_sniff_dongle_in_range = true;
+            }
+            NRF_LOG_INFO("dongle on channel %d ", freq);
+            pairing_sniff_reset_timer();
             break;
+        }
+        case NRF_ESB_EVENT_TX_FAILED:
+        {
+            // missed dongle, re-transmit ping payload
 
+            if (m_pair_sniff_dongle_in_range) {
+                // if dongle was in range before, notify tha we lost track
+                NRF_LOG_INFO("Lost dongle in pairing mode, restart channel hopping");
+                m_pair_sniff_dongle_in_range = false;
+            }
+
+            NRF_LOG_DEBUG("TX_FAILED on all channels, retry %d ...", freq);
+            // write payload again and start rx
+            nrf_esb_start_tx();
+        }
         default:
-            break; // no implementation needed
-    }
-
-}
-
-static void bsp_event_handler_active_enumeration(bsp_event_t ev) {
-    NRF_LOG_INFO("active enumeration BSP event: %d", (unsigned int)ev);
-    switch ((unsigned int)ev)
-    {
-        case BSP_USER_EVENT_RELEASE_0:
-            NRF_LOG_INFO("ACTION BUTTON RELEASED in active enumeration mode, retransmit frame...");
-            nrf_esb_flush_tx();
-            nrf_esb_write_payload(&tmp_tx_payload);
             break;
-
-        default:
-            break; // no implementation needed
     }
-
 }
 
 
-void logitacker_enter_state_discovery() {
-    NRF_LOG_INFO("Entering discovery mode");
-
-    nrf_esb_stop_rx(); //stop rx in case running
-    radio_disable_rx_timeout_event(); // disable RX timeouts
-    radio_stop_channel_hopping(); // disable channel hopping
-
-    m_state_local.mainstate = LOGITACKER_DEVICE_DISCOVERY;
-
-    m_state_local.current_bsp_event_handler = bsp_event_handler_discovery;
-    m_state_local.current_esb_event_handler = esb_event_handler_discovery; // process RX_RECEIVED
-    m_state_local.current_radio_event_handler = radio_event_handler_discovery; //restarts channel hopping on rx timeout
-    m_state_local.current_timer_event_handler = NULL;
-
-    bsp_board_leds_off(); //disable all LEDs
-
-    //set radio to promiscuous mode and start RX
-    nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS); //use promiscuous mode
-    nrf_esb_start_rx(); //start rx
-    radio_enable_rx_timeout_event(LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS); //set RX timeout, the eventhandler starts channel hopping once this timeout is reached    
+// Transfers execution to active_enum_process_sub_event
+void pairing_sniff_event_handler_timer_next_action(void *p_context) {
+        // if we haven't received data after last ping, ping again
+    //NRF_LOG_INFO("re-ping");
+        nrf_esb_flush_tx();
+        nrf_esb_write_payload(&tmp_tx_payload);
 }
 
-void logitacker_enter_state_passive_enumeration(uint8_t * rf_address) {
+
+
+// Transfers execution to active_enum_process_sub_event
+void logitacker_enter_mode_passive_enum(uint8_t *rf_address) {
     helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, rf_address);
     NRF_LOG_INFO("Entering passive enumeration mode for address %s", addr_str_buff);
 
@@ -802,9 +845,9 @@ void logitacker_enter_state_passive_enumeration(uint8_t * rf_address) {
     radio_stop_channel_hopping(); // disable channel hopping
     
     m_state_local.mainstate = LOGITACKER_DEVICE_PASSIVE_ENUMERATION;
-    m_state_local.current_bsp_event_handler = bsp_event_handler_passive_enumeration;
-    m_state_local.current_radio_event_handler = radio_event_handler_passive_enum;
-    m_state_local.current_esb_event_handler = esb_event_handler_passive_enum;    
+    m_state_local.current_bsp_event_handler = passive_enum_event_handler_bsp;
+    m_state_local.current_radio_event_handler = passive_enum_event_handler_radio;
+    m_state_local.current_esb_event_handler = passive_enum_event_handler_esb;
     m_state_local.current_timer_event_handler = NULL;
 
     //reset device state
@@ -866,7 +909,7 @@ void logitacker_enter_state_passive_enumeration(uint8_t * rf_address) {
 }
 
 
-void logitacker_enter_state_sniff_pairing() {
+void logitacker_enter_mode_pairing_sniff() {
     helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, UNIFYING_GLOBAL_PAIRING_ADDRESS);
     uint8_t base_addr[4] = { 0 };
     uint8_t prefix = 0;
@@ -882,8 +925,8 @@ void logitacker_enter_state_sniff_pairing() {
     m_state_local.mainstate = LOGITACKER_DEVICE_SNIFF_PAIRING;
     m_state_local.current_bsp_event_handler = NULL;
     m_state_local.current_radio_event_handler = NULL;
-    m_state_local.current_esb_event_handler = esb_event_handler_sniff_pair;    
-    m_state_local.current_timer_event_handler = timer_next_tx_action_handler_sniff_pair;
+    m_state_local.current_esb_event_handler = pairing_sniff_event_handler_esb;
+    m_state_local.current_timer_event_handler = pairing_sniff_event_handler_timer_next_action;
 
 
     
@@ -927,15 +970,15 @@ void logitacker_enter_state_sniff_pairing() {
 }
 
 
-void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
+void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
     //clear state
     memset(&m_state_local.substate_active_enumeration, 0, sizeof(m_state_local.substate_active_enumeration));
     
     m_state_local.mainstate = LOGITACKER_DEVICE_ACTIVE_ENUMERATION;
-    m_state_local.current_bsp_event_handler = bsp_event_handler_active_enumeration;
+    m_state_local.current_bsp_event_handler = active_enum_event_handler_bsp;
     m_state_local.current_radio_event_handler = NULL;
-    m_state_local.current_esb_event_handler = esb_event_handler_active_enum;    
-    m_state_local.current_timer_event_handler = timer_next_tx_action_handler_active_enum;
+    m_state_local.current_esb_event_handler = active_enum_event_handler_esb;
+    m_state_local.current_timer_event_handler = active_enum_event_handler_timer_next_action;
     m_state_local.substate_active_enumeration.tx_delay_ms = ACTIVE_ENUM_TX_DELAY_MS;
 
     helper_addr_to_base_and_prefix(m_state_local.substate_active_enumeration.base_addr, &m_state_local.substate_active_enumeration.known_prefix, rf_address, LOGITACKER_DEVICE_ADDR_LEN);
@@ -973,7 +1016,7 @@ void logitacker_enter_state_active_enumeration(uint8_t * rf_address) {
 }
 
 uint32_t logitacker_init() {
-    app_timer_create(&m_timer_next_tx_action, APP_TIMER_MODE_SINGLE_SHOT, timer_next_tx_action_handler_main);
+    app_timer_create(&m_timer_next_tx_action, APP_TIMER_MODE_SINGLE_SHOT, main_event_handler_timer_next_action);
 
     //update checksums for logitech payloads
     unifying_payload_update_checksum(rf_report_plain_keys_caps, sizeof(rf_report_plain_keys_caps));
@@ -983,18 +1026,17 @@ uint32_t logitacker_init() {
     unifying_payload_update_checksum(rf_report_keep_alive, sizeof(rf_report_keep_alive));
 
     m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
-    logitacker_bsp_init(bsp_event_handler_main);
-    logitacker_radio_init(esb_event_handler_main, radio_event_handler_main);
-    logitacker_enter_state_discovery();
+    logitacker_bsp_init(main_event_handler_bsp);
+    logitacker_radio_init(main_event_handler_esb, main_event_handler_radio);
+    logitacker_enter_mode_discovery();
 
 
     return NRF_SUCCESS;
 }
 
-void logitacker_discover_on_new_address_action(logitacker_discovery_on_new_address_t on_new_address_action) {
+void logitacker_discovery_mode_set_on_new_address_action(logitacker_discovery_on_new_address_t on_new_address_action) {
     m_state_local.substate_discovery.on_new_address_action = on_new_address_action;
 }
-
 
 
 

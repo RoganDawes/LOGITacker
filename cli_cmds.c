@@ -184,15 +184,15 @@ static void cmd_discover_onhit(nrf_cli_t const * p_cli, size_t argc, char **argv
 
     if (!strcmp(argv[1], "continue") || !strcmp(argv[1], "c"))
     {
-        logitacker_discover_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING);
+        logitacker_discovery_mode_set_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING);
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: continue\r\n");
         return;
     } else if (!strcmp(argv[1], "passive_enum") || !strcmp(argv[1], "p")) {
-        logitacker_discover_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION);
+        logitacker_discovery_mode_set_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION);
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start passive enumeration of new RF address\r\n");
         return;
     } else if (!strcmp(argv[1], "active_enum") || !strcmp(argv[1], "a")) {
-        logitacker_discover_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION);
+        logitacker_discovery_mode_set_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION);
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start active enumeration of new RF address\r\n");
         return;
     } else {
@@ -203,7 +203,7 @@ static void cmd_discover_onhit(nrf_cli_t const * p_cli, size_t argc, char **argv
 
 static void cmd_pairing_sniff(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-    logitacker_enter_state_sniff_pairing();
+    logitacker_enter_mode_pairing_sniff();
     /*
     for (size_t i = 1; i < argc; i++)
     {
@@ -232,7 +232,7 @@ static void cmd_pairing(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 static void cmd_discover_run(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-    logitacker_enter_state_discovery();
+    logitacker_enter_mode_discovery();
     /*
     for (size_t i = 1; i < argc; i++)
     {
