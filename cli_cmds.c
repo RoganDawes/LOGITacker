@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include "logitacker_keyboard_map.h"
 #include "nrf_cli.h"
 #include "nrf_log.h"
 #include "sdk_common.h"
@@ -120,43 +121,11 @@ static void cmd_counter(nrf_cli_t const * p_cli, size_t argc, char **argv)
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: unknown parameter: %s\r\n", argv[0], argv[1]);
 }
 
-static void cmd_nordic(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     UNUSED_PARAMETER(argc);
     UNUSED_PARAMETER(argv);
-
-    if (nrf_cli_help_requested(p_cli))
-    {
-        nrf_cli_help_print(p_cli, NULL, 0);
-        return;
-    }
-
-    nrf_cli_fprintf(p_cli, NRF_CLI_OPTION,
-                    "\r\n"
-                    "            .co:.                   'xo,          \r\n"
-                    "         .,collllc,.             'ckOOo::,..      \r\n"
-                    "      .:ooooollllllll:'.     .;dOOOOOOo:::;;;'.   \r\n"
-                    "   'okxddoooollllllllllll;'ckOOOOOOOOOo:::;;;,,,' \r\n"
-                    "   OOOkxdoooolllllllllllllllldxOOOOOOOo:::;;;,,,'.\r\n"
-                    "   OOOOOOkdoolllllllllllllllllllldxOOOo:::;;;,,,'.\r\n"
-                    "   OOOOOOOOOkxollllllllllllllllllcccldl:::;;;,,,'.\r\n"
-                    "   OOOOOOOOOOOOOxdollllllllllllllccccc::::;;;,,,'.\r\n"
-                    "   OOOOOOOOOOOOOOOOkxdlllllllllllccccc::::;;;,,,'.\r\n"
-                    "   kOOOOOOOOOOOOOOOOOOOkdolllllllccccc::::;;;,,,'.\r\n"
-                    "   kOOOOOOOOOOOOOOOOOOOOOOOxdllllccccc::::;;;,,,'.\r\n"
-                    "   kOOOOOOOOOOOOOOOOOOOOOOOOOOkxolcccc::::;;;,,,'.\r\n"
-                    "   kOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOkdlc::::;;;,,,'.\r\n"
-                    "   xOOOOOOOOOOOxdkOOOOOOOOOOOOOOOOOOOOxoc:;;;,,,'.\r\n"
-                    "   xOOOOOOOOOOOdc::ldkOOOOOOOOOOOOOOOOOOOkdc;,,,''\r\n"
-                    "   xOOOOOOOOOOOdc::;;,;cdkOOOOOOOOOOOOOOOOOOOxl;''\r\n"
-                    "   .lkOOOOOOOOOdc::;;,,''..;oOOOOOOOOOOOOOOOOOOOx'\r\n"
-                    "      .;oOOOOOOdc::;;,.       .:xOOOOOOOOOOOOd;.  \r\n"
-                    "          .:xOOdc:,.              'ckOOOOkl'      \r\n"
-                    "             .od'                    'xk,         \r\n"
-                    "\r\n");
-
-    nrf_cli_fprintf(p_cli,NRF_CLI_NORMAL,
-                    "                Nordic Semiconductor              \r\n\r\n");
+    logitacker_keyboard_map_test();
 }
 
 
@@ -285,7 +254,7 @@ static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 /**
  * @brief Command set array
  * */
-NRF_CLI_CMD_REGISTER(nordic, NULL, "Print Nordic Semiconductor logo.", cmd_nordic);
+NRF_CLI_CMD_REGISTER(test, NULL, "Print Nordic Semiconductor logo.", cmd_test);
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_print)
 {

@@ -92,6 +92,7 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
+  $(PROJ_DIR)/logitacker/logitacker_keyboard_map.c \
   $(PROJ_DIR)/logitacker/logitacker_devices.c \
   $(PROJ_DIR)/logitacker/logitacker_radio.c \
   $(PROJ_DIR)/logitacker/logitacker_bsp.c \
@@ -123,6 +124,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/kbd \
   $(SDK_ROOT)/components/libraries/balloc \
   $(PROJ_DIR)/esb_illegalmod \
+  $(PROJ_DIR)/helper \
   $(PROJ_DIR)/logitacker \
   $(SDK_ROOT)/components/drivers_nrf/usbd \
   $(SDK_ROOT)/components/libraries/ringbuf \

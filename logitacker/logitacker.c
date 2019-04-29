@@ -10,6 +10,8 @@
 #include "app_timer.h"
 #include "logitacker_pairing_parser.h"
 #include "logitacker_unifying_crypto.h"
+#include "logitacker_keyboard_map.h"
+
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
@@ -438,6 +440,11 @@ void passive_enum_process_rx() {
                     if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_keyboard_report_decryption_buffer, m_test_device_key, p_rx_payload) == NRF_SUCCESS) {
                         NRF_LOG_INFO("Test decryption of keyboard payload:");
                         NRF_LOG_HEXDUMP_INFO(m_keyboard_report_decryption_buffer, 8);
+                        for (int k=1; k<7; k++) {
+                            if (m_keyboard_report_decryption_buffer[k] == 0x00 && k>0) break; //print no further keys
+                            NRF_LOG_INFO("Key %d: %s", k, KEYCODE_TO_STR(m_keyboard_report_decryption_buffer[k]));
+                        }
+
                     }
                 }
             }
