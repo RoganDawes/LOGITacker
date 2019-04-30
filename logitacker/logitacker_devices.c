@@ -10,7 +10,7 @@ typedef struct {
     bool is_used;
 } logitacker_device_list_entry_state_t;
 
-logitacker_device_t m_dev_list[LOGITACKER_DEVICES_MAX_LIST_ENTRIES];
+logitacker_device_set_t m_dev_list[LOGITACKER_DEVICES_MAX_LIST_ENTRIES];
 logitacker_device_list_entry_state_t m_dev_list_state[LOGITACKER_DEVICES_MAX_LIST_ENTRIES];
 
 // searches usable list index, returns -1 if none found
@@ -55,10 +55,10 @@ int find_entry_by_base_prefix(uint8_t *base_addr, uint8_t prefix) {
 
 
 
-uint32_t logitacker_device_get_prefix_index(int *out_index, logitacker_device_t const * const in_device, uint8_t prefix) {
+uint32_t logitacker_device_get_prefix_index(int *out_index, logitacker_device_set_t const * const in_device, uint8_t prefix) {
     ASSERT(in_device);
-    for (int i=0; i<in_device->num_prefixes; i++) {
-        if (in_device->prefixes[i] == prefix) {
+    for (int i=0; i<in_device->num_device_prefixes; i++) {
+        if (in_device->device_prefixes[i] == prefix) {
             *out_index = (uint8_t) i;
             return NRF_SUCCESS;
         }
@@ -66,7 +66,7 @@ uint32_t logitacker_device_get_prefix_index(int *out_index, logitacker_device_t 
     return NRF_ERROR_INVALID_PARAM;;
 }
 
-uint32_t logitacker_device_add_prefix(logitacker_device_t * out_device, uint8_t prefix) {
+uint32_t logitacker_device_add_prefix(logitacker_device_set_t * out_device, uint8_t prefix) {
     ASSERT(out_device);
 
     // check if prefix is already present
@@ -75,9 +75,9 @@ uint32_t logitacker_device_add_prefix(logitacker_device_t * out_device, uint8_t 
 
     if (err_res == NRF_SUCCESS) return err_res; // prefix already exists
 
-    if (!(out_device->num_prefixes < LOGITACKER_DEVICE_MAX_PREFIX)) return NRF_ERROR_NO_MEM; // no room to add additional device indices 
+    if (!(out_device->num_device_prefixes < LOGITACKER_DEVICE_MAX_PREFIX)) return NRF_ERROR_NO_MEM; // no room to add additional device indices
 
-    out_device->prefixes[out_device->num_prefixes++] = prefix; //add the new prefiy and inc num_prefixes
+    out_device->device_prefixes[out_device->num_device_prefixes++] = prefix; //add the new prefiy and inc num_device_prefixes
 
     return NRF_SUCCESS;
 }
@@ -85,7 +85,7 @@ uint32_t logitacker_device_add_prefix(logitacker_device_t * out_device, uint8_t 
 
 /* NEW */
 
-logitacker_device_t* logitacker_device_list_add_addr(uint8_t const * const rf_addr) {
+logitacker_device_set_t* logitacker_device_set_add_new_by_dev_addr(uint8_t const *const rf_addr) {
     ASSERT(rf_addr);
 
     // translate to base and prefix
@@ -94,7 +94,7 @@ logitacker_device_t* logitacker_device_list_add_addr(uint8_t const * const rf_ad
     helper_addr_to_base_and_prefix(base, &prefix, rf_addr, LOGITACKER_DEVICE_ADDR_LEN);
 
     // fetch device with corresponding base addr, create otherwise
-    logitacker_device_t * p_device = NULL;
+    logitacker_device_set_t * p_device = NULL;
     int device_index = find_entry_by_base(base);
     if (device_index == -1) { // new entry needed
         // find first free entry
@@ -104,7 +104,7 @@ logitacker_device_t* logitacker_device_list_add_addr(uint8_t const * const rf_ad
             return NULL;
         }
 
-        memset(&m_dev_list[pos], 0, sizeof(logitacker_device_t));
+        memset(&m_dev_list[pos], 0, sizeof(logitacker_device_set_t));
         memcpy(m_dev_list[pos].base_addr, base, 4);
         p_device = &m_dev_list[pos];
 
@@ -122,7 +122,7 @@ logitacker_device_t* logitacker_device_list_add_addr(uint8_t const * const rf_ad
     return p_device;
 }
 
-logitacker_device_t* logitacker_device_list_get_by_addr(uint8_t const * const addr) {
+logitacker_device_set_t* logitacker_device_set_list_get_by_addr(uint8_t const *const addr) {
     if (addr == NULL) return NULL;
 
     // resolve base address / prefix
@@ -133,23 +133,23 @@ logitacker_device_t* logitacker_device_list_get_by_addr(uint8_t const * const ad
     //retrieve device
     int entry = find_entry_by_base(base);
     if (entry < 0) {
-        NRF_LOG_ERROR("logitacker_device_list_get_by_addr: no entry for base address")
+        NRF_LOG_ERROR("logitacker_device_set_list_get_by_addr: no entry for base address")
         return NULL;
     }
 
-    logitacker_device_t * p_device = &m_dev_list[entry];
+    logitacker_device_set_t * p_device = &m_dev_list[entry];
 
     int prefix_index = -1;
     uint32_t err_res = logitacker_device_get_prefix_index(&prefix_index, p_device, prefix);
     if (err_res != NRF_SUCCESS) {
-        NRF_LOG_ERROR("logitacker_device_list_get_by_addr: no entry for given prefix")
+        NRF_LOG_ERROR("logitacker_device_set_list_get_by_addr: no entry for given prefix")
         return NULL;
     }
 
     return p_device;
 }
 
-logitacker_device_t* logitacker_device_list_get(uint32_t pos) {
+logitacker_device_set_t* logitacker_device_set_list_get(uint32_t pos) {
     if (pos >= LOGITACKER_DEVICES_MAX_LIST_ENTRIES) return NULL;
     if (!m_dev_list_state[pos].is_used) return NULL;
     return &m_dev_list[pos];
@@ -163,7 +163,7 @@ void logitacker_device_list_flush() {
 }
 
 logitacker_device_capabilities_t * logitacker_device_get_caps_pointer(uint8_t const * const rf_addr) {
-    logitacker_device_t * p_dev = logitacker_device_list_get_by_addr(rf_addr);
+    logitacker_device_set_t * p_dev = logitacker_device_set_list_get_by_addr(rf_addr);
     if (p_dev == NULL) return NULL;
 
     int prefix_index = -1;
@@ -199,7 +199,7 @@ void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr,
         return;
     }
 
-    logitacker_device_t * p_device = &m_dev_list[entry];
+    logitacker_device_set_t * p_device = &m_dev_list[entry];
 
     int prefix_index = -1;
     uint32_t err_res = logitacker_device_get_prefix_index(&prefix_index, p_device, prefix);
@@ -232,26 +232,32 @@ void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr,
                 if (len != 22) return;
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_ENCRYPTED_KEYBOARD] > 2 || logitech_cksm) {
                     p_caps->is_logitech = true;
-                    p_caps->is_encrypted_keyboard = true;
+                    p_caps->caps |= (LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE | LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION);
+                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
                 }
                 break;
+            //ToDo: check if HID++ reports provide additional information (f.e. long version of device name is exchanged)
             case UNIFYING_RF_REPORT_HIDPP_LONG:
                 if (len != 22) return;
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_HIDPP_LONG] > 2 || logitech_cksm) {
                     p_caps->is_logitech = true;
-                    p_caps->is_unifying_compatible = true;
+                    p_caps->caps |= LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE;
+                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP;
                 }
                 break;
             case UNIFYING_RF_REPORT_HIDPP_SHORT:
                 if (len != 10) return;
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_HIDPP_SHORT] > 2 || logitech_cksm) {
                     p_caps->is_logitech = true;
-                    p_caps->is_unifying_compatible = true;
+                    p_caps->caps |= LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE;
+                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_SHORT_HIDPP;
                 }
                 break;
             case UNIFYING_RF_REPORT_LED:
                 if (len != 10) return;
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_LED]++;
+                p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD_LED;
+                p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
                 break;
             case UNIFYING_RF_REPORT_PAIRING:
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PAIRING]++;
@@ -259,21 +265,24 @@ void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr,
             case UNIFYING_RF_REPORT_PLAIN_KEYBOARD:
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_KEYBOARD] > 2 || logitech_cksm) {
                     p_caps->is_logitech = true;
-                    p_caps->is_plain_keyboard = true;
+                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
+                    p_caps->vuln_plain_injection = true;
                 } 
                 break;
             case UNIFYING_RF_REPORT_PLAIN_MOUSE:
                 if (len != 10) return;
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_MOUSE] > 2 || logitech_cksm) {
                     p_caps->is_logitech = true;
-                    p_caps->is_mouse = true;
+                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_MOUSE;
                 }
                 break;
             case UNIFYING_RF_REPORT_PLAIN_MULTIMEDIA:
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_MULTIMEDIA]++;
+                p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_MULTIMEDIA;
                 break;
             case UNIFYING_RF_REPORT_PLAIN_SYSTEM_CTL:
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_SYSTEM_CTL]++;
+                p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_POWER_KEYS;
                 break;
             case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
                 if (len != 10) return;

@@ -20,7 +20,8 @@ char* keycode_to_str(enum keys keycode) {
 #define LAYOUT_SWITCH_CASE(nameval, val) case nameval: {*p_out_report_seq=(void*)val; *out_rep_seq_len=sizeof(val) ;return NRF_SUCCESS; }
 
 /* maps the given wchar to respective HID report sequence (currently only US,DE layout) */
-uint32_t wchar_to_hid_report_seq(hid_keyboard_report_t ** p_out_report_seq, uint32_t * out_rep_seq_len, keyboard_language_layout_t in_layout, wchar_t in_rune) {
+uint32_t logitacker_keyboard_map_wc_to_hid_reports(hid_keyboard_report_t **p_out_report_seq, uint32_t *out_rep_seq_len,
+                                                   logitacker_keyboarmap_lang_t in_layout, wchar_t in_rune) {
 
     if (in_layout == LANGUAGE_LAYOUT_US) {
         switch (in_rune) {
@@ -42,9 +43,6 @@ uint32_t wchar_to_hid_report_seq(hid_keyboard_report_t ** p_out_report_seq, uint
     return NRF_SUCCESS;
 }
 
-typedef struct {
-    const char * p_pos;
-} str_to_hid_report_seq_ctx_t;
 
 /* Iterator, parses a rune from null terminated in_str on every call and returns an array of HID keyboard reports
  * which hold the needed key-presses to produce this rune (with respect to language layout
@@ -56,12 +54,25 @@ typedef struct {
  */
 
 // ToDo: append a key release report to every sequence after a rune
-uint32_t utf8_str_next_hid_report_seq(str_to_hid_report_seq_ctx_t * p_ctx, char * in_str, hid_keyboard_report_t ** p_out_next_report_seq, uint32_t * out_next_rep_seq_len, keyboard_language_layout_t in_layout) {
+uint32_t logitacker_keyboard_map_u8_str_to_hid_reports(logitacker_keyboard_map_u8_str_parser_ctx_t *p_ctx, char *in_str,
+                                                       hid_keyboard_report_t **p_out_next_report_seq,
+                                                       uint32_t *out_next_rep_seq_len,
+                                                       logitacker_keyboarmap_lang_t in_layout) {
     // ToDo: error checks for NULL params
 
     if (p_ctx->p_pos == NULL) {
         // first run, set to start of string
         p_ctx->p_pos = in_str;
+        p_ctx->append_release = false;
+    }
+
+    // check if we need to add a key release frame for this iteration
+    if (p_ctx->append_release) {
+        *p_out_next_report_seq = (void*) HID_REPORT_SEQUENCE_RELEASE;
+        *out_next_rep_seq_len = sizeof(HID_REPORT_SEQUENCE_RELEASE);
+        p_ctx->append_release = false;
+        return NRF_SUCCESS;
+
     }
 
     // if byte at p_pos is 0x00 we reached the end of the zero terminated string during last call and return an error this time
@@ -82,9 +93,8 @@ uint32_t utf8_str_next_hid_report_seq(str_to_hid_report_seq_ctx_t * p_ctx, char 
     //ToDo: check if c_utf contains an error value
 
     // map rune to output reports
-    if (wchar_to_hid_report_seq(p_out_next_report_seq, out_next_rep_seq_len, in_layout, c_utf) == NRF_SUCCESS) {
-        //NRF_LOG_INFO("NO REPORT FOR %lc", c_utf);
-
+    if (logitacker_keyboard_map_wc_to_hid_reports(p_out_next_report_seq, out_next_rep_seq_len, in_layout, c_utf) == NRF_SUCCESS) {
+        p_ctx->append_release=true;
         // reports are updated, let's return success
         return NRF_SUCCESS;
     } else {
@@ -103,14 +113,15 @@ char * test_key = "ÜÄüäHello world with abcÜ";
 
 void test_string_to_reports(void) {
     char * teststr = "Hello World ÜÄÖ!";
-    str_to_hid_report_seq_ctx_t ctx = {0};;
+    logitacker_keyboard_map_u8_str_parser_ctx_t ctx = {0};;
 
     hid_keyboard_report_t * rep_seq_result = {0};
     uint32_t rep_seq_result_size = 0;
 
     int runecount = 0;
     char countstr[16];
-    while (utf8_str_next_hid_report_seq(&ctx, teststr, &rep_seq_result, &rep_seq_result_size, LANGUAGE_LAYOUT_DE) == NRF_SUCCESS) {
+    while (logitacker_keyboard_map_u8_str_to_hid_reports(&ctx, teststr, &rep_seq_result, &rep_seq_result_size,
+                                                         LANGUAGE_LAYOUT_DE) == NRF_SUCCESS) {
         sprintf(countstr, "rune %d:", runecount++);
         NRF_LOG_INFO("%s", nrf_log_push(countstr));
         NRF_LOG_HEXDUMP_INFO(rep_seq_result, rep_seq_result_size); //log !raw! resulting report array
@@ -147,14 +158,14 @@ void logitacker_keyboard_map_test(void) {
 
     hid_keyboard_report_t * rep_seq = {0};
     uint32_t rep_seq_size = 0;
-    if (wchar_to_hid_report_seq(&rep_seq,&rep_seq_size,LANGUAGE_LAYOUT_US,L'A') != NRF_SUCCESS) {
+    if (logitacker_keyboard_map_wc_to_hid_reports(&rep_seq, &rep_seq_size, LANGUAGE_LAYOUT_US, L'A') != NRF_SUCCESS) {
         NRF_LOG_INFO("NO REPORT FOR 'A'");
     } else {
         NRF_LOG_INFO("REPORT FOR 'A'..");
         NRF_LOG_HEXDUMP_INFO(rep_seq, rep_seq_size);
     }
 
-    if (wchar_to_hid_report_seq(&rep_seq,&rep_seq_size, LANGUAGE_LAYOUT_US, L'\n') != NRF_SUCCESS) {
+    if (logitacker_keyboard_map_wc_to_hid_reports(&rep_seq, &rep_seq_size, LANGUAGE_LAYOUT_US, L'\n') != NRF_SUCCESS) {
         NRF_LOG_INFO("NO REPORT FOR 'Ü'");
     } else {
         NRF_LOG_INFO("REPORT FOR '\n'..");
@@ -163,7 +174,7 @@ void logitacker_keyboard_map_test(void) {
 
     NRF_LOG_INFO("TEST ALL")
     for (wchar_t c=0; c<0x7f; c++) {
-        if (wchar_to_hid_report_seq(&rep_seq,&rep_seq_size, LANGUAGE_LAYOUT_DE, c) != NRF_SUCCESS) {
+        if (logitacker_keyboard_map_wc_to_hid_reports(&rep_seq, &rep_seq_size, LANGUAGE_LAYOUT_DE, c) != NRF_SUCCESS) {
             NRF_LOG_INFO("NO REPORT FOR %lc", c);
         } else {
             NRF_LOG_INFO("REPORT FOR %lc..", c);
@@ -179,7 +190,7 @@ void logitacker_keyboard_map_test(void) {
         uint32_t c_utf;
         p_pos = utf8DecodeRune(p_pos, 0, &c_utf);
         sprintf(buf, "c_utf %.8lx, Ü %.8x", c_utf, L'Ü');
-        if (wchar_to_hid_report_seq(&rep_seq,&rep_seq_size, LANGUAGE_LAYOUT_DE, c_utf) != NRF_SUCCESS) {
+        if (logitacker_keyboard_map_wc_to_hid_reports(&rep_seq, &rep_seq_size, LANGUAGE_LAYOUT_DE, c_utf) != NRF_SUCCESS) {
             NRF_LOG_INFO("NO REPORT FOR %lc", c_utf);
 
         } else {

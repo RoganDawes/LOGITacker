@@ -29,6 +29,13 @@ typedef enum {
     LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION   // continues in active enumeration mode when address found
 } logitacker_discovery_on_new_address_t;
 
+typedef enum {
+    LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_CONTINUE,   // continues in discovery mode, when new address has been found
+    LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION,   // continues in passive enumeration mode when address found
+    LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION,   // continues in active enumeration mode when address found
+    LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY
+} logitacker_pairing_sniff_on_success_t;
+
 
 uint32_t logitacker_init();
 
