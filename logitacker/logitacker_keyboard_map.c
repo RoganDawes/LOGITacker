@@ -1,67 +1,102 @@
+#include <libraries/log/nrf_log_ctrl.h>
+#include "stdlib.h"
 #include "logitacker_keyboard_map.h"
+#include "utf.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_KEYBOARD_MAP
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
 
-#define isutf(c) (((c)&0xC0)!=0x80)
 
+char* keycode_to_str(enum keys keycode) {
+    switch (keycode) {
+        ALL_KEYCODES(KEYCODE_SWITCH_CASE)
+        default:
+            return "UNKNOWN HID KEY";
+    }
+}
 
+#define LAYOUT_SWITCH_CASE(nameval, val) case nameval: {*p_out_report_seq=(void*)val; *out_rep_seq_len=sizeof(val) ;return NRF_SUCCESS; }
 
-int u8_strlen(char *s);
-uint32_t u8_nextchar(char *s, int *i);
+uint32_t wchar_to_hid_report_seq(hid_keyboard_report_t ** p_out_report_seq, uint32_t * out_rep_seq_len, char * in_layout_name, wchar_t in_rune) {
 
+    switch (in_rune) {
+        LAYOUT_US(LAYOUT_SWITCH_CASE)
+        default:
+            return NRF_ERROR_INVALID_PARAM;
+    }
 
-
-int u8_strlen(char *s)
-{
-    int count = 0;
-    int i = 0;
-
-    while (u8_nextchar(s, &i) != 0)
-        count++;
-
-    return count;
+    return NRF_SUCCESS;
 }
 
 
-/* reads the next utf-8 sequence out of a string, updating an index */
-uint32_t u8_nextchar(char *s, int *i)
-{
-    uint32_t ch = 0;
-    int sz = 0;
+char * test_key = "ÜÄiìéèHello world with abcÜ";
 
-    do {
-        ch <<= 8;
-        ch += (unsigned char)s[(*i)++];
-        sz++;
-    } while (s[*i] && !isutf(s[*i]));
-
-    return ch;
-}
-char * test_key = "ÜHello world with \xF0\x9D\x84\x9E abcÜ\x00";
 
 
 void logitacker_keyboard_map_test(void) {
-    NRF_LOG_INFO("helper map");
-    NRF_LOG_INFO("Testkey (len %d, wlen %d): %s", strlen(test_key), test_key);
     NRF_LOG_HEXDUMP_INFO(test_key, strlen(test_key));
+    NRF_LOG_INFO("Testkey (len %d): %s", strlen(test_key), test_key);
+    NRF_LOG_INFO(test_key);
 
-    int len = strlen(test_key);
-    int pos = 0;
 
 
-    while (pos < len ) {
-        uint32_t c_utf = u8_nextchar(test_key, &pos);
-        NRF_LOG_INFO("utf8: %.8X %c", c_utf, c_utf);
+    static wchar_t CP_UE = L'Ü';
+
+    const char * p_pos = test_key;
+    while (*p_pos != 0x00) {
+        uint32_t c_utf;
+        p_pos = utf8DecodeRune(p_pos, 0, &c_utf);
+        char mb[4] = { 0 };
+        utf8EncodeRune(c_utf, mb);
+        NRF_LOG_INFO("utf8 (unicode %.8x): %s", c_utf, nrf_log_push(mb));
+
+    }
+    NRF_LOG_INFO("MYHID_KEY_A: %s", keycode_to_str(HID_KEY_A));
+    NRF_LOG_INFO("MYHID_KEY_0: %s", keycode_to_str(HID_KEY_0));
+    NRF_LOG_INFO("MYHID_KEY_1: %s", keycode_to_str(HID_KEY_1));
+    NRF_LOG_INFO("MYHID_KEY_Z: %s", keycode_to_str(HID_KEY_Z));
+    NRF_LOG_INFO("Key 5: %s", keycode_to_str(5));
+    NRF_LOG_INFO("Key 6: %s", keycode_to_str(6));
+    NRF_LOG_INFO("Key 7: %s", keycode_to_str(7));
+    NRF_LOG_INFO("Ü: %.8x", CP_UE);
+
+    hid_keyboard_report_t * rep_seq = {0};
+    uint32_t rep_seq_size = 0;
+    if (wchar_to_hid_report_seq2(&rep_seq,&rep_seq_size,"US",L'A') != NRF_SUCCESS) {
+        NRF_LOG_INFO("NO REPORT FOR 'A'");
+    } else {
+        NRF_LOG_INFO("REPORT FOR 'A'..");
+        NRF_LOG_HEXDUMP_INFO(rep_seq, rep_seq_size);
     }
 
-    NRF_LOG_INFO("MYHID_KEY_A: %s", KEYCODE_TO_STR(MYHID_KEY_A));
-    NRF_LOG_INFO("MYHID_KEY_0: %s", KEYCODE_TO_STR(MYHID_KEY_0));
-    NRF_LOG_INFO("MYHID_KEY_1: %s", KEYCODE_TO_STR(MYHID_KEY_1));
-    NRF_LOG_INFO("MYHID_KEY_Z: %s", KEYCODE_TO_STR(MYHID_KEY_Z));
-    NRF_LOG_INFO("Key 5: %s", KEYCODE_TO_STR(5));
-    NRF_LOG_INFO("Key 6: %s", KEYCODE_TO_STR(6));
-    NRF_LOG_INFO("Key 7: %s", KEYCODE_TO_STR(7));
+    if (wchar_to_hid_report_seq2(&rep_seq,&rep_seq_size,"US",L'\n') != NRF_SUCCESS) {
+        NRF_LOG_INFO("NO REPORT FOR 'Ü'");
+    } else {
+        NRF_LOG_INFO("REPORT FOR '\n'..");
+        NRF_LOG_HEXDUMP_INFO(rep_seq, rep_seq_size);
+    }
+
+    NRF_LOG_INFO("TES ALL")
+    for (wchar_t c=0; c<0x7f; c++) {
+        if (wchar_to_hid_report_seq2(&rep_seq,&rep_seq_size,"US", c) != NRF_SUCCESS) {
+            NRF_LOG_INFO("NO REPORT FOR %lc", c);
+        } else {
+            NRF_LOG_INFO("REPORT FOR %lc..", c);
+            NRF_LOG_HEXDUMP_INFO(rep_seq, rep_seq_size);
+        }
+
+    }
+
+    /*
+    NRF_LOG_INFO("rep ABC mod %.x keys (count %x)", REPORT_UPPER_ABC.mod, (uint32_t*) REPORT_UPPER_ABC.keys);
+    NRF_LOG_HEXDUMP_INFO(&REPORT_UPPER_ABC, sizeof(REPORT_UPPER_ABC));
+    */
+    /*
+    HID_RUNE_DE_00000050 = HID_REPORT_SEQUENCE_US_LOWER_Y
+    HID_RUNE_DE_000000DC = HID_REPORT_SEQUENCE_US_LOWER_Y
+    DEF_RUNE(L'z', DE, HID_REPORT_SEQUENCE_US_LOWER_Y);
+    DEF_RUNE(L'Ü', DE, HID_REPORT_SEQUENCE_US_LOWER_Y);
+    */
 }

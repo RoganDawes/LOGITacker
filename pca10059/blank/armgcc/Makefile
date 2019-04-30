@@ -124,7 +124,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/kbd \
   $(SDK_ROOT)/components/libraries/balloc \
   $(PROJ_DIR)/esb_illegalmod \
-  $(PROJ_DIR)/helper \
   $(PROJ_DIR)/logitacker \
   $(SDK_ROOT)/components/drivers_nrf/usbd \
   $(SDK_ROOT)/components/libraries/ringbuf \
@@ -194,6 +193,7 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in a separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums
+CFLAGS += -fexec-charset=UTF-8
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
