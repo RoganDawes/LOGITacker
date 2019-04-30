@@ -42,9 +42,80 @@ uint32_t wchar_to_hid_report_seq(hid_keyboard_report_t ** p_out_report_seq, uint
     return NRF_SUCCESS;
 }
 
+typedef struct {
+    const char * p_pos;
+} str_to_hid_report_seq_ctx_t;
 
-char * test_key = "ÜÄiìéèHello world with abcÜ";
+/* Iterator, parses a rune from null terminated in_str on every call and returns an array of HID keyboard reports
+ * which hold the needed key-presses to produce this rune (with respect to language layout
+ * - input p_ctx                    : context with iterator data (f.e. current position in string)
+ * - input in_str                   : the UTF-8 encoded string to use (support for non ASCII characters like 'Ü' depends on language layout)
+ * - output p_out_next_report_seq   : pointer to array of resulting keyboard reports for current rune
+ * - output out_next_rep_seq_len    : overall size of resulting hid_keyboard_report_t[]
+ * - input in_layout                : keyboard language layout to use (currently LANGUAGE_LAYOUT_US / LANGUAGE_LAYOUT_DE)
+ */
 
+// ToDo: append a key release report to every sequence after a rune
+uint32_t utf8_str_next_hid_report_seq(str_to_hid_report_seq_ctx_t * p_ctx, char * in_str, hid_keyboard_report_t ** p_out_next_report_seq, uint32_t * out_next_rep_seq_len, keyboard_language_layout_t in_layout) {
+    // ToDo: error checks for NULL params
+
+    if (p_ctx->p_pos == NULL) {
+        // first run, set to start of string
+        p_ctx->p_pos = in_str;
+    }
+
+    // if byte at p_pos is 0x00 we reached the end of the zero terminated string during last call and return an error this time
+    if (*p_ctx->p_pos == 0x00) {
+        // reached end of string
+        p_ctx->p_pos = NULL; //reusable
+        *p_out_next_report_seq = (void*) HID_REPORT_SEQUENCE_RELEASE;
+        *out_next_rep_seq_len = sizeof(HID_REPORT_SEQUENCE_RELEASE);
+        return NRF_ERROR_NULL;
+    }
+
+
+    uint32_t c_utf; //stores decoded unicode codepoint (wchar) of next UTF-8 rune
+
+    //read UTF-8 rune and advance p_pos to next one
+    p_ctx->p_pos = utf8DecodeRune(p_ctx->p_pos, 0, &c_utf);
+
+    //ToDo: check if c_utf contains an error value
+
+    // map rune to output reports
+    if (wchar_to_hid_report_seq(p_out_next_report_seq, out_next_rep_seq_len, in_layout, c_utf) == NRF_SUCCESS) {
+        //NRF_LOG_INFO("NO REPORT FOR %lc", c_utf);
+
+        // reports are updated, let's return success
+        return NRF_SUCCESS;
+    } else {
+        // something went wrong, likely we can't translate, we return success anyways, but with a KEY_RELEASE report
+        // sequence (this allows going on with the remaining string, in case a mapping for a single rune is missing)
+        *p_out_next_report_seq = (void*) HID_REPORT_SEQUENCE_RELEASE;
+        *out_next_rep_seq_len = sizeof(HID_REPORT_SEQUENCE_RELEASE);
+        return NRF_SUCCESS;
+
+    }
+
+}
+
+
+char * test_key = "ÜÄüäHello world with abcÜ";
+
+void test_string_to_reports(void) {
+    char * teststr = "Hello World ÜÄÖ!";
+    str_to_hid_report_seq_ctx_t ctx = {0};;
+
+    hid_keyboard_report_t * rep_seq_result = {0};
+    uint32_t rep_seq_result_size = 0;
+
+    int runecount = 0;
+    char countstr[16];
+    while (utf8_str_next_hid_report_seq(&ctx, teststr, &rep_seq_result, &rep_seq_result_size, LANGUAGE_LAYOUT_DE) == NRF_SUCCESS) {
+        sprintf(countstr, "rune %d:", runecount++);
+        NRF_LOG_INFO("%s", nrf_log_push(countstr));
+        NRF_LOG_HEXDUMP_INFO(rep_seq_result, rep_seq_result_size); //log !raw! resulting report array
+    }
+}
 
 
 void logitacker_keyboard_map_test(void) {
@@ -101,15 +172,23 @@ void logitacker_keyboard_map_test(void) {
 
     }
 
+    char buf[256] = {0};
 
-    /*
-    NRF_LOG_INFO("rep ABC mod %.x keys (count %x)", REPORT_UPPER_ABC.mod, (uint32_t*) REPORT_UPPER_ABC.keys);
-    NRF_LOG_HEXDUMP_INFO(&REPORT_UPPER_ABC, sizeof(REPORT_UPPER_ABC));
-    */
-    /*
-    HID_RUNE_DE_00000050 = HID_REPORT_SEQUENCE_US_LOWER_Y
-    HID_RUNE_DE_000000DC = HID_REPORT_SEQUENCE_US_LOWER_Y
-    DEF_RUNE(L'z', DE, HID_REPORT_SEQUENCE_US_LOWER_Y);
-    DEF_RUNE(L'Ü', DE, HID_REPORT_SEQUENCE_US_LOWER_Y);
-    */
+    p_pos = test_key;
+    while (*p_pos != 0x00) {
+        uint32_t c_utf;
+        p_pos = utf8DecodeRune(p_pos, 0, &c_utf);
+        sprintf(buf, "c_utf %.8lx, Ü %.8x", c_utf, L'Ü');
+        if (wchar_to_hid_report_seq(&rep_seq,&rep_seq_size, LANGUAGE_LAYOUT_DE, c_utf) != NRF_SUCCESS) {
+            NRF_LOG_INFO("NO REPORT FOR %lc", c_utf);
+
+        } else {
+            NRF_LOG_INFO("REPORT FOR %s..", nrf_log_push(buf));
+            NRF_LOG_HEXDUMP_INFO(rep_seq, rep_seq_size);
+        }
+    }
+
+
+    //
+    test_string_to_reports(); //iterarte over string and produce reports
 }
