@@ -8,7 +8,7 @@
 NRF_LOG_MODULE_REGISTER();
 
 
-
+/* maps the given HID keycode to a string representation */
 char* keycode_to_str(enum keys keycode) {
     switch (keycode) {
         ALL_KEYCODES(KEYCODE_SWITCH_CASE)
@@ -19,12 +19,24 @@ char* keycode_to_str(enum keys keycode) {
 
 #define LAYOUT_SWITCH_CASE(nameval, val) case nameval: {*p_out_report_seq=(void*)val; *out_rep_seq_len=sizeof(val) ;return NRF_SUCCESS; }
 
-uint32_t wchar_to_hid_report_seq(hid_keyboard_report_t ** p_out_report_seq, uint32_t * out_rep_seq_len, char * in_layout_name, wchar_t in_rune) {
+/* maps the given wchar to respective HID report sequence (currently only US,DE layout) */
+uint32_t wchar_to_hid_report_seq(hid_keyboard_report_t ** p_out_report_seq, uint32_t * out_rep_seq_len, keyboard_language_layout_t in_layout, wchar_t in_rune) {
 
-    switch (in_rune) {
-        LAYOUT_US(LAYOUT_SWITCH_CASE)
-        default:
-            return NRF_ERROR_INVALID_PARAM;
+    if (in_layout == LANGUAGE_LAYOUT_US) {
+        switch (in_rune) {
+            LAYOUT_US(LAYOUT_SWITCH_CASE)
+            default:
+                return NRF_ERROR_INVALID_PARAM;
+        }
+
+    } else if (in_layout == LANGUAGE_LAYOUT_DE) {
+        switch (in_rune) {
+            LAYOUT_DE(LAYOUT_SWITCH_CASE)
+            default:
+                return NRF_ERROR_INVALID_PARAM;
+        }
+    } else {
+        return NRF_ERROR_INVALID_PARAM;
     }
 
     return NRF_SUCCESS;
@@ -64,23 +76,23 @@ void logitacker_keyboard_map_test(void) {
 
     hid_keyboard_report_t * rep_seq = {0};
     uint32_t rep_seq_size = 0;
-    if (wchar_to_hid_report_seq2(&rep_seq,&rep_seq_size,"US",L'A') != NRF_SUCCESS) {
+    if (wchar_to_hid_report_seq(&rep_seq,&rep_seq_size,LANGUAGE_LAYOUT_US,L'A') != NRF_SUCCESS) {
         NRF_LOG_INFO("NO REPORT FOR 'A'");
     } else {
         NRF_LOG_INFO("REPORT FOR 'A'..");
         NRF_LOG_HEXDUMP_INFO(rep_seq, rep_seq_size);
     }
 
-    if (wchar_to_hid_report_seq2(&rep_seq,&rep_seq_size,"US",L'\n') != NRF_SUCCESS) {
+    if (wchar_to_hid_report_seq(&rep_seq,&rep_seq_size, LANGUAGE_LAYOUT_US, L'\n') != NRF_SUCCESS) {
         NRF_LOG_INFO("NO REPORT FOR 'Ü'");
     } else {
         NRF_LOG_INFO("REPORT FOR '\n'..");
         NRF_LOG_HEXDUMP_INFO(rep_seq, rep_seq_size);
     }
 
-    NRF_LOG_INFO("TES ALL")
+    NRF_LOG_INFO("TEST ALL")
     for (wchar_t c=0; c<0x7f; c++) {
-        if (wchar_to_hid_report_seq2(&rep_seq,&rep_seq_size,"US", c) != NRF_SUCCESS) {
+        if (wchar_to_hid_report_seq(&rep_seq,&rep_seq_size, LANGUAGE_LAYOUT_DE, c) != NRF_SUCCESS) {
             NRF_LOG_INFO("NO REPORT FOR %lc", c);
         } else {
             NRF_LOG_INFO("REPORT FOR %lc..", c);
@@ -88,6 +100,7 @@ void logitacker_keyboard_map_test(void) {
         }
 
     }
+
 
     /*
     NRF_LOG_INFO("rep ABC mod %.x keys (count %x)", REPORT_UPPER_ABC.mod, (uint32_t*) REPORT_UPPER_ABC.keys);
