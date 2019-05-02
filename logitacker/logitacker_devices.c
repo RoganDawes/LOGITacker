@@ -199,18 +199,18 @@ void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr,
         return;
     }
 
-    logitacker_device_set_t * p_device = &m_dev_list[entry];
+    logitacker_device_set_t * p_device_set = &m_dev_list[entry];
 
     int prefix_index = -1;
-    uint32_t err_res = logitacker_device_get_prefix_index(&prefix_index, p_device, prefix);
+    uint32_t err_res = logitacker_device_get_prefix_index(&prefix_index, p_device_set, prefix);
     if (err_res != NRF_SUCCESS) {
         NRF_LOG_ERROR("logitacker_device_update_counters_from_frame: no data to update for given prefix")
         return;
     }
 
     // get counters struct
-    logitacker_device_frame_counter_t *p_frame_counters = &p_device->frame_counters[prefix_index];
-    logitacker_device_capabilities_t *p_caps = &p_device->capabilities[prefix_index];
+    logitacker_device_frame_counter_t *p_frame_counters = &p_device_set->frame_counters[prefix_index];
+    logitacker_device_capabilities_t *p_device_caps = &p_device_set->capabilities[prefix_index];
 
 
 
@@ -219,70 +219,70 @@ void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr,
     //test if frame has valid logitech checksum
     bool logitech_cksm = unifying_payload_validate_checksum(frame.data, frame.length);
     if (logitech_cksm) {
-        p_caps->is_logitech = true;
+        p_device_set->is_logitech = true;
         p_frame_counters->logitech_chksm++;
     }
 
     if (len == 5 && unifying_report_type == 0x00 && unifying_is_keep_alive) {
         //keep alive frame, set respective device to be unifying
-        p_caps->is_logitech = true;
+        p_device_set->is_logitech = true;
     } else {
         switch (unifying_report_type) {
             case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
                 if (len != 22) return;
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_ENCRYPTED_KEYBOARD] > 2 || logitech_cksm) {
-                    p_caps->is_logitech = true;
-                    p_caps->caps |= (LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE | LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION);
-                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
+                    p_device_set->is_logitech = true;
+                    p_device_caps->caps |= (LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE | LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION);
+                    p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
                 }
                 break;
             //ToDo: check if HID++ reports provide additional information (f.e. long version of device name is exchanged)
             case UNIFYING_RF_REPORT_HIDPP_LONG:
                 if (len != 22) return;
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_HIDPP_LONG] > 2 || logitech_cksm) {
-                    p_caps->is_logitech = true;
-                    p_caps->caps |= LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE;
-                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP;
+                    p_device_set->is_logitech = true;
+                    p_device_caps->caps |= LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE;
+                    p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP;
                 }
                 break;
             case UNIFYING_RF_REPORT_HIDPP_SHORT:
                 if (len != 10) return;
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_HIDPP_SHORT] > 2 || logitech_cksm) {
-                    p_caps->is_logitech = true;
-                    p_caps->caps |= LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE;
-                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_SHORT_HIDPP;
+                    p_device_set->is_logitech = true;
+                    p_device_caps->caps |= LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE;
+                    p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_SHORT_HIDPP;
                 }
                 break;
             case UNIFYING_RF_REPORT_LED:
                 if (len != 10) return;
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_LED]++;
-                p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD_LED;
-                p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
+                p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD_LED;
+                p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
                 break;
             case UNIFYING_RF_REPORT_PAIRING:
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PAIRING]++;
                 break;
             case UNIFYING_RF_REPORT_PLAIN_KEYBOARD:
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_KEYBOARD] > 2 || logitech_cksm) {
-                    p_caps->is_logitech = true;
-                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
-                    p_caps->vuln_plain_injection = true;
+                    p_device_set->is_logitech = true;
+                    p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
+                    p_device_caps->vuln_plain_injection = true;
                 } 
                 break;
             case UNIFYING_RF_REPORT_PLAIN_MOUSE:
                 if (len != 10) return;
                 if (++p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_MOUSE] > 2 || logitech_cksm) {
-                    p_caps->is_logitech = true;
-                    p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_MOUSE;
+                    p_device_set->is_logitech = true;
+                    p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_MOUSE;
                 }
                 break;
             case UNIFYING_RF_REPORT_PLAIN_MULTIMEDIA:
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_MULTIMEDIA]++;
-                p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_MULTIMEDIA;
+                p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_MULTIMEDIA;
                 break;
             case UNIFYING_RF_REPORT_PLAIN_SYSTEM_CTL:
                 p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_SYSTEM_CTL]++;
-                p_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_POWER_KEYS;
+                p_device_caps->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_POWER_KEYS;
                 break;
             case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
                 if (len != 10) return;

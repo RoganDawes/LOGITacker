@@ -247,7 +247,7 @@ static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
                 if (p_caps->vuln_forced_pairing) outcol = NRF_CLI_VT100_COLOR_YELLOW;
                 if (p_caps->vuln_plain_injection) outcol = NRF_CLI_VT100_COLOR_GREEN;
                 if (p_caps->key_known) outcol = NRF_CLI_VT100_COLOR_RED;
-                nrf_cli_fprintf(p_cli, outcol, "%s (frames %d, logitech: %d, plain key injection %d, forced pairing om addr %d, key known %d)\r\n", addr_str_buff, p_counters->overal, p_caps->is_logitech, p_caps->vuln_plain_injection, p_caps->vuln_forced_pairing, p_caps->key_known);
+                nrf_cli_fprintf(p_cli, outcol, "%s (activity %d, plain keystroke injection %d, forced pairing %d, link key known %d)\r\n", addr_str_buff, p_counters->overal, p_caps->vuln_plain_injection, p_caps->vuln_forced_pairing, p_caps->key_known);
             }
         }
     }

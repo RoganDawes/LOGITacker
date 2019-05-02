@@ -92,7 +92,6 @@ typedef struct {
     bool key_known;
 
     bool is_encrypted; //applies to RF key reports
-    bool is_logitech;
 } logitacker_device_capabilities_t;
 
 
@@ -108,6 +107,7 @@ typedef struct {
 
     bool is_texas_instruments;
     bool is_nordic;
+    bool is_logitech;
 
     logitacker_device_frame_counter_t frame_counters[LOGITACKER_DEVICE_MAX_PREFIX];
     logitacker_device_capabilities_t capabilities[LOGITACKER_DEVICE_MAX_PREFIX];

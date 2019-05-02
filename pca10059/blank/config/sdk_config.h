@@ -1858,7 +1858,7 @@
 // <i> Setting ID to 0 disables the string.
 //==========================================================
 #ifndef APP_USBD_STRING_ID_PRODUCT
-#define APP_USBD_STRING_ID_PRODUCT 2
+#define APP_USBD_STRING_ID_PRODUCT 1
 #endif
 // <q> APP_USBD_STRINGS_PRODUCT_EXTERN  - Define whether @ref APP_USBD_STRINGS_PRODUCT is created by macro or declared as a global variable.
  
@@ -1872,7 +1872,7 @@
 // <i> Note: This value is not editable in Configuration Wizard.
 // <i> List of product names that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
 #ifndef APP_USBD_STRINGS_PRODUCT
-#define APP_USBD_STRINGS_PRODUCT APP_USBD_STRING_DESC("nRF52 ESB toy")
+#define APP_USBD_STRINGS_PRODUCT APP_USBD_STRING_DESC("Logitacker by MaMe82")
 #endif
 
 // </e>

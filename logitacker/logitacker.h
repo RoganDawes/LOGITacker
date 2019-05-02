@@ -10,7 +10,7 @@ extern "C" {
 #include "nrf_esb_illegalmod.h"
 
 
-#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
+//#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
 #define ACTIVE_ENUM_INNER_LOOP_MAX 20 //how many CAPS presses / key releases get send
 #define ACTIVE_ENUM_TX_DELAY_MS 2 //delay in ms between successful transmits in active enum mode (below 8 ms re-tx delay of real devices, to allow collecting ack payloads before device does)
 
@@ -35,6 +35,14 @@ typedef enum {
     LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION,   // continues in active enumeration mode when address found
     LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY
 } logitacker_pairing_sniff_on_success_t;
+
+typedef enum {
+    LOGITACKER_MAINSTATE_DISCOVERY,   // radio in promiscuous mode, logs devices
+    LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION,   // radio in PTX mode, actively collecting dongle info
+    LOGITACKER_MAINSTATE_PASSIVE_ENUMERATION,   // radio in SNIFF mode, collecting device frames to determin caps
+    LOGITACKER_MAINSTATE_SNIFF_PAIRING,
+    LOGITACKER_MAINSTATE_IDLE
+} logitacker_mainstate_t;
 
 
 uint32_t logitacker_init();
