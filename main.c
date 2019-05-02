@@ -77,9 +77,9 @@
 
 
 #define BTN_TRIGGER_ACTION   0
+bool report_frames_without_crc_match = true; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
+bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
 
-    bool report_frames_without_crc_match = true; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
-    bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
 #ifdef NRF52840_MDK
     bool with_log = true;
 #else
@@ -547,6 +547,11 @@ int main(void)
     //high frequency clock needed for ESB
     clocks_start();
 
+    bsp_board_led_invert(LED_G);
+    ret = nrf_crypto_init();
+    APP_ERROR_CHECK(ret);
+
+    bsp_board_led_invert(LED_G);
 
 
     
@@ -572,13 +577,12 @@ int main(void)
         return ret;
     }
 */
-    ret = nrf_crypto_init();
-    APP_ERROR_CHECK(ret);
-
 //    timestamp_init();
 
     while (true)
     {
+
+
         app_sched_execute(); //!! esb_promiscuous mode frame validation is handled by scheduler !!
         //while (app_usbd_event_queue_process()) { }
         nrf_cli_process(&m_cli_cdc_acm);
