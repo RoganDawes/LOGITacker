@@ -1,12 +1,20 @@
+#include "nrf.h"
+#include "logitacker.h"
 #include "logitacker_processor_active_enum.h"
 #include "logitacker_processor.h"
 #include "helper.h"
 #include "string.h"
 #include "logitacker_devices.h"
-#include "nrf_log.h"
 #include "unifying.h"
 
+#define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_ACTIVE_ENUM
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
+
+
 #define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
+
+// ToDo: Implement deinit and reset functions of processor interface
 
 /*
  * ToDo: Due to forced pairing test, the dongle changes unused device slots to offer new RF addresses
@@ -31,6 +39,14 @@
  * device addresses manually (functionality has to be implemented).
  *
  */
+
+typedef enum {
+    ACTIVE_ENUM_PHASE_STARTED,   // try to reach dongle RF address for device
+    ACTIVE_ENUM_PHASE_FINISHED,   // try to reach dongle RF address for device
+    ACTIVE_ENUM_PHASE_RUNNING_TESTS   // tests if plain keystrokes could be injected (press CAPS, listen for LED reports)
+} active_enumeration_phase_t;
+
+
 
 typedef struct {
     logitacker_mainstate_t * p_logitacker_mainstate;
@@ -125,9 +141,9 @@ void processor_active_enum_init_func_(logitacker_processor_active_enum_ctx_t *se
     helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, self->current_rf_address);
     NRF_LOG_INFO("Start active enumeration for address %s", addr_str_buff);
 
-    nrf_esb_stop_rx(); //stop rx in case running
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
+    nrf_esb_stop_rx(); //stop rx in case running
 
     // set current address for pipe 1
     nrf_esb_enable_pipes(0x00); //disable all pipes
@@ -165,9 +181,9 @@ void processor_active_enum_deinit_func_(logitacker_processor_active_enum_ctx_t *
 
     NRF_LOG_INFO("DEINIT active enumeration for address %s", addr_str_buff);
 
-    nrf_esb_stop_rx(); //stop rx in case running
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
+    nrf_esb_stop_rx(); //stop rx in case running
 
     nrf_esb_set_mode(NRF_ESB_MODE_PRX); //should disable and end up in idle state
 
@@ -195,7 +211,7 @@ void processor_active_enum_timer_handler_func(logitacker_processor_t *p_processo
 
 void processor_active_enum_timer_handler_func_(logitacker_processor_active_enum_ctx_t *self, void *p_timer_ctx) {
     // if timer is called, write (and auto transmit) current ESB payload
-    self->phase = ACTIVE_ENUM_PHASE_TEST_PLAIN_KEYSTROKE_INJECTION;
+    self->phase = ACTIVE_ENUM_PHASE_RUNNING_TESTS;
 
     // write payload (autostart TX is enabled for PTX mode)
     //NRF_LOG_HEXDUMP_INFO(self->tmp_tx_payload.data, self->tmp_tx_payload.length);

@@ -94,6 +94,7 @@ SRC_FILES += \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
   $(PROJ_DIR)/logitacker/logitacker_processor.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_active_enum.c \
+  $(PROJ_DIR)/logitacker/logitacker_processor_passive_enum.c \
   $(PROJ_DIR)/logitacker/logitacker_keyboard_map.c \
   $(PROJ_DIR)/logitacker/logitacker_devices.c \
   $(PROJ_DIR)/logitacker/logitacker_radio.c \
