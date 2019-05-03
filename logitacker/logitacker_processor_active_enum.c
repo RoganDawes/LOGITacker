@@ -127,16 +127,11 @@ void processor_active_enum_init_func(logitacker_processor_t *p_processor) {
 
 void processor_active_enum_init_func_(logitacker_processor_active_enum_ctx_t *self) {
     *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION;
-//    m_state_local.current_bsp_event_handler = active_enum_event_handler_bsp;
-//    m_state_local.current_radio_event_handler = NULL;
-//    m_state_local.current_esb_event_handler = active_enum_event_handler_esb;
-//    m_state_local.current_timer_event_handler = active_enum_event_handler_timer_next_action;
-//    m_state_local.substate_active_enumeration.tx_delay_ms = ACTIVE_ENUM_TX_DELAY_MS;
     self->tx_delay_ms = ACTIVE_ENUM_TX_DELAY_MS;
 
     //helper_addr_to_base_and_prefix(m_state_local.substate_active_enumeration.base_addr, &m_state_local.substate_active_enumeration.known_prefix, rf_address, LOGITACKER_DEVICE_ADDR_LEN);
     helper_addr_to_base_and_prefix(self->base_addr, &self->known_prefix, self->current_rf_address, LOGITACKER_DEVICE_ADDR_LEN);
-    self->next_prefix = self->known_prefix+1;
+    self->next_prefix = self->known_prefix-1;
 
     helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, self->current_rf_address);
     NRF_LOG_INFO("Start active enumeration for address %s", addr_str_buff);
@@ -164,6 +159,9 @@ void processor_active_enum_init_func_(logitacker_processor_active_enum_ctx_t *se
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
     nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
     nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
+    nrf_esb_set_retransmit_count(1);
+    nrf_esb_set_retransmit_delay(250);
+    nrf_esb_set_tx_power(NRF_ESB_TX_POWER_8DBM);
 
     self->phase = ACTIVE_ENUM_PHASE_STARTED;
 
@@ -177,7 +175,6 @@ void processor_active_enum_deinit_func(logitacker_processor_t *p_processor) {
 
 void processor_active_enum_deinit_func_(logitacker_processor_active_enum_ctx_t *self) {
     *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
-    self->next_prefix = 0;
 
     NRF_LOG_INFO("DEINIT active enumeration for address %s", addr_str_buff);
 
@@ -346,7 +343,8 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 
         uint8_t rf_addr[5] = { 0 };
         helper_base_and_prefix_to_addr(rf_addr, self->base_addr, self->known_prefix, 5);
-        logitacker_enter_mode_passive_enum(rf_addr);
+        //logitacker_enter_mode_passive_enum(rf_addr);
+        logitacker_enter_mode_discovery();
         return;
     }
 
@@ -372,14 +370,13 @@ bool processor_active_enum_advance_to_next_addr_prefix(logitacker_processor_acti
         return true;
     }
 
-
     nrf_esb_enable_pipes(0x00); //disable all pipes
     nrf_esb_update_prefix(1, self->next_prefix); // set prefix and enable pipe 1
     self->current_rf_address[4] = self->next_prefix;
     helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, self->current_rf_address);
 
     NRF_LOG_INFO("Test next neighbour address %s", addr_str_buff);
-    self->next_prefix++;
+    self->next_prefix--;
     self->inner_loop_count = 0; // reset TX_SUCCESS loop count
     self->led_count = 0; // reset RX LED report counter
 

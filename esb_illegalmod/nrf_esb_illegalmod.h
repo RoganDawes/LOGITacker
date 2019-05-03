@@ -626,6 +626,7 @@ uint32_t nrf_esb_get_rf_frequency(uint32_t * p_frequency);
 
 uint32_t nrf_esb_enable_all_channel_tx_failover(bool enabled);
 uint32_t nrf_esb_set_all_channel_tx_failover_loop_count(uint8_t loop_count); //how often re-transmission should loop over available channels
+uint32_t nrf_esb_set_retransmit_count_and_delay_for_single_tx(uint16_t count, uint16_t delay);
 
 #ifdef __cplusplus
 }

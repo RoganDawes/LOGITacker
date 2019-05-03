@@ -14,6 +14,7 @@
 #include "logitacker_processor.h"
 #include "logitacker_processor_active_enum.h"
 #include "logitacker_processor_passive_enum.h"
+#include "logitacker_processor_pair_device.h"
 #include "utf.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
@@ -325,6 +326,7 @@ void pairing_sniff_assign_addr_to_pipe1(uint8_t const *const rf_address) {
     nrf_esb_set_base_address_1(base);
     nrf_esb_update_prefix(1, prefix);
     nrf_esb_enable_pipes(0x03);
+    nrf_esb_start_rx();
     app_timer_start(m_timer_next_tx_action, m_pair_sniff_ticks, NULL); // restart timer
 }
 
@@ -556,6 +558,39 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
     m_state_local.current_radio_event_handler = NULL;
     m_state_local.current_esb_event_handler = NULL;
     m_state_local.current_timer_event_handler = NULL;
+}
+
+void logitacker_enter_mode_pair_device(uint8_t const *rf_address) {
+    if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
+
+    char dev_name[] = "LOGITacker";
+    logitacker_pairing_info_t pi = {
+            .device_name_len = sizeof(dev_name),
+            .device_usability_info = LOGITACKER_DEVICE_USABILITY_INFO_PS_LOCATION_OTHER,
+            .device_nonce = {0x011, 0x22, 0x33, 0x44},
+            .device_report_types = LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD |
+                    LOGITACKER_DEVICE_REPORT_TYPES_POWER_KEYS |
+                    LOGITACKER_DEVICE_REPORT_TYPES_MULTIMEDIA |
+                    LOGITACKER_DEVICE_REPORT_TYPES_MEDIA_CENTER |
+                    LOGITACKER_DEVICE_REPORT_TYPES_MOUSE |
+                    LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD_LED |
+                    LOGITACKER_DEVICE_REPORT_TYPES_SHORT_HIDPP |
+                    LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP,
+            .device_serial = { 0xde, 0xad, 0x13, 0x37 },
+            .device_caps = LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE, // no link encryption (we could enable and calculate keys if we like)
+            .device_type = LOGITACKER_DEVICE_UNIFYING_TYPE_MOUSE, // of course this is shown as a mouse in Unifying software
+            .device_wpid = { 0x04, 0x02 }, // random
+    };
+    memcpy(pi.device_name, dev_name, pi.device_name_len);
+
+    p_processor = new_processor_pair_device(rf_address, &pi, m_timer_next_tx_action);
+    p_processor->p_init_func(p_processor);
+
+    m_state_local.current_bsp_event_handler = NULL;
+    m_state_local.current_radio_event_handler = NULL;
+    m_state_local.current_esb_event_handler = NULL;
+    m_state_local.current_timer_event_handler = NULL;
+
 }
 
 uint32_t logitacker_init() {

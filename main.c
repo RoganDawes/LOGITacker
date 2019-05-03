@@ -483,6 +483,12 @@ int main(void)
         /* Just waiting */
     }
 
+    bsp_board_led_invert(LED_G);
+    ret = nrf_crypto_init();
+    APP_ERROR_CHECK(ret);
+
+    bsp_board_led_invert(LED_G);
+
     ret = app_timer_init();
     APP_ERROR_CHECK(ret);
 
@@ -546,12 +552,6 @@ int main(void)
 
     //high frequency clock needed for ESB
     clocks_start();
-
-    bsp_board_led_invert(LED_G);
-    ret = nrf_crypto_init();
-    APP_ERROR_CHECK(ret);
-
-    bsp_board_led_invert(LED_G);
 
 
     

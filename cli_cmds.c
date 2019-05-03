@@ -6,6 +6,7 @@
 #include "logitacker.h"
 #include "logitacker_devices.h"
 #include "helper.h"
+#include "unifying.h"
 
 #define CLI_EXAMPLE_MAX_CMD_CNT (20u)
 #define CLI_EXAMPLE_MAX_CMD_LEN (33u)
@@ -134,8 +135,8 @@ static void cmd_discover_onhit(nrf_cli_t const * p_cli, size_t argc, char **argv
         /* Extra defined dummy option */
     static const nrf_cli_getopt_option_t opt[] = {
         NRF_CLI_OPT("continue","c", "stay in discovery mode when RF address found"),
-        NRF_CLI_OPT("passive_enum", "p","stay in discovery mode when RF address found"),
-        NRF_CLI_OPT("active_enum", "a","stay in discovery mode when RF address found")
+        NRF_CLI_OPT("passive_enum", "p","start passive enumeration when RF address found"),
+        NRF_CLI_OPT("active_enum", "a","start active enumeration when RF address found")
         
     };
 
@@ -173,6 +174,18 @@ static void cmd_discover_onhit(nrf_cli_t const * p_cli, size_t argc, char **argv
 static void cmd_pairing_sniff(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     logitacker_enter_mode_pairing_sniff();
+    /*
+    for (size_t i = 1; i < argc; i++)
+    {
+        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "%s ", argv[i]);
+    }
+    nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "\r\n");
+    */
+}
+
+static void cmd_pairing_run(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    logitacker_enter_mode_pair_device(UNIFYING_GLOBAL_PAIRING_ADDRESS);
     /*
     for (size_t i = 1; i < argc; i++)
     {
@@ -278,6 +291,7 @@ NRF_CLI_CMD_REGISTER(discover, &m_sub_discover, "discover", cmd_discover);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pairing)
 {
     NRF_CLI_CMD(sniff,   NULL, "Sniff pairing.", cmd_pairing_sniff),
+    NRF_CLI_CMD(run,   NULL, "Sniff pairing.", cmd_pairing_run),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(pairing, &m_sub_pairing, "discover", cmd_pairing);

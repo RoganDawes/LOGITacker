@@ -23,7 +23,8 @@ NRF_LOG_MODULE_REGISTER();
 #define BIT_MASK_UINT_8(x) (0xFF >> (8 - (x)))
 
 // Constant parameters
-#define RX_WAIT_FOR_ACK_TIMEOUT_US_2MBPS        (48)        /**< 2 Mb RX wait for acknowledgment time-out value. Smallest reliable value - 43. */
+//#define RX_WAIT_FOR_ACK_TIMEOUT_US_2MBPS        (48)        /**< 2 Mb RX wait for acknowledgment time-out value. Smallest reliable value - 43. */
+#define RX_WAIT_FOR_ACK_TIMEOUT_US_2MBPS        (50)        /**< 2 Mb RX wait for acknowledgment time-out value. For nRF24LU1+ (CU0007) 50 is the minimum reliable value (endless tests). */
 #define RX_WAIT_FOR_ACK_TIMEOUT_US_1MBPS        (73)        /**< 1 Mb RX wait for acknowledgment time-out value. Smallest reliable value - 68. */
 #define RX_WAIT_FOR_ACK_TIMEOUT_US_250KBPS      (250)       /**< 250 Kb RX wait for acknowledgment time-out value. */
 #define RX_WAIT_FOR_ACK_TIMEOUT_US_1MBPS_BLE    (73)        /**< 1 Mb RX wait for acknowledgment time-out (combined with BLE). Smallest reliable value - 68.*/
@@ -150,7 +151,7 @@ static volatile uint32_t            m_last_tx_attempts;
 static volatile uint32_t            m_wait_for_ack_timeout_us;
 
 static volatile uint32_t            m_retransmit_all_channels_remaining_channel_hop_count;
-static volatile bool                m_retransmit_all_channels_running;
+static volatile bool                m_retransmit_all_channels_running_channel_sweep;
 
 static volatile uint32_t            m_radio_shorts_common = _RADIO_SHORTS_COMMON;
 
@@ -294,6 +295,7 @@ uint32_t nrf_esb_init_ptx_mode() {
     esb_config.crc = NRF_ESB_CRC_16BIT;
     esb_config.retransmit_count = 2;
     esb_config.retransmit_delay = 3*250; // enough room to receive a full length ack payload before re-transmit timeout occurs
+
 //    esb_config.retransmit_on_all_channels = true;
 //    esb_config.retransmit_on_all_channels_loop_count = 1;
 
@@ -932,9 +934,9 @@ static void start_tx_transaction()
                 //Configure retransmit with channel hopping
                 if (m_config_local.retransmit_on_all_channels) {
                     // maximum channel hop count is size of channel table * loop count (only set for first transmission)
-                    if (!m_retransmit_all_channels_running) {
+                    if (!m_retransmit_all_channels_running_channel_sweep) {
                         m_retransmit_all_channels_remaining_channel_hop_count = (uint32_t) m_config_local.retransmit_on_all_channels_loop_count *  m_esb_addr.channel_to_frequency_len;
-                        m_retransmit_all_channels_running = true;
+                        m_retransmit_all_channels_running_channel_sweep = true;
                     }
                 } else {
                     m_retransmit_all_channels_remaining_channel_hop_count = 0;
@@ -1047,7 +1049,7 @@ static void on_radio_disabled_tx_wait_for_ack_continue_rx()
     // If the radio has received a packet and the CRC status is OK
     if (NRF_RADIO->EVENTS_END && NRF_RADIO->CRCSTATUS != 0)
     {
-        m_retransmit_all_channels_running = false;
+        //m_retransmit_all_channels_running_channel_sweep = false;
 
         NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1; // stop timer for re-transmit
         NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START); //stop PPI channel, which tasks TXEN after TIMER->EVENTS_COMPARE[1] (which is retransmit delay)
@@ -1056,7 +1058,7 @@ static void on_radio_disabled_tx_wait_for_ack_continue_rx()
 
         (void) nrf_esb_skip_tx(); //pop TX payload from TX queue
         m_retransmit_all_channels_remaining_channel_hop_count = 0; // reset multi_channel retransmit counter
-        m_retransmit_all_channels_running = false;
+        m_retransmit_all_channels_running_channel_sweep = false;
 
         if (m_rx_payload_buffer[0] > 0)
         {
@@ -1100,7 +1102,9 @@ static void on_radio_disabled_tx_wait_for_ack_continue_rx()
             }
 
             if (tx_failed) {
-                m_retransmit_all_channels_running = false;
+                NRF_LOG_DEBUG("tx fail: r-tx count %d, r-tx on %d", m_retransmit_all_channels_remaining_channel_hop_count, m_config_local.retransmit_on_all_channels)
+
+                m_retransmit_all_channels_running_channel_sweep = false;
                 NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1;
                 NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START);
                 // All retransmits are expended, and the TX operation is suspended
@@ -1152,7 +1156,7 @@ static void on_radio_disabled_tx_wait_for_ack()
     // If the radio has received a packet and the CRC status is OK
     if (NRF_RADIO->EVENTS_END && NRF_RADIO->CRCSTATUS != 0)
     {
-        m_retransmit_all_channels_running = false;
+        m_retransmit_all_channels_running_channel_sweep = false;
 
         NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1;
         NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START);
@@ -1162,7 +1166,7 @@ static void on_radio_disabled_tx_wait_for_ack()
 
         (void) nrf_esb_skip_tx();
         m_retransmit_all_channels_remaining_channel_hop_count = 0; // reset multi_channel retransmit counter
-        m_retransmit_all_channels_running = false;
+        m_retransmit_all_channels_running_channel_sweep = false;
 
         if (m_rx_payload_buffer[0] > 0)
         {
@@ -1198,7 +1202,9 @@ static void on_radio_disabled_tx_wait_for_ack()
             } 
 
             if (tx_failed) {
-                m_retransmit_all_channels_running = false;
+                NRF_LOG_DEBUG("tx fail: r-tx count %d, r-tx on %d", m_retransmit_all_channels_remaining_channel_hop_count, m_config_local.retransmit_on_all_channels)
+
+                m_retransmit_all_channels_running_channel_sweep = false;
                 NRF_ESB_SYS_TIMER->TASKS_SHUTDOWN = 1;
                 NRF_PPI->CHENCLR = (1 << NRF_ESB_PPI_TX_START);
                 // All retransmits are expended, and the TX operation is suspended
@@ -2519,8 +2525,16 @@ uint32_t nrf_esb_enable_all_channel_tx_failover(bool enabled) {
     m_config_local.retransmit_on_all_channels = enabled;
     return NRF_SUCCESS;
 }
+
 uint32_t nrf_esb_set_all_channel_tx_failover_loop_count(uint8_t loop_count) {
     VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
     m_config_local.retransmit_on_all_channels_loop_count = loop_count;
+    return NRF_SUCCESS;
+}
+
+uint32_t nrf_esb_set_retransmit_count_and_delay_for_single_tx(uint16_t count, uint16_t delay) {
+    VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
+    m_config_local.retransmit_count = count;
+    m_config_local.retransmit_delay = delay;
     return NRF_SUCCESS;
 }
