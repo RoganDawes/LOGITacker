@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "nrf_esb_illegalmod.h"
+#include "logitacker_keyboard_map.h"
 
 #define LOGITACKER_DEVICES_MAX_LIST_ENTRIES 30
 #define LOGITACKER_DEVICE_ADDR_STR_LEN 16
@@ -95,6 +96,9 @@ typedef struct {
     bool key_known;
 
     bool is_encrypted; //applies to RF key reports
+
+    bool has_enough_whitened_reports;
+    bool has_single_whitened_report;
 } logitacker_device_capabilities_t;
 
 
@@ -137,6 +141,8 @@ uint32_t
 logitacker_device_get_prefix_index(int *out_index, logitacker_device_set_t const *const in_device, uint8_t prefix);
 
 logitacker_device_capabilities_t *logitacker_device_get_caps_pointer(uint8_t const *const rf_addr);
+
+uint32_t logitacker_device_generate_keyboard_frame(logitacker_device_capabilities_t * p_device_caps, nrf_esb_payload_t * p_result_payload, hid_keyboard_report_t const * const p_in_hid_report);
 
 
 #endif

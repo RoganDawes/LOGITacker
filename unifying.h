@@ -30,6 +30,9 @@
 #define UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD   0x13
 #define UNIFYING_RF_REPORT_PAIRING              0x1f
 
+#define UNIFYING_RF_REPORT_BIT_KEEP_ALIVE       0x40
+#define UNIFYING_RF_REPORT_BIT_UNKNOWN          0x80
+
 // note: 26 frames are minimum to overwrite counter re-use protection, but more frames
 //       are used to overcome changing counters by real keypresses in between replayed RF frames
 #define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 60                                 //space for record storage per pipe

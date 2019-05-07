@@ -15,7 +15,7 @@ NRF_LOG_MODULE_REGISTER();
 
 // ToDo: implement error conditions leading to failed pairing
 
-#define PAIR_DEVICE_TX_DELAY_MS 1 //delay in ms between successful transmits
+#define PAIR_DEVICE_TX_DELAY_MS 8 //delay in ms between successful transmits
 #define PAIR_DEVICE_MARKER_BYTE_PHASE1 0xe1 // byte used as device ID in pairing requests
 #define PAIR_DEVICE_MARKER_BYTE_PHASE2 0xe2 // byte used as device ID in pairing requests
 #define PAIR_DEVICE_MARKER_BYTE_PHASE3 0xe3 // byte used as device ID in pairing requests
@@ -23,6 +23,8 @@ NRF_LOG_MODULE_REGISTER();
 static const uint8_t pseudo_device_address[5] = { 0xde, 0xad, 0xbe, 0xef, 0x82};
 static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN] = {0};
+
+#define PAIR_DEVICE_RETRANSMIT_BEFORE_FAIL 10
 
 typedef enum {
     PAIR_DEVICE_PHASE_START,
@@ -71,6 +73,8 @@ typedef struct {
 
     nrf_esb_payload_t tmp_tx_payload;
     nrf_esb_payload_t tmp_rx_payload;
+
+    int retransmit_counter;
 } logitacker_processor_pair_device_ctx_t;
 
 static logitacker_processor_t m_processor = {0};
@@ -160,6 +164,8 @@ void processor_pair_device_init_func_(logitacker_processor_pair_device_ctx_t *se
     self->tmp_tx_payload.noack = false;
     self->phase = PAIR_DEVICE_PHASE_START;
 
+    self->retransmit_counter = 0;
+
     // setup radio as PTX
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
     nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
@@ -186,7 +192,7 @@ void processor_pair_device_deinit_func_(logitacker_processor_pair_device_ctx_t *
     radio_stop_channel_hopping(); // disable channel hopping
     nrf_esb_stop_rx(); //stop rx in case running
 
-    nrf_esb_set_mode(NRF_ESB_MODE_PRX); //should disable and end up in idle state
+    nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS); //should disable and end up in idle state
 
     // set current address for pipe 1
     nrf_esb_enable_pipes(0x00); //disable all pipes
@@ -201,6 +207,7 @@ void processor_pair_device_deinit_func_(logitacker_processor_pair_device_ctx_t *
     memset(&self->tmp_rx_payload, 0, sizeof(self->tmp_rx_payload)); //unset RX payload
 
     self->phase = PAIR_DEVICE_PHASE_START;
+    self->retransmit_counter = 0;
 
     nrf_esb_enable_all_channel_tx_failover(false); // disable all channel failover
 }
@@ -232,6 +239,16 @@ void processor_pair_device_esb_handler_func_(logitacker_processor_pair_device_ct
     uint32_t channel_freq;
     nrf_esb_get_rf_frequency(&channel_freq);
 */
+    if (self->retransmit_counter >= PAIR_DEVICE_RETRANSMIT_BEFORE_FAIL) {
+        self->phase = PAIR_DEVICE_PHASE_FAILED;
+    }
+
+    if (self->phase == PAIR_DEVICE_PHASE_FAILED) {
+        NRF_LOG_WARNING("Device pairing failed, switching mode to discovery");
+        logitacker_enter_mode_discovery();
+        return;
+    }
+
     switch (p_esb_event->evt_id) {
         case NRF_ESB_EVENT_TX_FAILED:
         {
@@ -262,11 +279,6 @@ void processor_pair_device_esb_handler_func_(logitacker_processor_pair_device_ct
     }
 
 
-    if (self->phase == PAIR_DEVICE_PHASE_FAILED) {
-        NRF_LOG_WARNING("Device pairing failed, switching mode to discovery");
-        logitacker_enter_mode_discovery();
-        return;
-    }
     if (self->phase == PAIR_DEVICE_PHASE_SUCCEEDED) {
         NRF_LOG_WARNING("Device pairing succeeded, switching mode to discovery");
         logitacker_enter_mode_discovery();
@@ -580,8 +592,10 @@ void processor_pair_device_update_tx_payload_and_transmit(logitacker_processor_p
     PAIR_DEVICE_PHASE_FAILED,
  */
 
+    pair_device_phase_t old_phase = self->phase;
     sprintf(tmp_str, "%d", self->phase);
     NRF_LOG_INFO("phase before TX: %s", nrf_log_push(tmp_str));
+
 
 
     switch (self->phase) {
@@ -626,15 +640,18 @@ void processor_pair_device_update_tx_payload_and_transmit(logitacker_processor_p
             NRF_LOG_WARNING("update TX payload called for unknown pairing phase: %d", self->phase);
     }
 
+    if (old_phase == self->phase) {
+        self->retransmit_counter++;
+    } else {
+        self->retransmit_counter = 0;
+    }
 
     self->tmp_tx_payload.noack = false; // we need an ack
 
     // schedule payload for sending
-    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(PAIR_DEVICE_TX_DELAY_MS), NULL);
-    /*
-    // enqueue and send updated payload
-    nrf_esb_write_payload(&self->tmp_tx_payload);
-    */
+//    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(PAIR_DEVICE_TX_DELAY_MS), NULL);
+    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL);
+
     sprintf(tmp_str, "%d", self->phase);
     NRF_LOG_INFO("phase after TX: %s", nrf_log_push(tmp_str));
     NRF_LOG_HEXDUMP_INFO(self->tmp_tx_payload.data, self->tmp_tx_payload.length);

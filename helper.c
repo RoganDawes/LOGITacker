@@ -74,4 +74,19 @@ void helper_addr_to_hex_str(char * p_result, uint8_t len, uint8_t const * const 
     }
 }
 
+uint32_t helper_hex_str_to_addr(uint8_t * p_result_addr, uint8_t len, char const * const addr_str) {
+    ASSERT(p_result_addr);
+    ASSERT(addr_str);
+
+    int tmp;
+    for (int i=0; i<len; i++) {
+        if (sscanf(&addr_str[i*3], "%02x", &tmp) != 1) return NRF_ERROR_INVALID_PARAM;
+        p_result_addr[i] = (uint8_t) tmp;
+    }
+
+    NRF_LOG_INFO("parsed addr len %d:", len);
+    NRF_LOG_HEXDUMP_INFO(p_result_addr, len);
+    return NRF_SUCCESS;
+}
+
 

@@ -19,6 +19,8 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
+#include "logitacker_processor_inject.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 APP_TIMER_DEF(m_timer_next_tx_action);
@@ -558,6 +560,8 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
     m_state_local.current_radio_event_handler = NULL;
     m_state_local.current_esb_event_handler = NULL;
     m_state_local.current_timer_event_handler = NULL;
+
+    m_state_local.mainstate = LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION;
 }
 
 void logitacker_enter_mode_pair_device(uint8_t const *rf_address) {
@@ -591,6 +595,30 @@ void logitacker_enter_mode_pair_device(uint8_t const *rf_address) {
     m_state_local.current_esb_event_handler = NULL;
     m_state_local.current_timer_event_handler = NULL;
 
+    m_state_local.mainstate = LOGITACKER_MAINSTATE_PAIR_DEVICE;
+}
+
+void logitacker_enter_mode_injection(uint8_t const *rf_address) {
+    if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
+
+    p_processor = new_processor_inject(rf_address, m_timer_next_tx_action);
+    p_processor->p_init_func(p_processor);
+
+    m_state_local.current_bsp_event_handler = NULL;
+    m_state_local.current_radio_event_handler = NULL;
+    m_state_local.current_esb_event_handler = NULL;
+    m_state_local.current_timer_event_handler = NULL;
+
+    m_state_local.mainstate = LOGITACKER_MAINSTATE_INJECT;
+}
+
+void logitacker_injection_string(logitacker_keyboarmap_lang_t language_layout, char const * str) {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    logitacker_processor_inject_string(p_processor, language_layout, str);
 }
 
 uint32_t logitacker_init() {

@@ -8,6 +8,7 @@ extern "C" {
 
 #include <stdint.h>
 #include "nrf_esb_illegalmod.h"
+#include "logitacker_keyboard_map.h"
 
 
 //#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
@@ -44,6 +45,7 @@ typedef enum {
     LOGITACKER_MAINSTATE_PASSIVE_ENUMERATION,   // radio in SNIFF mode, collecting device frames to determin caps
     LOGITACKER_MAINSTATE_SNIFF_PAIRING,
     LOGITACKER_MAINSTATE_PAIR_DEVICE,
+    LOGITACKER_MAINSTATE_INJECT,
     LOGITACKER_MAINSTATE_IDLE
 } logitacker_mainstate_t;
 
@@ -61,6 +63,10 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address);
 void logitacker_enter_mode_pair_device(uint8_t const *rf_address);
 
 void logitacker_enter_mode_pairing_sniff();
+
+void logitacker_enter_mode_injection(uint8_t const *rf_address);
+void logitacker_injection_string(logitacker_keyboarmap_lang_t language_layout, char const * const str);
+
 
 #ifdef __cplusplus
 }

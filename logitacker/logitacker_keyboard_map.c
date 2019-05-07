@@ -54,7 +54,7 @@ uint32_t logitacker_keyboard_map_wc_to_hid_reports(hid_keyboard_report_t **p_out
  */
 
 // ToDo: append a key release report to every sequence after a rune
-uint32_t logitacker_keyboard_map_u8_str_to_hid_reports(logitacker_keyboard_map_u8_str_parser_ctx_t *p_ctx, char *in_str,
+uint32_t logitacker_keyboard_map_u8_str_to_hid_reports(logitacker_keyboard_map_u8_str_parser_ctx_t *p_ctx, char const *in_str,
                                                        hid_keyboard_report_t **p_out_next_report_seq,
                                                        uint32_t *out_next_rep_seq_len,
                                                        logitacker_keyboarmap_lang_t in_layout) {
@@ -113,7 +113,7 @@ char * test_key = "ÜÄüäHello world with abcÜ";
 
 void test_string_to_reports(void) {
     char * teststr = "Hello World ÜÄÖ!";
-    logitacker_keyboard_map_u8_str_parser_ctx_t ctx = {0};;
+    logitacker_keyboard_map_u8_str_parser_ctx_t ctx = {0};
 
     hid_keyboard_report_t * rep_seq_result = {0};
     uint32_t rep_seq_result_size = 0;
