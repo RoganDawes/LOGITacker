@@ -21,7 +21,7 @@ char* keycode_to_str(enum keys keycode) {
 
 /* maps the given wchar to respective HID report sequence (currently only US,DE layout) */
 uint32_t logitacker_keyboard_map_wc_to_hid_reports(hid_keyboard_report_t **p_out_report_seq, uint32_t *out_rep_seq_len,
-                                                   logitacker_keyboarmap_lang_t in_layout, wchar_t in_rune) {
+                                                   logitacker_keyboard_map_lang_t in_layout, wchar_t in_rune) {
 
     if (in_layout == LANGUAGE_LAYOUT_US) {
         switch (in_rune) {
@@ -57,7 +57,7 @@ uint32_t logitacker_keyboard_map_wc_to_hid_reports(hid_keyboard_report_t **p_out
 uint32_t logitacker_keyboard_map_u8_str_to_hid_reports(logitacker_keyboard_map_u8_str_parser_ctx_t *p_ctx, char const *in_str,
                                                        hid_keyboard_report_t **p_out_next_report_seq,
                                                        uint32_t *out_next_rep_seq_len,
-                                                       logitacker_keyboarmap_lang_t in_layout) {
+                                                       logitacker_keyboard_map_lang_t in_layout) {
     // ToDo: error checks for NULL params
 
     if (p_ctx->p_pos == NULL) {

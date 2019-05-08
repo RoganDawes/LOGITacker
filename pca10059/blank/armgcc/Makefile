@@ -83,6 +83,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_init.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_shared.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_rng.c \
+  $(SDK_ROOT)/components/libraries/ringbuf/nrf_ringbuf.c \
   $(PROJ_DIR)/helper.c \
   $(PROJ_DIR)/state.c \
   $(PROJ_DIR)/unifying.c \
@@ -123,6 +124,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/bsp \
   $(SDK_ROOT)/components/libraries/crc16 \
   $(SDK_ROOT)/components/libraries/fds \
+  $(SDK_ROOT)/components/libraries/ringbuf \
   ../config \
   $(SDK_ROOT)/components/libraries/usbd/class/cdc \
   $(SDK_ROOT)/components/libraries/usbd/class/cdc/acm \

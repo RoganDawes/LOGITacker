@@ -612,7 +612,7 @@ void logitacker_enter_mode_injection(uint8_t const *rf_address) {
     m_state_local.mainstate = LOGITACKER_MAINSTATE_INJECT;
 }
 
-void logitacker_injection_string(logitacker_keyboarmap_lang_t language_layout, char const * str) {
+void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout, char * str) {
     if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");
         return;

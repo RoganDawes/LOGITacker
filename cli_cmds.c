@@ -124,7 +124,6 @@ static void cmd_counter(nrf_cli_t const * p_cli, size_t argc, char **argv)
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: unknown parameter: %s\r\n", argv[0], argv[1]);
 }
 
-static logitacker_device_capabilities_t m_tmp_device_caps;
 static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     if (argc > 1)
@@ -145,18 +144,6 @@ static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 
         //logitacker_keyboard_map_test();
-        nrf_esb_payload_t tmp_pay = {0};
-        logitacker_device_capabilities_t * p_caps = logitacker_device_get_caps_pointer(addr);
-        if (p_caps == NULL) {
-            nrf_cli_fprintf(p_cli, NRF_CLI_WARNING, "device not found, creating capabilities\r\n");
-            m_tmp_device_caps.is_encrypted = false;
-            memcpy(m_tmp_device_caps.rf_address, addr, 5);
-            p_caps = &m_tmp_device_caps;
-        }
-        logitacker_tx_payload_provider_t * p_pay_provider = new_payload_provider_string(p_caps, LANGUAGE_LAYOUT_DE, "^A`BCDEF");
-        while ((*p_pay_provider->p_get_next)(p_pay_provider, &tmp_pay)) {};
-
-
         logitacker_enter_mode_injection(addr);
         logitacker_injection_string(LANGUAGE_LAYOUT_DE, "Hello World!");
 
@@ -167,6 +154,44 @@ static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
     }
 
+}
+
+static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    if (argc > 1)
+    {
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_DEFAULT, "parameter count %d\r\n", argc);
+
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Trying to send keystrokes using address %s\r\n", tmp_addr_str);
+
+
+
+        //logitacker_keyboard_map_test();
+        logitacker_enter_mode_injection(addr);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "device address needed, format has to be xx:xx:xx:xx:xx\r\n");
+        return;
+
+    }
+
+}
+
+static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    for (int i=0; i<argc;i++) {
+        logitacker_injection_string(LANGUAGE_LAYOUT_DE, argv[i]);
+        logitacker_injection_string(LANGUAGE_LAYOUT_DE, " ");
+    }
 }
 
 
@@ -348,7 +373,14 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pairing)
 };
 NRF_CLI_CMD_REGISTER(pairing, &m_sub_pairing, "discover", cmd_pairing);
 
-NRF_CLI_CMD_REGISTER(devices, NULL, "Liost discovered devices", cmd_devices);
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
+{
+    NRF_CLI_CMD(string,   NULL, "inject given string", cmd_inject_string),
+    NRF_CLI_SUBCMD_SET_END
+};
+NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);
+
+NRF_CLI_CMD_REGISTER(devices, NULL, "List discovered devices", cmd_devices);
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_counter)
 {

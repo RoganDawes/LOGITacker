@@ -8,6 +8,6 @@
 
 logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, app_timer_id_t timer_next_action);
 
-void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inject, logitacker_keyboarmap_lang_t lang, char const * const str);
+void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inject, logitacker_keyboard_map_lang_t lang, char * str);
 
 #endif //LOGITACKER_PROCESSOR_INJECT_H

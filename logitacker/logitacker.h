@@ -65,7 +65,7 @@ void logitacker_enter_mode_pair_device(uint8_t const *rf_address);
 void logitacker_enter_mode_pairing_sniff();
 
 void logitacker_enter_mode_injection(uint8_t const *rf_address);
-void logitacker_injection_string(logitacker_keyboarmap_lang_t language_layout, char const * const str);
+void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout, char * str);
 
 
 #ifdef __cplusplus
