@@ -18,7 +18,7 @@ extern "C" {
 
 
 #define LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS 100 // time in ms to stop channel hopping in discovery mode, once a valid ESB frame is received
-#define LOGITACKER_DISCOVERY_CHANNEL_HOP_INTERVAL_MS 30 // channel hop interval in discovery mode
+#define LOGITACKER_DISCOVERY_CHANNEL_HOP_INTERVAL_MS 20 // channel hop interval in discovery mode
 
 #define LOGITACKER_PASSIVE_ENUM_STAY_ON_CHANNEL_AFTER_RX_MS 1300 // time in ms to stop channel hopping in passive mode, once a valid ESB frame is received
 #define LOGITACKER_PASSIVE_ENUM_CHANNEL_HOP_INTERVAL_MS 30 // channel hop interval in passive enum mode
@@ -65,8 +65,9 @@ void logitacker_enter_mode_pair_device(uint8_t const *rf_address);
 void logitacker_enter_mode_pairing_sniff();
 
 void logitacker_enter_mode_injection(uint8_t const *rf_address);
-void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout, char * str);
 
+void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout, char * str);
+void logitacker_injection_delay(uint32_t delay_ms);
 
 #ifdef __cplusplus
 }

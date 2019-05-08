@@ -188,7 +188,10 @@ static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-    for (int i=0; i<argc;i++) {
+    //let's inject a 5s delay upfront
+    logitacker_injection_delay(5000);
+
+    for (int i=1; i<argc;i++) {
         logitacker_injection_string(LANGUAGE_LAYOUT_DE, argv[i]);
         logitacker_injection_string(LANGUAGE_LAYOUT_DE, " ");
     }
@@ -322,22 +325,23 @@ static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN];
 static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     for (int i=0; i<LOGITACKER_DEVICES_MAX_LIST_ENTRIES; i++) {
-        logitacker_device_set_t *p_device = logitacker_device_set_list_get(i);
-        if (p_device != NULL) {
+        logitacker_device_set_t *p_device_set = logitacker_device_set_list_get(i);
+        if (p_device_set != NULL) {
 
-            for (int prefix_index=0; prefix_index < p_device->num_device_prefixes; prefix_index++) {
-                uint8_t prefix = p_device->device_prefixes[prefix_index];
-                logitacker_device_capabilities_t * p_caps = &p_device->capabilities[prefix_index];
-                logitacker_device_frame_counter_t * p_counters = &p_device->frame_counters[prefix_index];
+            for (int prefix_index=0; prefix_index < p_device_set->num_device_prefixes; prefix_index++) {
+                uint8_t prefix = p_device_set->device_prefixes[prefix_index];
+                logitacker_device_capabilities_t * p_caps = &p_device_set->capabilities[prefix_index];
+                logitacker_device_frame_counter_t * p_counters = &p_device_set->frame_counters[prefix_index];
 
-                helper_base_and_prefix_to_addr(tmp_addr, p_device->base_addr, prefix, 5);
+                helper_base_and_prefix_to_addr(tmp_addr, p_device_set->base_addr, prefix, 5);
                 helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, tmp_addr);
 
                 nrf_cli_vt100_color_t outcol = NRF_CLI_VT100_COLOR_DEFAULT;
+                if (p_device_set->is_logitech) outcol = NRF_CLI_VT100_COLOR_BLUE;
                 if (p_caps->vuln_forced_pairing) outcol = NRF_CLI_VT100_COLOR_YELLOW;
                 if (p_caps->vuln_plain_injection) outcol = NRF_CLI_VT100_COLOR_GREEN;
                 if (p_caps->key_known) outcol = NRF_CLI_VT100_COLOR_RED;
-                nrf_cli_fprintf(p_cli, outcol, "%s (activity %d, plain keystroke injection %d, forced pairing %d, link key known %d)\r\n", addr_str_buff, p_counters->overal, p_caps->vuln_plain_injection, p_caps->vuln_forced_pairing, p_caps->key_known);
+                nrf_cli_fprintf(p_cli, outcol, "%s (activity %d, Logitech: %d, plain keystroke injection %d, forced pairing %d, link key known %d)\r\n", addr_str_buff, p_counters->overal, p_device_set->is_logitech, p_caps->vuln_plain_injection, p_caps->vuln_forced_pairing, p_caps->key_known);
             }
         }
     }

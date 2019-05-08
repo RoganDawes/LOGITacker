@@ -273,24 +273,32 @@ void discovery_process_rx() {
             logitacker_device_set_t *p_device = logitacker_device_set_add_new_by_dev_addr(addr);
 
             // update device counters
+            bool isLogitech = false;
             if (p_device != NULL) {
                 logitacker_radio_convert_promiscuous_frame_to_default_frame(&tmp_payload, rx_payload);
                 //logitacker_device_update_counters_from_frame(p_device, prefix, tmp_payload);
                 logitacker_device_update_counters_from_frame(addr, tmp_payload);
+                if (p_device->is_logitech) isLogitech=true;
             }
 
-            switch (m_state_local.substate_discovery.on_new_address_action) {
-                case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
-                    break;
-                case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
-                    logitacker_enter_mode_active_enum(addr);
-                    break;
-                case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
-                    logitacker_enter_mode_passive_enum(addr);
-                    break;
-                default:
-                    // do nothing, stay in discovery
-                    break;
+            if (isLogitech) {
+                NRF_LOG_INFO("discovered device is Logitech")
+                switch (m_state_local.substate_discovery.on_new_address_action) {
+                    case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
+                        break;
+                    case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
+                        logitacker_enter_mode_active_enum(addr);
+                        break;
+                    case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
+                        logitacker_enter_mode_passive_enum(addr);
+                        break;
+                    default:
+                        // do nothing, stay in discovery
+                        break;
+                }
+
+            } else {
+                NRF_LOG_INFO("Discovered device doesn't seem to be Logitech, continue discovery...");
             }
         } else {
             NRF_LOG_WARNING("invalid promiscuous frame in discovery mode, shouldn't happen because of filtering");
@@ -619,6 +627,15 @@ void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout,
     }
 
     logitacker_processor_inject_string(p_processor, language_layout, str);
+}
+
+void logitacker_injection_delay(uint32_t delay_ms) {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    logitacker_processor_inject_delay(p_processor, delay_ms);
 }
 
 uint32_t logitacker_init() {

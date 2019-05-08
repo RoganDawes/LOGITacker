@@ -25,11 +25,13 @@ NRF_RINGBUF_DEF(m_test_ringbuf, INJECT_RINGBUF_BYTES);
 typedef enum inject_task_type inject_task_type_t;
 typedef struct inject_task inject_task_t;
 uint32_t ringbuf_available();
+bool push_task_delay(uint32_t delay_ms);
 bool push_task_string(logitacker_keyboard_map_lang_t lang, char * str);
 bool push_task(inject_task_t task);
 bool pop_task(inject_task_t * p_task);
 bool free_task(inject_task_t task);
 
+// ToDo: change to initialized -> idle -> working -> idle -> not_initialized (SUCCESS/FAIL states aren't needed, proper events could be fired while processing)
 typedef enum {
     INJECT_STATE_IDLE,
     INJECT_STATE_WORKING,
@@ -39,15 +41,18 @@ typedef enum {
 } inject_state_t;
 
 typedef enum inject_task_type {
-    INJECT_TASK_TYPE_TYPE_STRING,
-    INJECT_TASK_TYPE_PRESS_KEYS,
+    INJECT_TASK_TYPE_TYPE_STRING, //type out UTF-8 String
+    INJECT_TASK_TYPE_PRESS_KEYS,  // parse UTF-8 string for valid key combos and generate reports pressing those keys
+    INJECT_TASK_TYPE_DELAY,
 } inject_task_type_t;
 
 typedef struct inject_task {
     inject_task_type_t type;
     size_t data_len;
     logitacker_keyboard_map_lang_t lang;
-    bool finished;
+    uint32_t delay_ms;
+    bool finished; // ToDo: not needed, only one task at a time -> covered by inject_state_t
+
     union {
         uint8_t* p_data_u8;
         char* p_data_c;
@@ -96,6 +101,7 @@ void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *sel
 void processor_inject_bsp_handler_func(logitacker_processor_t *p_processor, bsp_event_t event);
 void processor_inject_bsp_handler_func_(logitacker_processor_inject_ctx_t *self, bsp_event_t event);
 
+void transfer_state(logitacker_processor_inject_ctx_t *self, inject_state_t new_state);
 void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t *self);
 
 static logitacker_processor_t m_processor = {0};
@@ -127,10 +133,13 @@ bool push_task(inject_task_t task) {
         return false; //this means memory leak, as it can't be read back
     }
 
-    nrf_ringbuf_cpy_put(&m_test_ringbuf, task.p_data_u8, &len_data);
-    if (len_data != task.data_len) {
-        NRF_LOG_ERROR("push_task hasn't written full data");
-        return false; //this means memory leak, as it can't be read back
+
+    if (len_data > 0) { //f.e. delay task has no body
+        nrf_ringbuf_cpy_put(&m_test_ringbuf, task.p_data_u8, &len_data);
+        if (len_data != task.data_len) {
+            NRF_LOG_ERROR("push_task hasn't written full data");
+            return false; //this means memory leak, as it can't be read back
+        }
     }
 
     return true;
@@ -143,6 +152,16 @@ bool push_task_string(logitacker_keyboard_map_lang_t lang, char * str) {
     tmp_task.type = INJECT_TASK_TYPE_TYPE_STRING;
     tmp_task.lang = lang;
     return push_task(tmp_task);
+}
+
+bool push_task_delay(uint32_t delay_ms) {
+    inject_task_t tmp_task = {0};
+    tmp_task.delay_ms = delay_ms;
+    tmp_task.data_len = 0; //include terminating 0x00
+    tmp_task.p_data_c = NULL;
+    tmp_task.type = INJECT_TASK_TYPE_DELAY;
+    return push_task(tmp_task);
+
 }
 
 bool pop_task(inject_task_t * p_task) {
@@ -282,18 +301,39 @@ void processor_inject_deinit_func_(logitacker_processor_inject_ctx_t *self) {
 }
 
 void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *self, void *p_timer_ctx) {
-    // if timer is called, write (and auto transmit) current ESB payload
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    if (self->state == INJECT_STATE_WORKING) {
+        switch (self->current_task.type) {
+            case INJECT_TASK_TYPE_DELAY:
+            {
+                NRF_LOG_INFO("DELAY end reached");
+                self->current_task.finished = true;
+                transfer_state(self, INJECT_STATE_IDLE);
+                free_task(self->current_task);
+                break;
+            }
+            case INJECT_TASK_TYPE_TYPE_STRING:
+            {
+                // if timer is called, write (and auto transmit) current ESB payload
+                unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 
-    if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
-        NRF_LOG_INFO("Error writing payload");
-    } else {
-        nrf_esb_convert_pipe_to_address(self->tmp_tx_payload.pipe, tmp_addr);
-        helper_addr_to_hex_str(addr_str_buff, 5, tmp_addr);
-        NRF_LOG_INFO("TX'ed to %s", nrf_log_push(addr_str_buff));
+                if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
+                    NRF_LOG_INFO("Error writing payload");
+                } else {
+                    nrf_esb_convert_pipe_to_address(self->tmp_tx_payload.pipe, tmp_addr);
+                    helper_addr_to_hex_str(addr_str_buff, 5, tmp_addr);
+                    NRF_LOG_INFO("TX'ed to %s", nrf_log_push(addr_str_buff));
+                }
+                break;
+            }
+            default:
+                NRF_LOG_WARNING("timer event fired for unhandled TASK TYPE: %d", self->current_task.type);
+                break;
+        }
     }
+
 }
 
+// runs next task if state is transferred back to idle
 void transfer_state(logitacker_processor_inject_ctx_t *self, inject_state_t new_state) {
     if (new_state == self->state) return; //no state change
 
@@ -413,7 +453,7 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
     return;
 }
 
-void logitacker_processor_inject_string_process(logitacker_processor_inject_ctx_t *self) {
+void logitacker_processor_inject_process_task_string(logitacker_processor_inject_ctx_t *self) {
     NRF_LOG_INFO("process string injection: %s", self->current_task.p_data_c);
     self->p_payload_provider = new_payload_provider_string(self->p_caps, self->current_task.lang, self->current_task.p_data_c);
     //while ((*p_pay_provider->p_get_next)(p_pay_provider, &tmp_pay)) {};
@@ -429,6 +469,17 @@ void logitacker_processor_inject_string_process(logitacker_processor_inject_ctx_
 
     //start injection
     app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL);
+}
+
+void logitacker_processor_inject_process_task_delay(logitacker_processor_inject_ctx_t *self) {
+    NRF_LOG_INFO("process delay injection: %d milliseconds", self->current_task.delay_ms);
+    self->p_payload_provider = NULL;
+
+    self->state = INJECT_STATE_WORKING;
+
+    //start injection
+    if (self->current_task.delay_ms == 0) self->current_task.delay_ms = 1; //avoid zero delay, alternatively the timer handler could be called directly
+    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->current_task.delay_ms), NULL);
 }
 
 
@@ -451,7 +502,10 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
 
     switch (self->current_task.type) {
         case INJECT_TASK_TYPE_TYPE_STRING:
-            logitacker_processor_inject_string_process(self);
+            logitacker_processor_inject_process_task_string(self);
+            break;
+        case INJECT_TASK_TYPE_DELAY:
+            logitacker_processor_inject_process_task_delay(self);
             break;
         default:
             NRF_LOG_ERROR("unhandled task type %d, dropped ...", self->current_task.type);
@@ -463,16 +517,6 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
 }
 
 void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inject, logitacker_keyboard_map_lang_t lang, char * str) {
-    push_task_string(lang, str);
-
-    /*
-    static inject_task_t task = {0};
-    while (pop_task(&task)) {
-        NRF_LOG_INFO("Task: %s", nrf_log_push(task.p_data_c));
-        free_task(task);
-    }
-     */
-
     if (p_processor_inject == NULL) {
         NRF_LOG_ERROR("logitacker processor is NULL");
     }
@@ -482,26 +526,29 @@ void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inj
         NRF_LOG_ERROR("logitacker processor inject context is NULL");
     }
 
+    push_task_string(lang, str);
+
+    if (self->state == INJECT_STATE_IDLE) {
+        logitacker_processor_inject_run_next_task(self);
+    }
+}
+
+void logitacker_processor_inject_delay(logitacker_processor_t * p_processor_inject, uint32_t delay_ms) {
+    if (p_processor_inject == NULL) {
+        NRF_LOG_ERROR("logitacker processor is NULL");
+    }
+
+    logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
+    if (self == NULL) {
+        NRF_LOG_ERROR("logitacker processor inject context is NULL");
+    }
+
+    push_task_delay(delay_ms);
+
     if (self->state == INJECT_STATE_IDLE) {
         logitacker_processor_inject_run_next_task(self);
     }
 
-    /*
-    self->p_payload_provider = new_payload_provider_string(self->p_caps, lang, str);
-    //while ((*p_pay_provider->p_get_next)(p_pay_provider, &tmp_pay)) {};
-
-    //fetch first payload
-    if (!(*self->p_payload_provider->p_get_next)(self->p_payload_provider, &self->tmp_tx_payload)) {
-        //failed to fetch first payload
-        NRF_LOG_WARNING("failed to fetch initial RF report from payload provider");
-        return;
-    }
-
-    self->state = INJECT_STATE_WORKING;
-
-    //start injection
-    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL);
-     */
 }
 
 logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, app_timer_id_t timer_next_action) {
