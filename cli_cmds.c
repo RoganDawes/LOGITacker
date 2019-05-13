@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <logitacker_tx_payload_provider.h>
 #include <logitacker_tx_pay_provider_string_to_keys.h>
+#include <logitacker_processor_passive_enum.h>
 #include "logitacker_keyboard_map.h"
 #include "nrf_cli.h"
 #include "nrf_log.h"
@@ -13,116 +14,6 @@
 #define CLI_EXAMPLE_MAX_CMD_CNT (20u)
 #define CLI_EXAMPLE_MAX_CMD_LEN (33u)
 #define CLI_EXAMPLE_VALUE_BIGGER_THAN_STACK     (20000u)
-
-uint32_t m_counter;
-bool     m_counter_active = false;
-
-/* Command handlers */
-static void cmd_print_param(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    for (size_t i = 1; i < argc; i++)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "argv[%d] = %s\r\n", i, argv[i]);
-    }
-}
-
-static void cmd_print_all(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    for (size_t i = 1; i < argc; i++)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "%s ", argv[i]);
-    }
-    nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "\r\n");
-}
-
-static void cmd_print(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    ASSERT(p_cli);
-    ASSERT(p_cli->p_ctx && p_cli->p_iface && p_cli->p_name);
-
-    if ((argc == 1) || nrf_cli_help_requested(p_cli))
-    {
-        nrf_cli_help_print(p_cli, NULL, 0);
-        return;
-    }
-
-    if (argc != 2)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
-        return;
-    }
-
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: unknown parameter: %s\r\n", argv[0], argv[1]);
-}
-
-static void cmd_counter_start(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    if (argc != 1)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
-        return;
-    }
-
-    m_counter_active = true;
-}
-
-static void cmd_counter_stop(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    if (argc != 1)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
-        return;
-    }
-
-    m_counter_active = false;
-}
-
-static void cmd_counter_reset(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    if (argc != 1)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
-        return;
-    }
-
-    m_counter = 0;
-}
-
-static void cmd_counter(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    ASSERT(p_cli);
-    ASSERT(p_cli->p_ctx && p_cli->p_iface && p_cli->p_name);
-
-    /* Extra defined dummy option */
-    static const nrf_cli_getopt_option_t opt[] = {
-        NRF_CLI_OPT(
-            "--test",
-            "-t",
-            "dummy option help string"
-        )
-    };
-
-    if ((argc == 1) || nrf_cli_help_requested(p_cli))
-    {
-        nrf_cli_help_print(p_cli, opt, ARRAY_SIZE(opt));
-        return;
-    }
-
-    if (argc != 2)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
-        return;
-    }
-
-    if (!strcmp(argv[1], "-t") || !strcmp(argv[1], "--test"))
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "Dummy test option.\r\n");
-        return;
-    }
-
-    /* subcommands have their own handlers and they are not processed here */
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: unknown parameter: %s\r\n", argv[0], argv[1]);
-}
 
 static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
@@ -348,18 +239,62 @@ static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     
 }
 
-/**
- * @brief Command set array
- * */
-NRF_CLI_CMD_REGISTER(test, NULL, "Print Nordic Semiconductor logo.", cmd_test);
-
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_print)
+static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-    NRF_CLI_CMD(all,   NULL, "Print all entered parameters.", cmd_print_all),
-    NRF_CLI_CMD(param, NULL, "Print each parameter in new line.", cmd_print_param),
+    if ((argc == 1) || nrf_cli_help_requested(p_cli))
+    {
+        nrf_cli_help_print(p_cli, NULL, 0);
+
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\ncurrent options\r\n===============\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard pass-through: %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmouse pass-through: %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+
+        return;
+    }
+
+    if (argc != 2)
+    {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
+        return;
+    }
+
+
+}
+
+static void cmd_options_pass_keyboard(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    if (argc > 1)
+    {
+        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.pass_through_keyboard = false;
+        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.pass_through_keyboard = true;
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "keyboard pass-through: %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
+}
+
+static void cmd_options_pass_mouse(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    if (argc > 1)
+    {
+        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.pass_through_mouse = false;
+        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.pass_through_mouse = true;
+
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "mouse pass-through: %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+}
+
+
+NRF_CLI_CMD_REGISTER(test, NULL, "Debug command to test code", cmd_test);
+
+
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
+{
+    NRF_CLI_CMD(pass-keyboard,   NULL, "pass-through keystrokes to USB keyboard", cmd_options_pass_keyboard),
+    NRF_CLI_CMD(pass-mouse,   NULL, "pass-through mouse moves to USB mouse", cmd_options_pass_mouse),
     NRF_CLI_SUBCMD_SET_END
 };
-NRF_CLI_CMD_REGISTER(print, &m_sub_print, "print", cmd_print);
+NRF_CLI_CMD_REGISTER(options, &m_sub_options, "options", cmd_options);
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)
 {
@@ -385,13 +320,4 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);
 
 NRF_CLI_CMD_REGISTER(devices, NULL, "List discovered devices", cmd_devices);
-
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_counter)
-{
-    NRF_CLI_CMD(reset,  NULL, "Reset seconds counter.",  cmd_counter_reset),
-    NRF_CLI_CMD(start,  NULL, "Start seconds counter.",  cmd_counter_start),
-    NRF_CLI_CMD(stop,   NULL, "Stop seconds counter.",   cmd_counter_stop),
-    NRF_CLI_SUBCMD_SET_END
-};
-NRF_CLI_CMD_REGISTER(counter, &m_sub_counter, "Display seconds on terminal screen", cmd_counter);
 

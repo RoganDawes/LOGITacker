@@ -522,7 +522,8 @@ bool processor_pair_device_validate_rx_payload(logitacker_processor_pair_device_
                 break;
             }
         case PAIR_DEVICE_PHASE_1_INFORM_ADDRESS_ACCEPTED_SENT:
-            self->phase = PAIR_DEVICE_PHASE_1_INFORM_ADDRESS_ACCEPTED_ACKED; // we had TX_SUCCESS when this method is called
+            if (self->tmp_rx_payload.length == 0)
+                self->phase = PAIR_DEVICE_PHASE_1_INFORM_ADDRESS_ACCEPTED_ACKED; // we had TX_SUCCESS when this method is called
             goto success;
         case PAIR_DEVICE_PHASE_REQUEST2_SENT:
             self->phase = PAIR_DEVICE_PHASE_REQUEST2_ACKED; // we had TX_SUCCESS when this method is called

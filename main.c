@@ -12,16 +12,11 @@
 #include "nrf_drv_power.h"
 
 #include "app_timer.h"
-#include "app_usbd.h"
-#include "app_usbd_core.h"
-#include "app_usbd_hid_generic.h"
-#include "app_usbd_hid_mouse.h"
-#include "app_usbd_hid_kbd.h"
 #include "app_error.h"
 #include "bsp.h"
 
-#include "app_usbd_cdc_acm.h"
-#include "app_usbd_serial_num.h"
+
+#include "logitacker_usb.h"
 
 // LOG
 #include "nrf_log.h"
@@ -40,7 +35,7 @@
 #include "flash_device_info.h"
 #include "state.h"
 #include "unifying.h"
-#include "hid.h"
+
 #include "logitacker_bsp.h"
 #include "logitacker_radio.h"
 #include "logitacker.h"
@@ -57,23 +52,6 @@
 
 
 #define SCHED_QUEUE_SIZE            16
-
-/**
- * @brief Enable USB power detection
- */
-#ifndef USBD_POWER_DETECTION
-
-#ifdef NRF52840_MDK_DONGLE
-#define USBD_POWER_DETECTION false
-#elif NRF52840_MDK
-#define USBD_POWER_DETECTION true
-#elif BOARD_PCA10059
-#define USBD_POWER_DETECTION false
-#else
-#define USBD_POWER_DETECTION false
-#endif
-
-#endif //POWER_DETECTION
 
 
 #define BTN_TRIGGER_ACTION   0
@@ -96,20 +74,6 @@ uint32_t m_act_led = LED_B;
 uint32_t m_channel_scan_led = LED_G;
 
 
-// created HID report descriptor with vendor define output / input report of max size in raw_desc
-APP_USBD_HID_GENERIC_SUBCLASS_REPORT_DESC(raw_desc,APP_USBD_HID_RAW_REPORT_DSC_SIZE(REPORT_OUT_MAXSIZE));
-// add created HID report descriptor to subclass descriptor list
-static const app_usbd_hid_subclass_desc_t * reps[] = {&raw_desc};
-// setup generic HID interface 
-APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_generic,
-                                HID_GENERIC_INTERFACE,
-                                usbd_hid_event_handler,
-                                ENDPOINT_LIST(),
-                                reps,
-                                REPORT_IN_QUEUE_SIZE,
-                                REPORT_OUT_MAXSIZE,
-                                APP_USBD_HID_SUBCLASS_BOOT,
-                                APP_USBD_HID_PROTO_GENERIC);
 
 // internal state
 struct
@@ -118,165 +82,10 @@ struct
     int16_t lastCounter;
 }m_state;
 
-static bool m_report_pending; //Mark ongoing USB transmission
-
-
-
-static uint8_t hid_out_report[REPORT_OUT_MAXSIZE];
-static bool processing_hid_out_report = false;
-/**
- * @brief Class specific event handler.
- *
- * @param p_inst    Class instance.
- * @param event     Class specific event.
- * */
-static void usbd_hid_event_handler(app_usbd_class_inst_t const * p_inst,
-                                app_usbd_hid_user_event_t event)
-{
-    //helper_log_priority("usbd_hid_event_handler");
-    switch (event)
-    {
-        case APP_USBD_HID_USER_EVT_OUT_REPORT_READY:
-        {
-            size_t out_rep_size = REPORT_OUT_MAXSIZE;
-            const uint8_t* out_rep = app_usbd_hid_generic_out_report_get(&m_app_hid_generic, &out_rep_size);
-            memcpy(&hid_out_report, out_rep, REPORT_OUT_MAXSIZE);
-            processing_hid_out_report = true;
-            break;
-        }
-        case APP_USBD_HID_USER_EVT_IN_REPORT_DONE:
-        {
-            m_report_pending = false;
-            break;
-        }
-        case APP_USBD_HID_USER_EVT_SET_BOOT_PROTO:
-        {
-            UNUSED_RETURN_VALUE(hid_generic_clear_buffer(p_inst));
-            NRF_LOG_INFO("SET_BOOT_PROTO");
-            break;
-        }
-        case APP_USBD_HID_USER_EVT_SET_REPORT_PROTO:
-        {
-            UNUSED_RETURN_VALUE(hid_generic_clear_buffer(p_inst));
-            NRF_LOG_INFO("SET_REPORT_PROTO");
-            break;
-        }
-        default:
-            break;
-    }
-}
-
-/**
- * @brief USBD library specific event handler.
- *
- * @param event     USBD library event.
- * */
-static void usbd_user_ev_handler(app_usbd_event_type_t event)
-{
-    //runs in thread mode
-    switch (event)
-    {
-        case APP_USBD_EVT_DRV_SOF:
-            break;
-        case APP_USBD_EVT_DRV_RESET:
-            m_report_pending = false;
-            break;
-        case APP_USBD_EVT_DRV_SUSPEND:
-            m_report_pending = false;
-            app_usbd_suspend_req(); // Allow the library to put the peripheral into sleep mode
-            bsp_board_led_off(LED_R);
-            break;
-        case APP_USBD_EVT_DRV_RESUME:
-            m_report_pending = false;
-            bsp_board_led_on(LED_R);
-            break;
-        case APP_USBD_EVT_STARTED:
-            m_report_pending = false;
-            bsp_board_led_on(LED_R);
-            break;
-        case APP_USBD_EVT_STOPPED:
-            app_usbd_disable();
-            bsp_board_led_off(LED_R);
-            break;
-        case APP_USBD_EVT_POWER_DETECTED:
-            NRF_LOG_INFO("USB power detected");
-            if (!nrf_drv_usbd_is_enabled())
-            {
-                app_usbd_enable();
-            }
-            break;
-        case APP_USBD_EVT_POWER_REMOVED:
-            NRF_LOG_INFO("USB power removed");
-            app_usbd_stop();
-            break;
-        case APP_USBD_EVT_POWER_READY:
-            NRF_LOG_INFO("USB ready");
-            app_usbd_start();
-            break;
-        default:
-            break;
-    }
-}
-
-
-static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t report_id)
-{
-    switch (report_id)
-    {
-        case 0:
-        {
-            //uint8_t report[] = {0xBE, 0xEF};
-            uint8_t report[] = {};
-            return app_usbd_hid_generic_idle_report_set(&m_app_hid_generic, report, sizeof(report));
-        }
-        default:
-            return NRF_ERROR_NOT_SUPPORTED;
-    }
-    
-}
 
 /*
-        case NRF_ESB_MODE_SNIFF:
-            // pull RX payload from fifo, till no more left
-            while (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
-                if (rx_payload.length == 0) bsp_board_led_invert(m_act_led); // toggle act led to indicate non-empty frame sniffed
-                
-                uint8_t rfReportType;
-                bool rfReportIsKeepAlive;
-                unifying_frame_classify_log(rx_payload);
-                unifying_frame_classify(rx_payload, &rfReportType, &rfReportIsKeepAlive);
-                switch (rfReportType) {
-                    case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
-                    case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
-                    {
-                        // record frames, till enough received
-                        if (continue_frame_recording) {
-                            unifying_record_rf_frame(rx_payload);
-                        }
-                        break;
-                    }
-                    
-                    default:
-                        break;
-                }
-
-                bsp_board_led_off(m_channel_scan_led); //assure LED indicating channel hops is disabled
-
-                // hid report:
-                // byte 0:    rx pipe
-                // byte 1:    ESB payload length
-                // byte 2..6: RF address on pipe (account for addr_len when copying over)
-                // byte 7:    reserved, would be part of PCF in promiscuous mode (set to 0x00 here)
-                // byte 8..:  ESB payload
-
-                memset(report,0,REPORT_IN_MAXSIZE);
-                report[0] = rx_payload.pipe;
-                report[1] = rx_payload.length;
-                nrf_esb_convert_pipe_to_address(rx_payload.pipe, &report[2]);
-                memcpy(&report[8], rx_payload.data, rx_payload.length);
-                
-                app_usbd_hid_generic_in_report_set(&m_app_hid_generic, report, sizeof(report));
-
+static uint8_t hid_out_report[LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE];
+static bool processing_hid_out_report = false;
 */
 
 void clocks_start( void )
@@ -288,6 +97,7 @@ void clocks_start( void )
 }
 
 /* FDS */
+/*
 static dongle_state_t m_dongle_state = {
     .boot_count = 0,
     .device_info_count = 0,
@@ -299,6 +109,7 @@ static device_info_t m_current_device_info =
 {
     .RfAddress = {0x75, 0xa5, 0xdc, 0x0a, 0xbb}, //prefix, addr3, addr2, addr1, addr0
 };
+*/
 
 // Flag to check fds initialization.
 static bool volatile m_fds_initialized;
@@ -463,10 +274,6 @@ int main(void)
     // supported). Thus this code won't support button interaction on MDK dongle.
 
     ret_code_t ret;
-    static const app_usbd_config_t usbd_config = {
-        .ev_state_proc = usbd_user_ev_handler
-    };
-
     APP_SCHED_INIT(SCHED_MAX_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
     
     ret = NRF_LOG_INIT(NULL);
@@ -508,23 +315,7 @@ int main(void)
 
 
     //USB
-    ret = app_usbd_init(&usbd_config);
-    APP_ERROR_CHECK(ret);
-
-    app_usbd_class_inst_t const * class_inst_generic;
-    class_inst_generic = app_usbd_hid_generic_class_inst_get(&m_app_hid_generic);
-
-    ret = hid_generic_idle_handler_set(class_inst_generic, idle_handle);
-    APP_ERROR_CHECK(ret);
-
-    ret = app_usbd_class_append(class_inst_generic);
-    APP_ERROR_CHECK(ret);
-
-
-    app_usbd_class_inst_t const * class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&nrf_cli_cdc_acm);
-    ret = app_usbd_class_append(class_cdc_acm);
-    APP_ERROR_CHECK(ret);
-
+    logitacker_usb_init();
 
     if (with_log) {
         NRF_LOG_DEFAULT_BACKENDS_INIT();  
@@ -587,6 +378,7 @@ int main(void)
         //while (app_usbd_event_queue_process()) { }
         nrf_cli_process(&m_cli_cdc_acm);
 
+        /*
         if (processing_hid_out_report) {
             uint8_t command = hid_out_report[1]; //preserve pos 0 for report ID
             uint32_t ch = 0;
@@ -629,6 +421,7 @@ int main(void)
             }
             processing_hid_out_report = false;
         }
+        */
 
         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
         /* Sleep CPU only if there was no interrupt since last loop processing */

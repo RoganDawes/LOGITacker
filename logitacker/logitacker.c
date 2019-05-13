@@ -27,6 +27,7 @@ APP_TIMER_DEF(m_timer_next_tx_action);
 
 static logitacker_processor_t * p_processor = NULL;
 
+logitacker_global_config_t g_logitacker_global_config = {0};
 
 typedef struct {
     logitacker_discovery_on_new_address_t on_new_address_action; //not only state, persistent config
@@ -291,6 +292,10 @@ void discovery_process_rx() {
                         break;
                     case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
                         logitacker_enter_mode_passive_enum(addr);
+                        break;
+                    case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
+                        logitacker_enter_mode_injection(addr);
+                        logitacker_injection_string(LANGUAGE_LAYOUT_US, LOGITACKER_AUTO_INJECTION_PAYLOAD);
                         break;
                     default:
                         // do nothing, stay in discovery
@@ -572,6 +577,7 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
     m_state_local.mainstate = LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION;
 }
 
+static uint8_t temp_dev_id = 1;
 void logitacker_enter_mode_pair_device(uint8_t const *rf_address) {
     if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
 
@@ -588,7 +594,8 @@ void logitacker_enter_mode_pair_device(uint8_t const *rf_address) {
                     LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD_LED |
                     LOGITACKER_DEVICE_REPORT_TYPES_SHORT_HIDPP |
                     LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP,
-            .device_serial = { 0xde, 0xad, 0x13, 0x37 },
+//            .device_serial = { 0xde, 0xad, 0x13, 0x37 },
+            .device_serial = { 0xde, 0xad, 0x13, temp_dev_id++ },
             .device_caps = LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE, // no link encryption (we could enable and calculate keys if we like)
             .device_type = LOGITACKER_DEVICE_UNIFYING_TYPE_MOUSE, // of course this is shown as a mouse in Unifying software
             .device_wpid = { 0x04, 0x02 }, // random
@@ -641,7 +648,7 @@ void logitacker_injection_delay(uint32_t delay_ms) {
 uint32_t logitacker_init() {
     app_timer_create(&m_timer_next_tx_action, APP_TIMER_MODE_SINGLE_SHOT, main_event_handler_timer_next_action);
 
-    m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
+    m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
     logitacker_bsp_init(main_event_handler_bsp);
     logitacker_radio_init(main_event_handler_esb, main_event_handler_radio);
     logitacker_enter_mode_discovery();

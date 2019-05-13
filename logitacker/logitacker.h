@@ -26,10 +26,13 @@ extern "C" {
 #define LOGITACKER_SNIFF_PAIR_STAY_ON_CHANNEL_AFTER_RX_MS 1300
 #define LOGITACKER_SNIFF_PAIR_CHANNEL_HOP_INTERVAL_MS 10
 
+#define LOGITACKER_AUTO_INJECTION_PAYLOAD "\n\n\nHello from @MaMe82\n\n\n"
+
 typedef enum {
     LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING,   // continues in discovery mode, when new address has been found
     LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION,   // continues in passive enumeration mode when address found
-    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION   // continues in active enumeration mode when address found
+    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION,   // continues in active enumeration mode when address found
+    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION   // continues in active enumeration mode when address found
 } logitacker_discovery_on_new_address_t;
 
 typedef enum {
@@ -49,6 +52,12 @@ typedef enum {
     LOGITACKER_MAINSTATE_IDLE
 } logitacker_mainstate_t;
 
+typedef struct {
+    bool pass_through_keyboard;
+    bool pass_through_mouse;
+} logitacker_global_config_t;
+
+extern logitacker_global_config_t g_logitacker_global_config;
 
 uint32_t logitacker_init();
 

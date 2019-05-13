@@ -30,6 +30,7 @@ bool push_task_string(logitacker_keyboard_map_lang_t lang, char * str);
 bool push_task(inject_task_t task);
 bool pop_task(inject_task_t * p_task);
 bool free_task(inject_task_t task);
+bool flush_tasks();
 
 // ToDo: change to initialized -> idle -> working -> idle -> not_initialized (SUCCESS/FAIL states aren't needed, proper events could be fired while processing)
 typedef enum {
@@ -195,6 +196,10 @@ bool free_task(inject_task_t task) {
     return nrf_ringbuf_free(&m_test_ringbuf, task.data_len) == NRF_SUCCESS;
 }
 
+bool flush_tasks() {
+    nrf_ringbuf_init(&m_test_ringbuf);
+    return true;
+}
 
 logitacker_processor_t * contruct_processor_inject_instance(logitacker_processor_inject_ctx_t *const inject_ctx) {
     m_processor.p_ctx = inject_ctx;
@@ -297,6 +302,7 @@ void processor_inject_deinit_func_(logitacker_processor_inject_ctx_t *self) {
     self->state = INJECT_STATE_NOT_INITIALIZED;
     self->retransmit_counter = 0;
 
+    flush_tasks();
     nrf_esb_enable_all_channel_tx_failover(false); // disable all channel failover
 }
 
@@ -497,6 +503,7 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
     if (!pop_task(&self->current_task)) {
         NRF_LOG_INFO("No more tasks scheduled");
         self->state = INJECT_STATE_IDLE;
+        logitacker_enter_mode_discovery();
         return;
     }
 
@@ -519,11 +526,13 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
 void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inject, logitacker_keyboard_map_lang_t lang, char * str) {
     if (p_processor_inject == NULL) {
         NRF_LOG_ERROR("logitacker processor is NULL");
+        return;
     }
 
     logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
     if (self == NULL) {
         NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return;
     }
 
     push_task_string(lang, str);
@@ -536,11 +545,13 @@ void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inj
 void logitacker_processor_inject_delay(logitacker_processor_t * p_processor_inject, uint32_t delay_ms) {
     if (p_processor_inject == NULL) {
         NRF_LOG_ERROR("logitacker processor is NULL");
+        return;
     }
 
     logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
     if (self == NULL) {
         NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return;
     }
 
     push_task_delay(delay_ms);

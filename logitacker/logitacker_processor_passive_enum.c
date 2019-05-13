@@ -10,6 +10,8 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_PASIVE_ENUM
 #include "nrf_log.h"
+#include "logitacker_usb.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 
@@ -217,7 +219,7 @@ void processor_passive_enum_bsp_handler_func_(logitacker_processor_passive_enum_
 }
 
 
-
+static uint8_t m_pass_throgh_keyboard_hid_out_report[8] = {0};
 void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
     while (nrf_esb_read_rx_payload(&(self->tmp_rx_payload)) == NRF_SUCCESS) {
         uint8_t len = self->tmp_rx_payload.length;
@@ -261,6 +263,19 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                             if (m_keyboard_report_decryption_buffer[k] == 0x00 && k>0) break; //print no further keys
                             NRF_LOG_INFO("Key %d: %s", k, keycode_to_str(m_keyboard_report_decryption_buffer[k]));
                         }
+
+                        if (g_logitacker_global_config.pass_through_keyboard) {
+                            //convert to hid out report
+
+                            m_pass_throgh_keyboard_hid_out_report[0] = m_keyboard_report_decryption_buffer[0]; // copy modifier
+                            memcpy(&m_pass_throgh_keyboard_hid_out_report[2], &m_keyboard_report_decryption_buffer[1], 6); // copy keys
+                            // send via USB
+                            if (logitacker_usb_write_keyboard_input_report(m_pass_throgh_keyboard_hid_out_report) != NRF_SUCCESS) {
+                                NRF_LOG_WARNING("Failed to pass through USB report, busy with old report");
+                            } else {
+                                NRF_LOG_INFO("passed through to USB");
+                            }
+                        }
                     }
                 }
             }
@@ -283,3 +298,5 @@ logitacker_processor_t * new_processor_passive_enum(uint8_t *rf_address) {
 
     return contruct_processor_passive_enum_instance(&m_static_passive_enum_ctx);
 }
+
+
