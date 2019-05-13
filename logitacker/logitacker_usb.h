@@ -64,7 +64,14 @@
 
 #define LOGITACKER_USB_HID_MOUSE_INTERFACE 4
 #define LOGITACKER_USB_HID_MOUSE_EPIN       NRF_DRV_USBD_EPIN5
-#define LOGITACKER_USB_HID_MOUSE_BUTTON_COUNT 2
+//#define LOGITACKER_USB_HID_MOUSE_BUTTON_COUNT 2
+#define LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE  7
+#define LOGITACKER_USB_HID_MOUSE_REPORT_IN_QUEUE_SIZE    1
+#define LOGITACKER_USB_HID_MOUSE_INTERFACE_ENDPOINT_LIST()       \
+(                                                                   \
+        LOGITACKER_USB_HID_MOUSE_EPIN                            \
+)
+
 
 /**
  * @brief Size of maximum output report. HID generic class will reserve
@@ -95,6 +102,44 @@
 0x91, 0x02,        /* Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)  */  \
 0xC0,              /* End Collection */   \
 }
+
+#define APP_USBD_HID_MOUSE_12BIT_REPORT_DSC() {                \
+0x05, 0x01,		  /* USAGE_PAGE (Generic Desktop)           */ \
+0x09, 0x02,		  /* USAGE (Mouse)                          */ \
+0xA1, 0x01,		  /* COLLECTION (Application)               */ \
+/* 0x85, 0x02, */		  /*   REPORT_ID = 2                        */ \
+0x09, 0x01,		  /*   USAGE (pointer)                      */ \
+0xA1, 0x00,		  /*   COLLECTION (physical)                */ \
+0x05, 0x09,		  /*     USAGE_PAGE (buttons)               */ \
+0x19, 0x01,		  /*     USAGE_MIN (1)                      */ \
+0x29, 0x10,		  /*     USAGE_MAX (16)                     */ \
+0x15, 0x00,		  /*     LOGICAL_MIN (0)                    */ \
+0x25, 0x01,		  /*     LOGICAL_MAX (1)                    */ \
+0x95, 0x10,		  /*     REPORT_COUNT (16)                  */ \
+0x75, 0x01,		  /*     REPORT_SIZE (1)                    */ \
+0x81, 0x02,		  /*     INPUT (data var abs)               */ \
+0x05, 0x01,		  /*     USAGE_PAGE (generic desktop)       */ \
+0x16, 0x01, 0xF8, /*     LOGICAL_MIN (-2047)                */ \
+0x26, 0xFF, 0x07, /*     LOGICAL_MAX (2047)                 */ \
+0x75, 0x0C,		  /*     REPORT_SIZE (12)                   */ \
+0x95, 0x02,		  /*     REPORT_COUNT (2)                   */ \
+0x09, 0x30,		  /*     USAGE (X)                          */ \
+0x09, 0x31,		  /*     USAGE (Y)                          */ \
+0x81, 0x06,		  /*     INPUT                              */ \
+0x15, 0x81,		  /*     LOGICAL_MIN (-127)                 */ \
+0x25, 0x7F,		  /*     LOGICAL_MAX (127)                  */ \
+0x75, 0x08,		  /*     REPORT_SIZE (8)                    */ \
+0x95, 0x01,		  /*     REPORT_COUNT (1)                   */ \
+0x09, 0x38,		  /*     USAGE (wheel)                      */ \
+0x81, 0x06,		  /*     INPUT                              */ \
+0x05, 0x0C,		  /*     USAGE_PAGE(consumer)               */ \
+0x0A, 0x38, 0x02, /*     USAGE(AC Pan)                      */ \
+0x95, 0x01,		  /*     REPORT_COUNT (1)                   */ \
+0x81, 0x06,		  /*     INPUT                              */ \
+0xC0, 			  /*   END_COLLECTION                       */ \
+0xC0,			  /* END_COLLECTION                         */ \
+}
+
 
 const app_usbd_hid_generic_t m_app_hid_generic;
 

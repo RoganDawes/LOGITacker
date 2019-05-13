@@ -27,6 +27,10 @@ static const app_usbd_hid_subclass_desc_t * hid_report_descriptors_raw_device[] 
 APP_USBD_HID_GENERIC_SUBCLASS_REPORT_DESC(kbd_desc, APP_USBD_HID_KBD_REPORT_DSC());
 static const app_usbd_hid_subclass_desc_t * hid_report_descriptors_keyboard_device[] = {&kbd_desc};
 
+// report descriptors for mouse (16 buttons, 12 bit x-/y-axis, 8bit wheel, AC Pan)
+APP_USBD_HID_GENERIC_SUBCLASS_REPORT_DESC(mouse_desc, APP_USBD_HID_MOUSE_12BIT_REPORT_DSC());
+static const app_usbd_hid_subclass_desc_t * hid_report_descriptors_mouse_device[] = {&mouse_desc};
+
 /* USB HID INTERFACES */
 // setup generic HID interface
 APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_generic,
@@ -37,7 +41,7 @@ APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_generic,
                                 LOGITACKER_USB_HID_GENERIC_REPORT_IN_QUEUE_SIZE,
                                 LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE,
                                 APP_USBD_HID_SUBCLASS_BOOT,
-                                APP_USBD_HID_PROTO_KEYBOARD);
+                                APP_USBD_HID_PROTO_GENERIC);
 
 // setup HID keyboard interface (as generic interface)
 
@@ -49,7 +53,7 @@ APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_keyboard,
                                 LOGITACKER_USB_HID_KEYBOARD_REPORT_IN_QUEUE_SIZE,
                                 LOGITACKER_USB_HID_KEYBOARD_OUT_REPORT_MAXSIZE,
                                 APP_USBD_HID_SUBCLASS_BOOT,
-                                APP_USBD_HID_PROTO_GENERIC);
+                                APP_USBD_HID_PROTO_KEYBOARD);
 
 /*
 APP_USBD_HID_KBD_GLOBAL_DEF(m_app_hid_keyboard,
@@ -61,18 +65,30 @@ APP_USBD_HID_KBD_GLOBAL_DEF(m_app_hid_keyboard,
 
 
 // setup HID mouse interface
+APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_mouse,
+                                LOGITACKER_USB_HID_MOUSE_INTERFACE,
+                                usbd_hid_mouse_event_handler,
+                                LOGITACKER_USB_HID_MOUSE_INTERFACE_ENDPOINT_LIST(),
+                                hid_report_descriptors_mouse_device,
+                                LOGITACKER_USB_HID_MOUSE_REPORT_IN_QUEUE_SIZE,
+                                1,
+                                APP_USBD_HID_SUBCLASS_BOOT,
+                                APP_USBD_HID_PROTO_MOUSE);
+
+/*
 APP_USBD_HID_MOUSE_GLOBAL_DEF(m_app_hid_mouse,
                               LOGITACKER_USB_HID_MOUSE_INTERFACE,
                               LOGITACKER_USB_HID_MOUSE_EPIN,
                               LOGITACKER_USB_HID_MOUSE_BUTTON_COUNT,
                               usbd_hid_mouse_event_handler,
                               APP_USBD_HID_SUBCLASS_BOOT);
-
+*/
 
 
 
 static uint8_t m_generic_hid_input_report[LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE];
 static uint8_t m_keyboard_hid_input_report[LOGITACKER_USB_HID_KEYBOARD_IN_REPORT_MAXSIZE];
+static uint8_t m_mouse_hid_input_report[LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE];
 
 // app_usbd configuration
 static const app_usbd_config_t usbd_config = {
@@ -217,6 +233,7 @@ static void usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const *p_inst,
     }
 }
 
+static bool currently_sending_mouse_input;
 static void usbd_hid_mouse_event_handler(app_usbd_class_inst_t const *p_inst, app_usbd_hid_user_event_t event)
 {
     switch (event)
@@ -228,6 +245,7 @@ static void usbd_hid_mouse_event_handler(app_usbd_class_inst_t const *p_inst, ap
         }
         case APP_USBD_HID_USER_EVT_IN_REPORT_DONE:
         {
+            currently_sending_mouse_input = false;
             NRF_LOG_INFO("hid mouse evt: APP_USBD_HID_USER_EVT_IN_REPORT_DONE");
             break;
         }
@@ -281,7 +299,8 @@ uint32_t logitacker_usb_init() {
     // Note: configured in logitacker_usb.h
     //   #define LOGITACKER_USB_HID_MOUSE_INTERFACE  4
     //   #define LOGITACKER_USB_HID_MOUSE_EPIN       NRF_DRV_USBD_EPIN5
-    app_usbd_class_inst_t const * class_inst_hid_mouse = app_usbd_hid_mouse_class_inst_get(&m_app_hid_mouse);
+    //app_usbd_class_inst_t const * class_inst_hid_mouse = app_usbd_hid_mouse_class_inst_get(&m_app_hid_mouse);
+    app_usbd_class_inst_t const * class_inst_hid_mouse = app_usbd_hid_generic_class_inst_get(&m_app_hid_mouse);
     ret = app_usbd_class_append(class_inst_hid_mouse);
     VERIFY_SUCCESS(ret);
 
@@ -307,5 +326,14 @@ uint32_t logitacker_usb_write_keyboard_input_report(const void * p_buf) {
 
     // write report
     return app_usbd_hid_generic_in_report_set(&m_app_hid_keyboard, m_keyboard_hid_input_report, LOGITACKER_USB_HID_KEYBOARD_IN_REPORT_MAXSIZE);
+}
 
+uint32_t logitacker_usb_write_mouse_input_report(const void * p_buf) {
+    VERIFY_FALSE(currently_sending_mouse_input, NRF_ERROR_BUSY);
+    currently_sending_mouse_input = true;
+    memcpy(m_mouse_hid_input_report, p_buf, LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE);
+
+    // write report
+    NRF_LOG_HEXDUMP_INFO(m_mouse_hid_input_report, 8);
+    return app_usbd_hid_generic_in_report_set(&m_app_hid_mouse, m_mouse_hid_input_report, LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE);
 }
