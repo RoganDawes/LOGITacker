@@ -248,11 +248,31 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
             unifying_frame_classify_log(self->tmp_rx_payload);
             NRF_LOG_HEXDUMP_INFO(self->tmp_rx_payload.data, self->tmp_rx_payload.length);
 
+
+            // handle encrypted keyboard reports
+            if (unifying_report_type == UNIFYING_RF_REPORT_PLAIN_KEYBOARD && len == 10) {
+                // if pass-through for keyboard is enabled, send keystrokes to USB HID keyboard
+                if (g_logitacker_global_config.pass_through_keyboard) {
+                    //convert to hid out report
+
+                    m_pass_throgh_keyboard_hid_out_report[0] = self->tmp_rx_payload.data[2]; // copy modifier
+                    memcpy(&m_pass_throgh_keyboard_hid_out_report[2], &self->tmp_rx_payload.data[3], 6); // copy keys
+                    // send via USB
+                    if (logitacker_usb_write_keyboard_input_report(m_pass_throgh_keyboard_hid_out_report) != NRF_SUCCESS) {
+                        NRF_LOG_WARNING("Failed to pass through USB report, busy with old report");
+                    } else {
+                        NRF_LOG_INFO("passed through plain keyboard frame to USB");
+                    }
+                }
+
+            }
+
             if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
                 // check if theres a device entry for the address
                 logitacker_device_capabilities_t * p_caps = logitacker_device_get_caps_pointer(addr);
+                // check if device key is known
                 if (p_caps != NULL && p_caps->key_known) {
-                    // decrypt and print frame
+                    // try to decrypt frame
                     if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_keyboard_report_decryption_buffer, p_caps->key, &self->tmp_rx_payload) == NRF_SUCCESS) {
                         NRF_LOG_INFO("Test decryption of keyboard payload:");
                         NRF_LOG_HEXDUMP_INFO(m_keyboard_report_decryption_buffer, 8);
@@ -264,6 +284,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                             NRF_LOG_INFO("Key %d: %s", k, keycode_to_str(m_keyboard_report_decryption_buffer[k]));
                         }
 
+                        // if pass-through for keyboard is enabled, send keystrokes to USB HID keyboard
                         if (g_logitacker_global_config.pass_through_keyboard) {
                             //convert to hid out report
 
@@ -273,7 +294,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                             if (logitacker_usb_write_keyboard_input_report(m_pass_throgh_keyboard_hid_out_report) != NRF_SUCCESS) {
                                 NRF_LOG_WARNING("Failed to pass through USB report, busy with old report");
                             } else {
-                                NRF_LOG_INFO("passed through to USB");
+                                NRF_LOG_INFO("passed through decrypted keyboard frame to USB");
                             }
                         }
                     }
