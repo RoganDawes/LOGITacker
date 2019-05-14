@@ -22,6 +22,7 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
+#include "logitacker_flash.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -652,6 +653,11 @@ void clocks_start( void )
 
 
 uint32_t logitacker_init() {
+    logitacker_flash_init();
+    logitacker_options_restore_from_flash(); // try to restore options from flash (updates stats like boot count)
+    logitacker_options_store_to_flash(); // store back updated options
+
+
     clocks_start(); // HF clock needed by ESB radio part
 
     app_timer_create(&m_timer_next_tx_action, APP_TIMER_MODE_SINGLE_SHOT, main_event_handler_timer_next_action);

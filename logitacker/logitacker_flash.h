@@ -1,0 +1,11 @@
+#ifndef LOGITACKER_FLASH_H
+#define LOGITACKER_FLASH_H
+
+#include <stdint.h>
+
+#define LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS 0x1000
+#define LOGITACKER_FLASH_KEY_GLOBAL_OPTIONS_LOGITACKER 0x1000
+
+uint32_t logitacker_flash_init();
+
+#endif //LOGITACKER_FLASH_H

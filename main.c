@@ -89,6 +89,8 @@ static dongle_state_t m_dongle_state = {
 };
 */
 
+/*
+
 // Flag to check fds initialization.
 static bool volatile m_fds_initialized;
 
@@ -105,7 +107,6 @@ static void power_manage(void)
 {
     __WFE();
 }
-
 
 static void wait_for_fds_ready(void)
 {
@@ -153,6 +154,7 @@ static void fds_evt_handler(fds_evt_t const * p_evt)
             break;
     }
 }
+*/
 
 bool m_auto_bruteforce_started = false;
 
@@ -279,7 +281,7 @@ int main(void)
 
     logitacker_init();
 
-
+/*
     //FDS
     // Register first to receive an event when initialization is complete.
     (void) fds_register(fds_evt_handler);
@@ -288,7 +290,7 @@ int main(void)
     APP_ERROR_CHECK(ret);
     // Wait for fds to initialize.
     wait_for_fds_ready();
-
+*/
 
     if (with_log) {
         NRF_LOG_DEFAULT_BACKENDS_INIT();  

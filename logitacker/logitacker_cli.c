@@ -1,8 +1,9 @@
-#include <ctype.h>
-#include <logitacker_tx_payload_provider.h>
-#include <logitacker_tx_pay_provider_string_to_keys.h>
-#include <logitacker_processor_passive_enum.h>
-#include <logitacker_options.h>
+#include <libraries/fds/fds.h>
+#include "ctype.h"
+#include "logitacker_tx_payload_provider.h"
+#include "logitacker_tx_pay_provider_string_to_keys.h"
+#include "logitacker_processor_passive_enum.h"
+#include "logitacker_options.h"
 #include "logitacker_keyboard_map.h"
 #include "nrf_cli.h"
 #include "nrf_log.h"
@@ -11,6 +12,7 @@
 #include "logitacker_devices.h"
 #include "helper.h"
 #include "unifying.h"
+#include "logitacker_flash.h"
 
 #define CLI_EXAMPLE_MAX_CMD_CNT (20u)
 #define CLI_EXAMPLE_MAX_CMD_LEN (33u)
@@ -18,6 +20,7 @@
 
 static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
+/*
     if (argc > 1)
     {
         nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_DEFAULT, "parameter count %d\r\n", argc);
@@ -45,7 +48,13 @@ static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
         return;
 
     }
-
+*/
+    //logitacker_flash_init();
+    //fds_file_delete(LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS);
+    logitacker_options_restore_from_flash();
+    logitacker_options_store_to_flash();
+    logitacker_options_print();
+    logitacker_options_print_stats();
 }
 
 static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -246,9 +255,29 @@ static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv)
     {
         nrf_cli_help_print(p_cli, NULL, 0);
 
+        char * discover_on_hit_str = "unknown";
+
+        switch (g_logitacker_global_config.discovery_on_new_address_action) {
+            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
+                discover_on_hit_str = "continue in discovery mode";
+                break;
+            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
+                discover_on_hit_str = "start active enumeration for newly discovered address";
+                break;
+            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
+                discover_on_hit_str = "start passive enumeration for newly discovered address";
+                break;
+            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
+                discover_on_hit_str = "(blindly) inject keystrokes for newly discovered address";
+                break;
+        }
+
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\ncurrent options\r\n===============\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard pass-through: %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmouse pass-through: %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discovery : %s\r\n", discover_on_hit_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard pass-through          : %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmouse pass-through             : %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n======\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot count                     : %d\r\n", g_logitacker_global_config.stats.boot_count);
 
         return;
     }
@@ -260,6 +289,14 @@ static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv)
     }
 
 
+}
+
+static void cmd_options_store(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    logitacker_options_store_to_flash();
+}
+
+static void cmd_options_erase(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    fds_file_delete(LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS);
 }
 
 static void cmd_options_pass_keyboard(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -291,6 +328,8 @@ NRF_CLI_CMD_REGISTER(test, NULL, "Debug command to test code", cmd_test);
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
 {
+    NRF_CLI_CMD(erase,   NULL, "erase stored options from flash (return to defaults on reboot)", cmd_options_erase),
+    NRF_CLI_CMD(store,   NULL, "store current options to flash (persist reboot)", cmd_options_store),
     NRF_CLI_CMD(pass-keyboard,   NULL, "pass-through keystrokes to USB keyboard", cmd_options_pass_keyboard),
     NRF_CLI_CMD(pass-mouse,   NULL, "pass-through mouse moves to USB mouse", cmd_options_pass_mouse),
     NRF_CLI_SUBCMD_SET_END
