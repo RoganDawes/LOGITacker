@@ -1,4 +1,4 @@
-PROJECT_NAME     := logitacker
+PROJECT_NAME     := LOGITacker
 TARGETS          := nrf52840_xxaa
 OUTPUT_DIRECTORY := _build
 
@@ -58,13 +58,14 @@ SRC_FILES += \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_power.c \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_uart.c \
-  $(SDK_ROOT)/components/drivers_nrf/usbd/nrf_drv_usbd.c \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd/nrf_nvic.c \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd/nrf_soc.c \
+  $(SDK_ROOT)/modules/nrfx/soc/nrfx_atomic.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_usbd.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_gpiote.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_power_clock.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/prs/nrfx_prs.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uart.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uarte.c \
@@ -88,11 +89,12 @@ SRC_FILES += \
   $(PROJ_DIR)/state.c \
   $(PROJ_DIR)/unifying.c \
   $(PROJ_DIR)/timestamp.c \
-  $(PROJ_DIR)/cli_cmds.c \
   $(PROJ_DIR)/main.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
+  $(PROJ_DIR)/logitacker/logitacker_cli.c \
+  $(PROJ_DIR)/logitacker/logitacker_options.c \
   $(PROJ_DIR)/logitacker/logitacker_usb.c \
   $(PROJ_DIR)/logitacker/logitacker_processor.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_active_enum.c \
@@ -110,6 +112,7 @@ SRC_FILES += \
 
 # Include folders common to all targets
 INC_FOLDERS += \
+  ../config \
   $(SDK_ROOT)/components \
   $(SDK_ROOT)/components/libraries/cli \
   $(SDK_ROOT)/components/libraries/cli/cdc_acm \
@@ -126,7 +129,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/crc16 \
   $(SDK_ROOT)/components/libraries/fds \
   $(SDK_ROOT)/components/libraries/ringbuf \
-  ../config \
   $(SDK_ROOT)/components/libraries/usbd/class/cdc \
   $(SDK_ROOT)/components/libraries/usbd/class/cdc/acm \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/generic \
@@ -134,7 +136,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/balloc \
   $(PROJ_DIR)/esb_illegalmod \
   $(PROJ_DIR)/logitacker \
-  $(SDK_ROOT)/components/drivers_nrf/usbd \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/components/libraries/usbd/class/hid \
   $(SDK_ROOT)/components/libraries/hardfault/nrf52 \
@@ -164,6 +165,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/modules/nrfx/hal \
   $(SDK_ROOT)/external/fprintf \
   $(SDK_ROOT)/components/libraries/log/src \
+  $(SDK_ROOT)/components/libraries/crypto/backend/optiga \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310_bl \
   $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls \
@@ -179,7 +181,7 @@ INC_FOLDERS += \
 
 # Libraries common to all targets
 LIB_FILES += \
-  $(SDK_ROOT)/external/nrf_cc310/lib/libnrf_cc310_0.9.10.a \
+  $(SDK_ROOT)/external/nrf_cc310/lib/cortex-m4/hard-float/libnrf_cc310_0.9.12.a \
 
 # Optimization flags
 OPT = -O3 -g3

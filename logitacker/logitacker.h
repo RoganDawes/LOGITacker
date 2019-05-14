@@ -52,18 +52,11 @@ typedef enum {
     LOGITACKER_MAINSTATE_IDLE
 } logitacker_mainstate_t;
 
-typedef struct {
-    bool pass_through_keyboard;
-    bool pass_through_mouse;
-} logitacker_global_config_t;
-
-extern logitacker_global_config_t g_logitacker_global_config;
 
 uint32_t logitacker_init();
 
 void logitacker_enter_mode_discovery();
 
-void logitacker_discovery_mode_set_on_new_address_action(logitacker_discovery_on_new_address_t on_new_address_action);
 
 void logitacker_enter_mode_passive_enum(uint8_t *rf_address);
 

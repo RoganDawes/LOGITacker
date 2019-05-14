@@ -305,6 +305,18 @@ uint32_t logitacker_usb_init() {
     VERIFY_SUCCESS(ret);
 
 
+    if (USBD_POWER_DETECTION)
+    {
+        ret = app_usbd_power_events_enable();
+        APP_ERROR_CHECK(ret);
+    }
+    else
+    {
+        NRF_LOG_INFO("No USB power detection enabled\r\nStarting USB now");
+
+        app_usbd_enable();
+        app_usbd_start();
+    }
 
 
     return NRF_SUCCESS;

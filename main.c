@@ -54,9 +54,6 @@
 #define SCHED_QUEUE_SIZE            16
 
 
-#define BTN_TRIGGER_ACTION   0
-bool report_frames_without_crc_match = true; // if enabled, invalid promiscuous mode frames are pushed through as USB HID reports
-bool switch_from_promiscous_to_sniff_on_discovered_address = true; // if enabled, the dongle automatically toggles to sniffing mode for captured addresses
 
 #ifdef NRF52840_MDK
     bool with_log = true;
@@ -83,31 +80,12 @@ struct
 }m_state;
 
 
-/*
-static uint8_t hid_out_report[LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE];
-static bool processing_hid_out_report = false;
-*/
-
-void clocks_start( void )
-{
-    NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
-    NRF_CLOCK->TASKS_HFCLKSTART = 1;
-
-    while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0);
-}
 
 /* FDS */
 /*
 static dongle_state_t m_dongle_state = {
     .boot_count = 0,
     .device_info_count = 0,
-};
-
-
-// current device info
-static device_info_t m_current_device_info =
-{
-    .RfAddress = {0x75, 0xa5, 0xdc, 0x0a, 0xbb}, //prefix, addr3, addr2, addr1, addr0
 };
 */
 
@@ -301,8 +279,6 @@ int main(void)
 
     logitacker_init();
 
-    //BSP
-  //  init_bsp();
 
     //FDS
     // Register first to receive an event when initialization is complete.
@@ -313,9 +289,6 @@ int main(void)
     // Wait for fds to initialize.
     wait_for_fds_ready();
 
-
-    //USB
-    logitacker_usb_init();
 
     if (with_log) {
         NRF_LOG_DEFAULT_BACKENDS_INIT();  
@@ -328,24 +301,9 @@ int main(void)
     APP_ERROR_CHECK(ret);
 
 
-    if (USBD_POWER_DETECTION)
-    {
-        ret = app_usbd_power_events_enable();
-        APP_ERROR_CHECK(ret);
-    }
-    else
-    {
-        NRF_LOG_INFO("No USB power detection enabled\r\nStarting USB now");
-
-        app_usbd_enable();
-        app_usbd_start();
-    }
-
     //high frequency clock needed for ESB
-    clocks_start();
+//    clocks_start();
 
-
-    
     unifying_init(unifying_event_handler);
 
     //FDS
@@ -361,67 +319,13 @@ int main(void)
     } 
 #endif
 
-/*
-    ret = nrf_crypto_init();
-    if (ret == NRF_SUCCESS) {
-        NRF_LOG_ERROR("nrf_crypto_init error: 0x%x", ret);
-        return ret;
-    }
-*/
 //    timestamp_init();
 
     while (true)
     {
-
-
         app_sched_execute(); //!! esb_promiscuous mode frame validation is handled by scheduler !!
         //while (app_usbd_event_queue_process()) { }
         nrf_cli_process(&m_cli_cdc_acm);
-
-        /*
-        if (processing_hid_out_report) {
-            uint8_t command = hid_out_report[1]; //preserve pos 0 for report ID
-            uint32_t ch = 0;
-            switch (command) {
-                case HID_COMMAND_GET_CHANNEL:
-                    nrf_esb_get_rf_channel(&ch);
-                    hid_out_report[2] = (uint8_t) ch;
-                    memset(&hid_out_report[3], 0, sizeof(hid_out_report)-3);
-                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 
-                    break;
-                case HID_COMMAND_SET_CHANNEL:
-                    //nrf_esb_get_rf_channel(&ch);
-                    ch = (uint32_t) hid_out_report[2];
-                    //nrf_esb_stop_rx();
-                    if (nrf_esb_set_rf_channel(ch) == NRF_SUCCESS) {
-                        hid_out_report[2] = 0;
-                    } else {
-                        hid_out_report[2] = -1;
-                    }
-                    //while (nrf_esb_start_rx() != NRF_SUCCESS) {};
-                    
-                    memset(&hid_out_report[3], 0, sizeof(hid_out_report)-3);
-                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 
-                    break;
-                case HID_COMMAND_GET_ADDRESS:
-                    hid_out_report[2] = m_current_device_info.RfAddress[4];
-                    hid_out_report[3] = m_current_device_info.RfAddress[3];
-                    hid_out_report[4] = m_current_device_info.RfAddress[2];
-                    hid_out_report[5] = m_current_device_info.RfAddress[1];
-                    hid_out_report[6] = m_current_device_info.RfAddress[0];
-                    memset(&hid_out_report[7], 0, sizeof(hid_out_report)-7);
-
-                    hid_out_report[8] = (uint8_t) (m_dongle_state.boot_count &0xFF);
-                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back 
-                    break;
-                default:
-                    //echo back
-                    app_usbd_hid_generic_in_report_set(&m_app_hid_generic, hid_out_report, sizeof(hid_out_report)); //send back copy of out report as in report
-                    
-            }
-            processing_hid_out_report = false;
-        }
-        */
 
         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
         /* Sleep CPU only if there was no interrupt since last loop processing */

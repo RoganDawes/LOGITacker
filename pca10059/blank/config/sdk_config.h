@@ -114,6 +114,15 @@
 #define NRF_CRYPTO_BACKEND_CC310_BL_HASH_AUTOMATIC_RAM_BUFFER_SIZE 4096
 #endif
 
+// <q> NRF_CRYPTO_BACKEND_CC310_BL_INTERRUPTS_ENABLED  - Enable Interrupts while support using CC310 bl.
+ 
+
+// <i> Select a library version compatible with the configuration. When interrupts are disable, a version named _noint must be used
+
+#ifndef NRF_CRYPTO_BACKEND_CC310_BL_INTERRUPTS_ENABLED
+#define NRF_CRYPTO_BACKEND_CC310_BL_INTERRUPTS_ENABLED 1
+#endif
+
 // </e>
 
 // <e> NRF_CRYPTO_BACKEND_CC310_ENABLED - Enable the ARM Cryptocell CC310 backend.
@@ -204,7 +213,7 @@
  
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_ECC_SECP224R1_ENABLED
-#define NRF_CRYPTO_BACKEND_CC310_ECC_SECP224R1_ENABLED 1
+#define NRF_CRYPTO_BACKEND_CC310_ECC_SECP224R1_ENABLED 0
 #endif
 
 // <q> NRF_CRYPTO_BACKEND_CC310_ECC_SECP256R1_ENABLED  - Enable the secp256r1 elliptic curve support using CC310.
@@ -311,6 +320,15 @@
 
 #ifndef NRF_CRYPTO_BACKEND_CC310_RNG_ENABLED
 #define NRF_CRYPTO_BACKEND_CC310_RNG_ENABLED 1
+#endif
+
+// <q> NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED  - Enable Interrupts while support using CC310.
+ 
+
+// <i> Select a library version compatible with the configuration. When interrupts are disable, a version named _noint must be used
+
+#ifndef NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED
+#define NRF_CRYPTO_BACKEND_CC310_INTERRUPTS_ENABLED 1
 #endif
 
 // </e>
@@ -764,6 +782,60 @@
 
 // </e>
 
+// <e> NRFX_USBD_ENABLED - nrfx_usbd - USBD peripheral driver
+//==========================================================
+#ifndef NRFX_USBD_ENABLED
+#define NRFX_USBD_ENABLED 1
+#endif
+// <o> NRFX_USBD_CONFIG_IRQ_PRIORITY  - Interrupt priority
+ 
+// <0=> 0 (highest) 
+// <1=> 1 
+// <2=> 2 
+// <3=> 3 
+// <4=> 4 
+// <5=> 5 
+// <6=> 6 
+// <7=> 7 
+
+#ifndef NRFX_USBD_CONFIG_IRQ_PRIORITY
+#define NRFX_USBD_CONFIG_IRQ_PRIORITY 6
+#endif
+
+// <o> NRFX_USBD_CONFIG_DMASCHEDULER_MODE  - USBD DMA scheduler working scheme
+ 
+// <0=> Prioritized access 
+// <1=> Round Robin 
+
+#ifndef NRFX_USBD_CONFIG_DMASCHEDULER_MODE
+#define NRFX_USBD_CONFIG_DMASCHEDULER_MODE 0
+#endif
+
+// <q> NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST  - Give priority to isochronous transfers
+ 
+
+// <i> This option gives priority to isochronous transfers.
+// <i> Enabling it assures that isochronous transfers are always processed,
+// <i> even if multiple other transfers are pending.
+// <i> Isochronous endpoints are prioritized before the usbd_dma_scheduler_algorithm
+// <i> function is called, so the option is independent of the algorithm chosen.
+
+#ifndef NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST
+#define NRFX_USBD_CONFIG_DMASCHEDULER_ISO_BOOST 1
+#endif
+
+// <q> NRFX_USBD_CONFIG_ISO_IN_ZLP  - Respond to an IN token on ISO IN endpoint with ZLP when no data is ready
+ 
+
+// <i> If set, ISO IN endpoint will respond to an IN token with ZLP when no data is ready to be sent.
+// <i> Else, there will be no response.
+
+#ifndef NRFX_USBD_CONFIG_ISO_IN_ZLP
+#define NRFX_USBD_CONFIG_ISO_IN_ZLP 0
+#endif
+
+// </e>
+
 // <e> NRFX_CLOCK_ENABLED - nrfx_clock - CLOCK peripheral driver
 //==========================================================
 #ifndef NRFX_CLOCK_ENABLED
@@ -966,6 +1038,13 @@
 #endif
 
 // </e>
+
+// <q> SYSTICK_ENABLED  - nrf_drv_systick - ARM(R) SysTick driver - legacy layer
+ 
+
+#ifndef SYSTICK_ENABLED
+#define SYSTICK_ENABLED 1
+#endif
 
 // <e> NRFX_PRS_ENABLED - nrfx_prs - Peripheral Resource Sharing module
 //==========================================================
@@ -2000,7 +2079,6 @@
 #endif
 
 // <q> HARDFAULT_HANDLER_ENABLED  - hardfault_default - HardFault default handler for debugging and release
- 
 
 #ifndef HARDFAULT_HANDLER_ENABLED
 #define HARDFAULT_HANDLER_ENABLED 1
@@ -2035,6 +2113,15 @@
 
 #ifndef FDS_VIRTUAL_PAGE_SIZE
 #define FDS_VIRTUAL_PAGE_SIZE 1024
+#endif
+
+// <o> FDS_VIRTUAL_PAGES_RESERVED - The number of virtual flash pages that are used by other modules. 
+// <i> FDS module stores its data in the last pages of the flash memory.
+// <i> By setting this value, you can move flash end address used by the FDS.
+// <i> As a result the reserved space can be used by other modules.
+
+#ifndef FDS_VIRTUAL_PAGES_RESERVED
+#define FDS_VIRTUAL_PAGES_RESERVED 0
 #endif
 
 // </h> 

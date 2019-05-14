@@ -15,11 +15,13 @@
 #include "logitacker_processor_active_enum.h"
 #include "logitacker_processor_passive_enum.h"
 #include "logitacker_processor_pair_device.h"
+#include "logitacker_processor_inject.h"
+#include "logitacker_usb.h"
+#include "logitacker_options.h"
 #include "utf.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
-#include "logitacker_processor_inject.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -27,11 +29,6 @@ APP_TIMER_DEF(m_timer_next_tx_action);
 
 static logitacker_processor_t * p_processor = NULL;
 
-logitacker_global_config_t g_logitacker_global_config = {0};
-
-typedef struct {
-    logitacker_discovery_on_new_address_t on_new_address_action; //not only state, persistent config
-} logitacker_substate_discovery_t;
 
 
 typedef struct {
@@ -61,7 +58,7 @@ typedef struct {
 typedef struct {
     bool initialized;
     logitacker_mainstate_t   mainstate;
-    logitacker_substate_discovery_t substate_discovery;
+    //logitacker_substate_discovery_t substate_discovery;
     logitacker_substate_passive_enumeration_t substate_passive_enumeration;
     logitacker_substate_active_enumeration_t substate_active_enumeration;
 
@@ -284,7 +281,7 @@ void discovery_process_rx() {
 
             if (isLogitech) {
                 NRF_LOG_INFO("discovered device is Logitech")
-                switch (m_state_local.substate_discovery.on_new_address_action) {
+                switch (g_logitacker_global_config.discovery_on_new_address_action) {
                     case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
                         break;
                     case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
@@ -645,21 +642,26 @@ void logitacker_injection_delay(uint32_t delay_ms) {
     logitacker_processor_inject_delay(p_processor, delay_ms);
 }
 
+void clocks_start( void )
+{
+    NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
+    NRF_CLOCK->TASKS_HFCLKSTART = 1;
+
+    while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0);
+}
+
+
 uint32_t logitacker_init() {
+    clocks_start(); // HF clock needed by ESB radio part
+
     app_timer_create(&m_timer_next_tx_action, APP_TIMER_MODE_SINGLE_SHOT, main_event_handler_timer_next_action);
 
-    m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
+    //m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
     logitacker_bsp_init(main_event_handler_bsp);
+    logitacker_usb_init();
     logitacker_radio_init(main_event_handler_esb, main_event_handler_radio);
     logitacker_enter_mode_discovery();
 
 
     return NRF_SUCCESS;
 }
-
-void logitacker_discovery_mode_set_on_new_address_action(logitacker_discovery_on_new_address_t on_new_address_action) {
-    m_state_local.substate_discovery.on_new_address_action = on_new_address_action;
-}
-
-
-

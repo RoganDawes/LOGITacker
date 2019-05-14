@@ -2,6 +2,7 @@
 #include <logitacker_tx_payload_provider.h>
 #include <logitacker_tx_pay_provider_string_to_keys.h>
 #include <logitacker_processor_passive_enum.h>
+#include <logitacker_options.h>
 #include "logitacker_keyboard_map.h"
 #include "nrf_cli.h"
 #include "nrf_log.h"
@@ -113,15 +114,15 @@ static void cmd_discover_onhit(nrf_cli_t const * p_cli, size_t argc, char **argv
 
     if (!strcmp(argv[1], "continue") || !strcmp(argv[1], "c"))
     {
-        logitacker_discovery_mode_set_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING);
+        g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: continue\r\n");
         return;
     } else if (!strcmp(argv[1], "passive_enum") || !strcmp(argv[1], "p")) {
-        logitacker_discovery_mode_set_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION);
+        g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start passive enumeration of new RF address\r\n");
         return;
     } else if (!strcmp(argv[1], "active_enum") || !strcmp(argv[1], "a")) {
-        logitacker_discovery_mode_set_on_new_address_action(LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION);
+        g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION;
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start active enumeration of new RF address\r\n");
         return;
     } else {

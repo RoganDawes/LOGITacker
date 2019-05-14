@@ -11,6 +11,7 @@
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_PASIVE_ENUM
 #include "nrf_log.h"
 #include "logitacker_usb.h"
+#include "logitacker_options.h"
 
 NRF_LOG_MODULE_REGISTER();
 
