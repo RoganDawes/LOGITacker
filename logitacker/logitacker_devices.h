@@ -55,9 +55,9 @@ typedef uint8_t logitacker_device_unifying_device_capbilities_t;
 
 typedef uint8_t logitacker_device_unifying_wpid_t[2];
 typedef uint8_t logitacker_device_unifying_device_serial_t[4];
-typedef uint8_t logitacker_device_unifying_device_rf_address_t[5]; //byte order as seen on air (base address LSB first, prefix is last byte of address)
-typedef uint8_t logitacker_device_unifying_device_rf_addr_prefix_t; //prefix of rf_address
-typedef uint8_t logitacker_device_unifying_device_rf_addr_base_t[4]; //base rf_address (nRF5 SDK byte order, MSB first)
+typedef uint8_t logitacker_devices_unifying_device_rf_address_t[5]; //byte order as seen on air (base address LSB first, prefix is last byte of address)
+typedef uint8_t logitacker_devices_unifying_device_rf_addr_prefix_t; //prefix of rf_address
+typedef uint8_t logitacker_devices_unifying_device_rf_addr_base_t[4]; //base rf_address (nRF5 SDK byte order, MSB first)
 typedef uint8_t logitacker_device_unifying_device_key_t[16];
 
 typedef uint16_t logitacker_device_unifying_device_fds_key_t;
@@ -83,21 +83,21 @@ typedef struct {
     uint32_t logitech_chksm;
 } logitacker_device_frame_counter_t;
 
-typedef struct logitacker_device_unifying_device logitacker_device_unifying_device_t;
-typedef struct logitacker_device_unifying_dongle logitacker_device_unifying_dongle_t;
+typedef struct logitacker_device_unifying_device logitacker_devices_unifying_device_t;
+typedef struct logitacker_device_unifying_dongle logitacker_devices_unifying_dongle_t;
 
 
 typedef struct logitacker_device_unifying_device {
     logitacker_device_unifying_device_fds_key_t storage_id;
-    logitacker_device_unifying_dongle_t * p_dongle;
+    logitacker_devices_unifying_dongle_t * p_dongle;
 
     uint8_t index;  //refers to index used on USB end of dongle
     //uint8_t destination_id; //corresponds to prefix
-    logitacker_device_unifying_device_rf_addr_prefix_t addr_prefix;
+    logitacker_devices_unifying_device_rf_addr_prefix_t addr_prefix;
     logitacker_device_unifying_wpid_t wpid;
     logitacker_device_unifying_type_t type;
     logitacker_device_unifying_device_serial_t serial;
-    logitacker_device_unifying_device_rf_address_t rf_address;
+    logitacker_devices_unifying_device_rf_address_t rf_address;
     logitacker_device_unifying_report_types_t report_types;
     logitacker_device_unifying_usability_info_t usability_info;
 
@@ -120,17 +120,20 @@ typedef struct logitacker_device_unifying_device {
     bool has_single_whitened_report;
 
     logitacker_device_frame_counter_t frame_counters;
-} logitacker_device_unifying_device_t;
+} logitacker_devices_unifying_device_t;
 
 
 #define LOGITACKER_DEVICE_DONGLE_MAX_PREFIX 7
 
+
+#define LOGITACKER_DEVICES_MAX_DEVICES_PER_DONGLE 7
+
 typedef struct logitacker_device_unifying_dongle {
     logitacker_device_unifying_device_fds_key_t storage_id;
 
-    logitacker_device_unifying_device_rf_addr_base_t base_addr;
+    logitacker_devices_unifying_device_rf_addr_base_t base_addr;
 
-    //logitacker_device_unifying_device_rf_addr_prefix_t device_prefixes[LOGITACKER_DEVICE_DONGLE_MAX_PREFIX];
+    //logitacker_devices_unifying_device_rf_addr_prefix_t device_prefixes[LOGITACKER_DEVICE_DONGLE_MAX_PREFIX];
     uint8_t num_devices;
 
     logitacker_device_unifying_wpid_t wpid;
@@ -140,18 +143,43 @@ typedef struct logitacker_device_unifying_dongle {
     bool is_logitech;
 
     //logitacker_device_frame_counter_t frame_counters[LOGITACKER_DEVICE_DONGLE_MAX_PREFIX];
-    logitacker_device_unifying_device_t devices[LOGITACKER_DEVICE_DONGLE_MAX_PREFIX];
-} logitacker_device_unifying_dongle_t;
+    logitacker_devices_unifying_device_t devices[LOGITACKER_DEVICE_DONGLE_MAX_PREFIX];
+
+    uint8_t num_connected_devices;
+    logitacker_devices_unifying_device_t * p_connected_devices[LOGITACKER_DEVICES_MAX_DEVICES_PER_DONGLE];
+} logitacker_devices_unifying_dongle_t;
+
+
+typedef struct {
+    int current_pos;
+} logitacker_devices_list_iterator_t;
+
+#define LOGITACKER_DEVICES_DONGLE_LIST_MAX_ENTRIES 2
+#define LOGITACKER_DEVICES_DEVICE_LIST_MAX_ENTRIES 2
+uint32_t logitacker_devices_create_dongle(logitacker_devices_unifying_dongle_t **pp_dongle,
+                                          logitacker_devices_unifying_device_rf_addr_base_t const base_addr);
+uint32_t logitacker_devices_get_dongle(logitacker_devices_unifying_dongle_t ** pp_dongle, logitacker_devices_unifying_device_rf_addr_base_t const base_addr);
+uint32_t logitacker_devices_del_dongle(logitacker_devices_unifying_device_rf_addr_base_t const base_addr);
+uint32_t logitacker_devices_get_next_dongle(logitacker_devices_unifying_dongle_t ** pp_dongle, logitacker_devices_list_iterator_t * iter);
+
+uint32_t logitacker_devices_add_given_device_to_dongle(logitacker_devices_unifying_dongle_t * p_dongle, logitacker_devices_unifying_device_t * p_device);
+uint32_t logitacker_devices_remove_device_from_dongle(logitacker_devices_unifying_device_t * p_device);
+
+
+uint32_t logitacker_devices_create_device(logitacker_devices_unifying_device_t ** pp_device, logitacker_devices_unifying_device_rf_address_t const rf_addr);
+uint32_t logitacker_devices_get_device(logitacker_devices_unifying_device_t ** pp_device, logitacker_devices_unifying_device_rf_address_t const rf_addr);
+uint32_t logitacker_devices_del_device(logitacker_devices_unifying_device_rf_address_t const rf_addr);
+uint32_t logitacker_devices_get_next_device(logitacker_devices_unifying_device_t ** pp_device, logitacker_devices_list_iterator_t * iter);
 
 
 void logitacker_devices_update_frame_counters_for_rf_address(uint8_t const *const rf_addr, nrf_esb_payload_t frame);
 
-logitacker_device_unifying_dongle_t *logitacker_devices_add_new_dongle_and_device_by_rf_address(
+logitacker_devices_unifying_dongle_t *logitacker_devices_add_new_dongle_and_device_by_rf_address(
         uint8_t const *const rf_addr);
 
-logitacker_device_unifying_dongle_t *logitacker_devices_get_dongle_by_rf_address(uint8_t const *const addr);
+logitacker_devices_unifying_dongle_t *logitacker_devices_get_dongle_by_rf_address(uint8_t const *const addr);
 
-logitacker_device_unifying_dongle_t *logitacker_device_set_list_get(uint32_t pos); //returns NULL if position is unused or invalid
+logitacker_devices_unifying_dongle_t *logitacker_device_set_list_get(uint32_t pos); //returns NULL if position is unused or invalid
 
 uint32_t logitacker_device_list_remove_by_addr(uint8_t const *const rf_addr);
 
@@ -159,16 +187,16 @@ uint32_t logitacker_device_list_remove_by_base(uint8_t const *const base_addr);
 
 void logitacker_devices_dongle_list_flush();
 
-uint32_t logitacker_devices_add_device_to_dongle(logitacker_device_unifying_dongle_t *p_dongle, uint8_t prefix);
+uint32_t logitacker_devices_add_device_to_dongle(logitacker_devices_unifying_dongle_t *p_dongle, uint8_t prefix);
 
 uint32_t
 logitacker_devices_get_device_index_from_dongle_by_addr_prefix(int *out_index,
-                                                               logitacker_device_unifying_dongle_t const *const p_dongle,
+                                                               logitacker_devices_unifying_dongle_t const *const p_dongle,
                                                                uint8_t prefix);
 
-logitacker_device_unifying_device_t *logitacker_devices_get_device_by_rf_address(uint8_t const *const rf_addr);
+logitacker_devices_unifying_device_t *logitacker_devices_get_device_by_rf_address(uint8_t const *const rf_addr);
 
-uint32_t logitacker_devices_generate_keyboard_frame(logitacker_device_unifying_device_t *p_caps,
+uint32_t logitacker_devices_generate_keyboard_frame(logitacker_devices_unifying_device_t *p_caps,
                                                     nrf_esb_payload_t *p_result_payload,
                                                     hid_keyboard_report_t const *const p_in_hid_report);
 

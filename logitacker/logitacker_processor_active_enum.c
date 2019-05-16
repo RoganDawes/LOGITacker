@@ -246,7 +246,7 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 
             if (self->next_prefix == 0x00) {
                 //if prefix 0x00 isn't reachable, it is unlikely that this is a Logitech dongle
-                logitacker_device_unifying_dongle_t *p_device_set = logitacker_devices_get_dongle_by_rf_address(
+                logitacker_devices_unifying_dongle_t *p_device_set = logitacker_devices_get_dongle_by_rf_address(
                         self->current_rf_address);
                 if (p_device_set != NULL) {
                     p_device_set->is_logitech = false;
@@ -289,18 +289,18 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                         self->led_count++;
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: devices accepts plain keystroke injection (LED test succeeded)");
-                        logitacker_device_unifying_device_t *p_caps = logitacker_devices_get_device_by_rf_address(
+                        logitacker_devices_unifying_device_t *p_caps = logitacker_devices_get_device_by_rf_address(
                                 self->current_rf_address);
                         if (p_caps != NULL) p_caps->vuln_plain_injection = true;
                     } else if (rf_report_type == UNIFYING_RF_REPORT_PAIRING && device_id == PAIRING_REQ_MARKER_BYTE) { //data[0] holds byte used in request
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: forced pairing seems possible");
-                        logitacker_device_unifying_device_t *p_caps = logitacker_devices_get_device_by_rf_address(
+                        logitacker_devices_unifying_device_t *p_caps = logitacker_devices_get_device_by_rf_address(
                                 self->current_rf_address);
                         if (p_caps != NULL) {
                             p_caps->vuln_forced_pairing = true;
                         }
-                        logitacker_device_unifying_dongle_t * p_device_set = logitacker_devices_get_dongle_by_rf_address(
+                        logitacker_devices_unifying_dongle_t * p_device_set = logitacker_devices_get_dongle_by_rf_address(
                                 self->current_rf_address);
                         if (p_device_set != NULL) {
                             // dongle wpid is in response (byte 8,9)

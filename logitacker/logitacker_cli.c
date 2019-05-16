@@ -49,8 +49,23 @@ static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
     }
 */
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "device set size %d\r\n", sizeof(logitacker_devices_unifying_dongle_t));
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_rf_address_t)   : %d\r\n", sizeof(logitacker_devices_unifying_device_rf_address_t));
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_rf_addr_base_t) : %d\r\n", sizeof(logitacker_devices_unifying_device_rf_addr_base_t));
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_t)              : %d\r\n", sizeof(logitacker_devices_unifying_device_t));
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_dongle_t)              : %d\r\n", sizeof(logitacker_devices_unifying_dongle_t));
 
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "device set size %d\r\n", sizeof(logitacker_device_unifying_dongle_t));
+    logitacker_devices_unifying_device_t * p_device1 = NULL;
+    logitacker_devices_unifying_device_t * p_device2 = NULL;
+    logitacker_devices_unifying_device_rf_address_t addr1 = {0x00, 0x01, 0x02, 0x03, 0x04};
+    logitacker_devices_unifying_device_rf_address_t addr2 = {0x01, 0x02, 0x03, 0x04, 0x05};
+    logitacker_devices_create_device(&p_device1, addr1);
+    logitacker_devices_create_device(&p_device2, addr2);
+    if (p_device1 != NULL) {
+        NRF_LOG_INFO("device1:");
+        NRF_LOG_HEXDUMP_INFO(p_device1, sizeof(logitacker_devices_unifying_device_t));
+    }
+    logitacker_devices_create_device(&p_device2, addr1);
 
 }
 
@@ -223,11 +238,11 @@ static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN];
 static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     for (int i=0; i<LOGITACKER_DEVICES_MAX_LIST_ENTRIES; i++) {
-        logitacker_device_unifying_dongle_t *p_dongle = logitacker_device_set_list_get(i);
+        logitacker_devices_unifying_dongle_t *p_dongle = logitacker_device_set_list_get(i);
         if (p_dongle != NULL) {
 
             for (int device_index=0; device_index < p_dongle->num_devices; device_index++) {
-                logitacker_device_unifying_device_t * p_device = &p_dongle->devices[device_index];
+                logitacker_devices_unifying_device_t * p_device = &p_dongle->devices[device_index];
                 logitacker_device_frame_counter_t * p_counters = &p_device->frame_counters;
 
                 helper_base_and_prefix_to_addr(tmp_addr, p_dongle->base_addr, p_device->addr_prefix, 5);

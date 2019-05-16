@@ -21,11 +21,11 @@ typedef struct {
     logitacker_flash_device_list_entry_t next_free_key;
 } logitacker_flash_device_list_t;
 
-uint32_t logitacker_load_device_set_from_flash_by_addr(logitacker_device_unifying_dongle_t * p_device_set, uint8_t rf_address[5]);
-uint32_t logitacker_load_device_set_from_flash_by_key(logitacker_device_unifying_dongle_t * p_device_set, uint16_t key);
+uint32_t logitacker_load_device_set_from_flash_by_addr(logitacker_devices_unifying_dongle_t * p_device_set, uint8_t rf_address[5]);
+uint32_t logitacker_load_device_set_from_flash_by_key(logitacker_devices_unifying_dongle_t * p_device_set, uint16_t key);
 uint32_t logitacker_remove_device_set_from_flash_by_addr(uint8_t rf_address[5]);
 uint32_t logitacker_remove_device_set_from_flash_by_key(uint16_t key);
-uint32_t logitacker_store_device_set_to_flash(logitacker_device_unifying_dongle_t * p_device_set, uint16_t * out_key);
+uint32_t logitacker_store_device_set_to_flash(logitacker_devices_unifying_dongle_t * p_device_set, uint16_t * out_key);
 
 uint32_t logitacker_flash_init();
 

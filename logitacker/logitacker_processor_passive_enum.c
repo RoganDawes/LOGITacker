@@ -25,7 +25,7 @@ typedef struct {
     uint8_t known_prefix;
     uint8_t current_channel_index;
 
-    logitacker_device_unifying_dongle_t devices[NRF_ESB_PIPE_COUNT];
+    logitacker_devices_unifying_dongle_t devices[NRF_ESB_PIPE_COUNT];
 
     nrf_esb_payload_t tmp_rx_payload;
 } logitacker_processor_passive_enum_ctx_t;
@@ -99,7 +99,7 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
     int prefix_count = sizeof(prefixes);
 
     // if the rf_address is in device list and has more than 1 prefix (f.e. from active scan), overwrite listen device_prefixes
-    logitacker_device_unifying_dongle_t * p_dongle = logitacker_devices_get_dongle_by_rf_address(
+    logitacker_devices_unifying_dongle_t * p_dongle = logitacker_devices_get_dongle_by_rf_address(
             self->current_rf_address);
     if (p_dongle->num_devices > 1) {
         for (int dev_idx=0; dev_idx < p_dongle->num_devices; dev_idx++) {
@@ -233,7 +233,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
         bool unifying_is_keep_alive;
         unifying_frame_classify(self->tmp_rx_payload, &unifying_report_type, &unifying_is_keep_alive);
 
-//            logitacker_device_unifying_dongle_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
+//            logitacker_devices_unifying_dongle_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
 
         uint8_t addr[5];
         nrf_esb_convert_pipe_to_address(self->tmp_rx_payload.pipe, addr);
@@ -292,7 +292,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
 
             if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
                 // check if theres a device entry for the address
-                logitacker_device_unifying_device_t * p_caps = logitacker_devices_get_device_by_rf_address(addr);
+                logitacker_devices_unifying_device_t * p_caps = logitacker_devices_get_device_by_rf_address(addr);
                 // check if device key is known
                 if (p_caps != NULL && p_caps->key_known) {
                     // try to decrypt frame

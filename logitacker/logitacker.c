@@ -52,7 +52,7 @@ typedef struct {
     uint8_t known_prefix;
     uint8_t current_channel_index;
 
-    logitacker_device_unifying_dongle_t devices[NRF_ESB_PIPE_COUNT];
+    logitacker_devices_unifying_dongle_t devices[NRF_ESB_PIPE_COUNT];
 } logitacker_substate_passive_enumeration_t;
 
 
@@ -269,7 +269,7 @@ void discovery_process_rx() {
            
             NRF_LOG_HEXDUMP_DEBUG(p_rx_payload->data, p_rx_payload->length);
 
-            logitacker_device_unifying_dongle_t *p_device = logitacker_devices_add_new_dongle_and_device_by_rf_address(
+            logitacker_devices_unifying_dongle_t *p_device = logitacker_devices_add_new_dongle_and_device_by_rf_address(
                     addr);
 
             // update device counters
@@ -420,13 +420,13 @@ void pairing_sniff_event_handler_esb(nrf_esb_evt_t *p_event) {
                     pairing_sniff_disable_pipe1();
 
                     //retrieve device or add new and update data
-                    logitacker_device_unifying_dongle_t * p_device_set = logitacker_devices_add_new_dongle_and_device_by_rf_address(
+                    logitacker_devices_unifying_dongle_t * p_device_set = logitacker_devices_add_new_dongle_and_device_by_rf_address(
                             m_device_pair_info.device_rf_address);
                     if (p_device_set == NULL) {
                         NRF_LOG_ERROR("failed adding device entry for pairing sniff result");
                     } else {
                         // update device caps
-                        logitacker_device_unifying_device_t * p_caps = logitacker_devices_get_device_by_rf_address(
+                        logitacker_devices_unifying_device_t * p_caps = logitacker_devices_get_device_by_rf_address(
                                 m_device_pair_info.device_rf_address);
                         memcpy(p_caps->serial, m_device_pair_info.device_serial, 4);
                         memcpy(p_caps->device_name, m_device_pair_info.device_name, m_device_pair_info.device_name_len);

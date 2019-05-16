@@ -20,7 +20,7 @@ typedef struct {
     uint32_t remaining_reports_in_sequence; // count of hid reports in current sequence
     logitacker_keyboard_map_lang_t language_layout;
     //uint32_t pos_in_seq; //position in current report sequence
-    logitacker_device_unifying_device_t * p_device_caps;
+    logitacker_devices_unifying_device_t * p_device_caps;
 
 } logitacker_tx_payload_provider_string_ctx_t;
 
@@ -107,7 +107,7 @@ void provider_inject_reset(logitacker_tx_payload_provider_string_ctx_t * self) {
 }
 
 
-logitacker_tx_payload_provider_t * new_payload_provider_string(logitacker_device_unifying_device_t * p_device_caps, logitacker_keyboard_map_lang_t lang, char const * const str) {
+logitacker_tx_payload_provider_t * new_payload_provider_string(logitacker_devices_unifying_device_t * p_device_caps, logitacker_keyboard_map_lang_t lang, char const * const str) {
     if (p_device_caps == NULL) {
         NRF_LOG_WARNING("cannot create payload provider string, no device capabilities given");
     }
