@@ -20,7 +20,7 @@ typedef struct {
     uint32_t remaining_reports_in_sequence; // count of hid reports in current sequence
     logitacker_keyboard_map_lang_t language_layout;
     //uint32_t pos_in_seq; //position in current report sequence
-    logitacker_device_capabilities_t * p_device_caps;
+    logitacker_device_unifying_device_t * p_device_caps;
 
 } logitacker_tx_payload_provider_string_ctx_t;
 
@@ -66,7 +66,7 @@ void convert_hid_report_to_rf_payload(logitacker_tx_payload_provider_string_ctx_
     NRF_LOG_DEBUG("HID report to translate to RF frame (%d):", rc++);
     NRF_LOG_HEXDUMP_DEBUG(p_hid_report, sizeof(hid_keyboard_report_t));
 
-    logitacker_device_generate_keyboard_frame(self->p_device_caps, p_next_payload, p_hid_report);
+    logitacker_devices_generate_keyboard_frame(self->p_device_caps, p_next_payload, p_hid_report);
 
     NRF_LOG_INFO("Updated TX payload (%d):", rc++);
     NRF_LOG_HEXDUMP_INFO(p_next_payload->data, p_next_payload->length);
@@ -107,7 +107,7 @@ void provider_inject_reset(logitacker_tx_payload_provider_string_ctx_t * self) {
 }
 
 
-logitacker_tx_payload_provider_t * new_payload_provider_string(logitacker_device_capabilities_t * p_device_caps, logitacker_keyboard_map_lang_t lang, char const * const str) {
+logitacker_tx_payload_provider_t * new_payload_provider_string(logitacker_device_unifying_device_t * p_device_caps, logitacker_keyboard_map_lang_t lang, char const * const str) {
     if (p_device_caps == NULL) {
         NRF_LOG_WARNING("cannot create payload provider string, no device capabilities given");
     }

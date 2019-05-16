@@ -25,7 +25,7 @@ typedef struct {
     uint8_t known_prefix;
     uint8_t current_channel_index;
 
-    logitacker_device_set_t devices[NRF_ESB_PIPE_COUNT];
+    logitacker_device_unifying_dongle_t devices[NRF_ESB_PIPE_COUNT];
 
     nrf_esb_payload_t tmp_rx_payload;
 } logitacker_processor_passive_enum_ctx_t;
@@ -99,10 +99,13 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
     int prefix_count = sizeof(prefixes);
 
     // if the rf_address is in device list and has more than 1 prefix (f.e. from active scan), overwrite listen device_prefixes
-    logitacker_device_set_t * p_dev = logitacker_device_set_list_get_by_addr(self->current_rf_address);
-    if (p_dev->num_device_prefixes > 1) {
-        memcpy(prefixes, p_dev->device_prefixes, p_dev->num_device_prefixes);
-        prefix_count = p_dev->num_device_prefixes;
+    logitacker_device_unifying_dongle_t * p_dongle = logitacker_devices_get_dongle_by_rf_address(
+            self->current_rf_address);
+    if (p_dongle->num_devices > 1) {
+        for (int dev_idx=0; dev_idx < p_dongle->num_devices; dev_idx++) {
+            prefixes[dev_idx] = p_dongle->devices[dev_idx].addr_prefix;
+        }
+        prefix_count = p_dongle->num_devices;
     }
 
 
@@ -230,7 +233,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
         bool unifying_is_keep_alive;
         unifying_frame_classify(self->tmp_rx_payload, &unifying_report_type, &unifying_is_keep_alive);
 
-//            logitacker_device_set_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
+//            logitacker_device_unifying_dongle_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
 
         uint8_t addr[5];
         nrf_esb_convert_pipe_to_address(self->tmp_rx_payload.pipe, addr);
@@ -239,8 +242,8 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
         uint8_t base[4];
         helper_addr_to_base_and_prefix(base, &prefix, addr, 5); //convert device addr to base+prefix and update device
 
-        //logitacker_device_update_counters_from_frame(p_device, prefix, rx_payload); //update device data
-        logitacker_device_update_counters_from_frame(addr, self->tmp_rx_payload);
+        //logitacker_devices_update_frame_counters_for_rf_address(p_device, prefix, rx_payload); //update device data
+        logitacker_devices_update_frame_counters_for_rf_address(addr, self->tmp_rx_payload);
 
 
         if (!(unifying_report_type == 0x00 && unifying_is_keep_alive) && len != 0) { //ignore keep-alive only frames and empty frames
@@ -289,7 +292,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
 
             if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
                 // check if theres a device entry for the address
-                logitacker_device_capabilities_t * p_caps = logitacker_device_get_caps_pointer(addr);
+                logitacker_device_unifying_device_t * p_caps = logitacker_devices_get_device_by_rf_address(addr);
                 // check if device key is known
                 if (p_caps != NULL && p_caps->key_known) {
                     // try to decrypt frame

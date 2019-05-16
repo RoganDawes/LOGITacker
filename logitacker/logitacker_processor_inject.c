@@ -82,7 +82,7 @@ typedef struct {
 
     inject_task_t current_task;
 
-    logitacker_device_capabilities_t * p_caps;
+    logitacker_device_unifying_device_t * p_caps;
     logitacker_tx_payload_provider_t * p_payload_provider;
 } logitacker_processor_inject_ctx_t;
 
@@ -110,7 +110,7 @@ static logitacker_processor_inject_ctx_t m_static_inject_ctx; //we reuse the sam
 
 static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN] = {0};
-static logitacker_device_capabilities_t tmp_device_caps = {0};
+static logitacker_device_unifying_device_t tmp_device_caps = {0};
 static bool m_ringbuf_initialized;
 
 uint32_t ringbuf_available() {
@@ -577,7 +577,7 @@ logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, 
     p_ctx->timer_next_action = timer_next_action;
 
 
-    p_ctx->p_caps = logitacker_device_get_caps_pointer(p_ctx->current_rf_address);
+    p_ctx->p_caps = logitacker_devices_get_device_by_rf_address(p_ctx->current_rf_address);
     if (p_ctx->p_caps == NULL) {
         NRF_LOG_WARNING("device not found, creating capabilities");
         tmp_device_caps.is_encrypted = false;

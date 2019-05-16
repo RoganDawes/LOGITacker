@@ -20,7 +20,7 @@ NRF_LOG_MODULE_REGISTER();
  * ToDo: Due to forced pairing test, the dongle changes unused device slots to offer new RF addresses
  * (listens on new prefixes while dropping old ones). As the dongle couldn't listen on more than 7 prefixes a time
  * (00 for dongle address and 6 device addresses) the backing data struct for discovered neighbours limits the
- * maximum storable prefixes per base address to 7 (defined by LOGITACKER_DEVICE_MAX_PREFIX). This is an issue,
+ * maximum storable prefixes per base address to 7 (defined by LOGITACKER_DEVICE_DONGLE_MAX_PREFIX). This is an issue,
  * if prefixes change during neighbour discovery. To account for this, active enum should store all results to a temporary
  * data structure. In case a full prefix range (0x00 + 6 device prefixes) during neighbour discovery, the result could be
  * used to replace the current prefixes for the corresponding base address.
@@ -246,7 +246,8 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 
             if (self->next_prefix == 0x00) {
                 //if prefix 0x00 isn't reachable, it is unlikely that this is a Logitech dongle
-                logitacker_device_set_t *p_device_set = logitacker_device_set_list_get_by_addr(self->current_rf_address);
+                logitacker_device_unifying_dongle_t *p_device_set = logitacker_devices_get_dongle_by_rf_address(
+                        self->current_rf_address);
                 if (p_device_set != NULL) {
                     p_device_set->is_logitech = false;
                 }
@@ -288,16 +289,19 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                         self->led_count++;
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: devices accepts plain keystroke injection (LED test succeeded)");
-                        logitacker_device_capabilities_t *p_caps = logitacker_device_get_caps_pointer(self->current_rf_address);
+                        logitacker_device_unifying_device_t *p_caps = logitacker_devices_get_device_by_rf_address(
+                                self->current_rf_address);
                         if (p_caps != NULL) p_caps->vuln_plain_injection = true;
                     } else if (rf_report_type == UNIFYING_RF_REPORT_PAIRING && device_id == PAIRING_REQ_MARKER_BYTE) { //data[0] holds byte used in request
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: forced pairing seems possible");
-                        logitacker_device_capabilities_t *p_caps = logitacker_device_get_caps_pointer(self->current_rf_address);
+                        logitacker_device_unifying_device_t *p_caps = logitacker_devices_get_device_by_rf_address(
+                                self->current_rf_address);
                         if (p_caps != NULL) {
                             p_caps->vuln_forced_pairing = true;
                         }
-                        logitacker_device_set_t * p_device_set = logitacker_device_set_list_get_by_addr(self->current_rf_address);
+                        logitacker_device_unifying_dongle_t * p_device_set = logitacker_devices_get_dongle_by_rf_address(
+                                self->current_rf_address);
                         if (p_device_set != NULL) {
                             // dongle wpid is in response (byte 8,9)
                             memcpy(p_device_set->wpid, &self->tmp_rx_payload.data[9], 2);
@@ -354,7 +358,7 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 
 
 void processor_active_enum_add_device_address_to_list(logitacker_processor_active_enum_ctx_t *self) {
-    if (logitacker_device_set_add_new_by_dev_addr(self->current_rf_address) != NULL) {
+    if (logitacker_devices_add_new_dongle_and_device_by_rf_address(self->current_rf_address) != NULL) {
         NRF_LOG_INFO("device address %s added/updated", addr_str_buff);
     } else {
         NRF_LOG_INFO("failed to add/update device address %s", addr_str_buff);

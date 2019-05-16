@@ -49,12 +49,9 @@ static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
     }
 */
-    //logitacker_flash_init();
-    //fds_file_delete(LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS);
-    logitacker_options_restore_from_flash();
-    logitacker_options_store_to_flash();
-    logitacker_options_print();
-    logitacker_options_print_stats();
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "device set size %d\r\n", sizeof(logitacker_device_unifying_dongle_t));
+
 }
 
 static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -226,23 +223,22 @@ static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN];
 static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     for (int i=0; i<LOGITACKER_DEVICES_MAX_LIST_ENTRIES; i++) {
-        logitacker_device_set_t *p_device_set = logitacker_device_set_list_get(i);
-        if (p_device_set != NULL) {
+        logitacker_device_unifying_dongle_t *p_dongle = logitacker_device_set_list_get(i);
+        if (p_dongle != NULL) {
 
-            for (int prefix_index=0; prefix_index < p_device_set->num_device_prefixes; prefix_index++) {
-                uint8_t prefix = p_device_set->device_prefixes[prefix_index];
-                logitacker_device_capabilities_t * p_caps = &p_device_set->capabilities[prefix_index];
-                logitacker_device_frame_counter_t * p_counters = &p_device_set->frame_counters[prefix_index];
+            for (int device_index=0; device_index < p_dongle->num_devices; device_index++) {
+                logitacker_device_unifying_device_t * p_device = &p_dongle->devices[device_index];
+                logitacker_device_frame_counter_t * p_counters = &p_device->frame_counters;
 
-                helper_base_and_prefix_to_addr(tmp_addr, p_device_set->base_addr, prefix, 5);
+                helper_base_and_prefix_to_addr(tmp_addr, p_dongle->base_addr, p_device->addr_prefix, 5);
                 helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, tmp_addr);
 
                 nrf_cli_vt100_color_t outcol = NRF_CLI_VT100_COLOR_DEFAULT;
-                if (p_device_set->is_logitech) outcol = NRF_CLI_VT100_COLOR_BLUE;
-                if (p_caps->vuln_forced_pairing) outcol = NRF_CLI_VT100_COLOR_YELLOW;
-                if (p_caps->vuln_plain_injection) outcol = NRF_CLI_VT100_COLOR_GREEN;
-                if (p_caps->key_known) outcol = NRF_CLI_VT100_COLOR_RED;
-                nrf_cli_fprintf(p_cli, outcol, "%s (activity %d, Logitech: %d, plain keystroke injection %d, forced pairing %d, link key known %d)\r\n", addr_str_buff, p_counters->overal, p_device_set->is_logitech, p_caps->vuln_plain_injection, p_caps->vuln_forced_pairing, p_caps->key_known);
+                if (p_dongle->is_logitech) outcol = NRF_CLI_VT100_COLOR_BLUE;
+                if (p_device->vuln_forced_pairing) outcol = NRF_CLI_VT100_COLOR_YELLOW;
+                if (p_device->vuln_plain_injection) outcol = NRF_CLI_VT100_COLOR_GREEN;
+                if (p_device->key_known) outcol = NRF_CLI_VT100_COLOR_RED;
+                nrf_cli_fprintf(p_cli, outcol, "%s (activity %d, Logitech: %d, plain keystroke injection %d, forced pairing %d, link key known %d)\r\n", addr_str_buff, p_counters->overal, p_dongle->is_logitech, p_device->vuln_plain_injection, p_device->vuln_forced_pairing, p_device->key_known);
             }
         }
     }
