@@ -269,41 +269,48 @@ void discovery_process_rx() {
            
             NRF_LOG_HEXDUMP_DEBUG(p_rx_payload->data, p_rx_payload->length);
 
-            logitacker_devices_unifying_dongle_t *p_device = logitacker_devices_add_new_dongle_and_device_by_rf_address(
-                    addr);
+            logitacker_devices_unifying_device_t *p_device = NULL;
+            logitacker_devices_create_device(&p_device, addr);
 
             // update device counters
-            bool isLogitech = false;
+            //bool isLogitech = false;
             if (p_device != NULL) {
+                // convert promisuous mode frame to default ESB frame
                 logitacker_radio_convert_promiscuous_frame_to_default_frame(&tmp_payload, rx_payload);
-                //logitacker_devices_update_frame_counters_for_rf_address(p_device, prefix, tmp_payload);
-                logitacker_devices_update_frame_counters_for_rf_address(addr, tmp_payload);
-                if (p_device->is_logitech) isLogitech=true;
-            }
 
-            if (isLogitech) {
-                NRF_LOG_INFO("discovered device is Logitech")
-                switch (g_logitacker_global_config.discovery_on_new_address_action) {
-                    case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
-                        break;
-                    case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
-                        logitacker_enter_mode_active_enum(addr);
-                        break;
-                    case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
-                        logitacker_enter_mode_passive_enum(addr);
-                        break;
-                    case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
-                        logitacker_enter_mode_injection(addr);
-                        logitacker_injection_string(LANGUAGE_LAYOUT_US, LOGITACKER_AUTO_INJECTION_PAYLOAD);
-                        break;
-                    default:
-                        // do nothing, stay in discovery
-                        break;
+                // classify device (determin if it is Logitech)
+                logitacker_devices_device_update_classification(p_device, tmp_payload);
+                if (p_device->p_dongle != NULL) {
+                    if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH) {
+                        NRF_LOG_INFO("discovered device is Logitech")
+                        switch (g_logitacker_global_config.discovery_on_new_address_action) {
+                            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
+                                break;
+                            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
+                                logitacker_enter_mode_active_enum(addr);
+                                break;
+                            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
+                                logitacker_enter_mode_passive_enum(addr);
+                                break;
+                            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
+                                logitacker_enter_mode_injection(addr);
+                                logitacker_injection_string(LANGUAGE_LAYOUT_US, LOGITACKER_AUTO_INJECTION_PAYLOAD);
+                                break;
+                            default:
+                                // do nothing, stay in discovery
+                                break;
+                        }
+                    } else if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_NOT_LOGITECH) {
+                        NRF_LOG_INFO("Discovered device doesn't seem to be Logitech, removing from list again...");
+                        NRF_LOG_HEXDUMP_INFO(tmp_payload.data, tmp_payload.length);
+                        if (p_device != NULL) logitacker_devices_del_device(p_device->rf_address);
+                    } else {
+                        NRF_LOG_INFO("discovered device not classified, yet. Likely because RX frame was empty ... removing device from list")
+                        if (p_device != NULL) logitacker_devices_del_device(p_device->rf_address);
+                    }
                 }
-
-            } else {
-                NRF_LOG_INFO("Discovered device doesn't seem to be Logitech, continue discovery...");
             }
+
         } else {
             NRF_LOG_WARNING("invalid promiscuous frame in discovery mode, shouldn't happen because of filtering");
         }
@@ -420,23 +427,28 @@ void pairing_sniff_event_handler_esb(nrf_esb_evt_t *p_event) {
                     pairing_sniff_disable_pipe1();
 
                     //retrieve device or add new and update data
-                    logitacker_devices_unifying_dongle_t * p_device_set = logitacker_devices_add_new_dongle_and_device_by_rf_address(
-                            m_device_pair_info.device_rf_address);
-                    if (p_device_set == NULL) {
+                    logitacker_devices_unifying_device_t * p_device = NULL;
+                    logitacker_devices_get_device(&p_device, m_device_pair_info.device_rf_address);
+                    if (p_device == NULL) {
+                        //couldn't fetch device, try to create
+                        logitacker_devices_create_device(&p_device, m_device_pair_info.device_rf_address);
+                    }
+                    if (p_device == NULL) {
                         NRF_LOG_ERROR("failed adding device entry for pairing sniff result");
                     } else {
                         // update device caps
-                        logitacker_devices_unifying_device_t * p_caps = logitacker_devices_get_device_by_rf_address(
-                                m_device_pair_info.device_rf_address);
-                        memcpy(p_caps->serial, m_device_pair_info.device_serial, 4);
-                        memcpy(p_caps->device_name, m_device_pair_info.device_name, m_device_pair_info.device_name_len);
-                        memcpy(p_caps->key, m_device_pair_info.device_key, 16);
-                        memcpy(p_caps->raw_key_data, m_device_pair_info.device_raw_key_material, 16);
-                        memcpy(p_caps->rf_address, m_device_pair_info.device_rf_address, 16);
-                        memcpy(p_caps->wpid, m_device_pair_info.device_wpid, 2);
-                        memcpy(p_device_set->wpid, m_device_pair_info.dongle_wpid, 2);
-
-                        p_caps->key_known = m_device_pair_info.key_material_complete;
+                        memcpy(p_device->serial, m_device_pair_info.device_serial, 4);
+                        memcpy(p_device->device_name, m_device_pair_info.device_name, m_device_pair_info.device_name_len);
+                        memcpy(p_device->key, m_device_pair_info.device_key, 16);
+                        memcpy(p_device->raw_key_data, m_device_pair_info.device_raw_key_material, 16);
+                        memcpy(p_device->rf_address, m_device_pair_info.device_rf_address, 16);
+                        memcpy(p_device->wpid, m_device_pair_info.device_wpid, 2);
+                        if (p_device->p_dongle == NULL) {
+                            NRF_LOG_ERROR("device doesn't point to dongle");
+                        } else {
+                            memcpy(p_device->p_dongle->wpid, m_device_pair_info.dongle_wpid, 2);
+                        }
+                        p_device->key_known = m_device_pair_info.key_material_complete;
                     }
 
                     pairing_sniff_on_success();

@@ -170,7 +170,6 @@ uint8_t unifying_calculate_checksum(uint8_t * p_array, uint8_t paylen) {
         checksum -= p_array[i];
     }
     //checksum++;
-
     return checksum;
 }
 

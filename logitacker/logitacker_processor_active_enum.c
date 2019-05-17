@@ -245,11 +245,18 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
             }
 
             if (self->next_prefix == 0x00) {
-                //if prefix 0x00 isn't reachable, it is unlikely that this is a Logitech dongle
-                logitacker_devices_unifying_dongle_t *p_device_set = logitacker_devices_get_dongle_by_rf_address(
-                        self->current_rf_address);
-                if (p_device_set != NULL) {
-                    p_device_set->is_logitech = false;
+                //if prefix 0x00 isn't reachable, it is unlikely that this is a Logitech dongle, thus we remove the device from the list and abort enumeration
+                NRF_LOG_INFO("The dongle for this device isn't in range, device will be removed from list")
+                logitacker_devices_unifying_dongle_t *p_dongle = NULL;
+
+                logitacker_devices_get_dongle_by_device_addr(&p_dongle, self->current_rf_address);
+                if (p_dongle != NULL) {
+                    logitacker_devices_del_dongle(p_dongle->base_addr);
+
+                    //abort enumeration
+                    self->phase = ACTIVE_ENUM_PHASE_FINISHED;
+                    goto ACTIVE_ENUM_FINISHED;
+                    //p_dongle->is_logitech = false;
                 }
 
             }
@@ -280,6 +287,8 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 
             if (p_esb_event->evt_id == NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY) {
                 NRF_LOG_DEBUG("ACK_PAY channel (loop %d)", self->inner_loop_count);
+                logitacker_devices_unifying_device_t * p_device = NULL;
+
                 while (nrf_esb_read_rx_payload(&self->tmp_rx_payload) == NRF_SUCCESS) {
                     //Note: LED testing doesn't work on presenters like "R400", because no HID led output reports are sent
                     // test if LED report
@@ -289,25 +298,23 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                         self->led_count++;
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: devices accepts plain keystroke injection (LED test succeeded)");
-                        logitacker_devices_unifying_device_t *p_caps = logitacker_devices_get_device_by_rf_address(
-                                self->current_rf_address);
-                        if (p_caps != NULL) p_caps->vuln_plain_injection = true;
+                        logitacker_devices_get_device(&p_device, self->current_rf_address);
+                        if (p_device != NULL) p_device->vuln_plain_injection = true;
                     } else if (rf_report_type == UNIFYING_RF_REPORT_PAIRING && device_id == PAIRING_REQ_MARKER_BYTE) { //data[0] holds byte used in request
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: forced pairing seems possible");
-                        logitacker_devices_unifying_device_t *p_caps = logitacker_devices_get_device_by_rf_address(
-                                self->current_rf_address);
-                        if (p_caps != NULL) {
-                            p_caps->vuln_forced_pairing = true;
-                        }
-                        logitacker_devices_unifying_dongle_t * p_device_set = logitacker_devices_get_dongle_by_rf_address(
-                                self->current_rf_address);
-                        if (p_device_set != NULL) {
-                            // dongle wpid is in response (byte 8,9)
-                            memcpy(p_device_set->wpid, &self->tmp_rx_payload.data[9], 2);
-                            if (p_caps->wpid[0] == 0x88 && p_caps->wpid[0] == 0x02) p_device_set->is_nordic = true;
-                            if (p_caps->wpid[0] == 0x88 && p_caps->wpid[0] == 0x08) p_device_set->is_texas_instruments = true;
-                            NRF_LOG_INFO("Dongle WPID is %.2X%.2X (TI: %s, Nordic: %s)", p_device_set->wpid[0], p_device_set->wpid[1], p_device_set->is_texas_instruments ? "yes" : "no", p_device_set->is_nordic ? "yes" : "no");
+                        logitacker_devices_get_device(&p_device, self->current_rf_address);
+                        if (p_device != NULL) {
+                            p_device->vuln_forced_pairing = true;
+                            logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
+                            if (p_dongle != NULL) {
+                                // dongle wpid is in response (byte 8,9)
+                                memcpy(p_dongle->wpid, &self->tmp_rx_payload.data[9], 2);
+                                if (p_device->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x02) p_dongle->is_nordic = true;
+                                if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x08) p_dongle->is_texas_instruments = true;
+                                NRF_LOG_INFO("Dongle WPID is %.2X%.2X (TI: %s, Nordic: %s)", p_dongle->wpid[0], p_dongle->wpid[1], p_dongle->is_texas_instruments ? "yes" : "no", p_dongle->is_nordic ? "yes" : "no");
+                            }
+
                         }
 
                     }
@@ -358,7 +365,9 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 
 
 void processor_active_enum_add_device_address_to_list(logitacker_processor_active_enum_ctx_t *self) {
-    if (logitacker_devices_add_new_dongle_and_device_by_rf_address(self->current_rf_address) != NULL) {
+    logitacker_devices_unifying_device_t * p_device = NULL;
+    logitacker_devices_create_device(&p_device, self->current_rf_address);
+    if (p_device != NULL) {
         NRF_LOG_INFO("device address %s added/updated", addr_str_buff);
     } else {
         NRF_LOG_INFO("failed to add/update device address %s", addr_str_buff);

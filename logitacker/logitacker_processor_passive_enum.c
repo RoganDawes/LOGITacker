@@ -99,13 +99,16 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
     int prefix_count = sizeof(prefixes);
 
     // if the rf_address is in device list and has more than 1 prefix (f.e. from active scan), overwrite listen device_prefixes
-    logitacker_devices_unifying_dongle_t * p_dongle = logitacker_devices_get_dongle_by_rf_address(
-            self->current_rf_address);
-    if (p_dongle->num_devices > 1) {
-        for (int dev_idx=0; dev_idx < p_dongle->num_devices; dev_idx++) {
-            prefixes[dev_idx] = p_dongle->devices[dev_idx].addr_prefix;
+    logitacker_devices_unifying_dongle_t * p_dongle = NULL;
+
+    logitacker_devices_get_dongle_by_device_addr(&p_dongle, self->current_rf_address);
+    if (p_dongle != NULL && p_dongle->num_connected_devices > 1) {
+        logitacker_devices_unifying_device_t * p_device = NULL;
+        for (int dev_idx=0; dev_idx < p_dongle->num_connected_devices; dev_idx++) {
+            p_device = p_dongle->p_connected_devices[dev_idx];
+            if (p_device != NULL) prefixes[dev_idx] = p_device->addr_prefix;
         }
-        prefix_count = p_dongle->num_devices;
+        prefix_count = p_dongle->num_connected_devices;
     }
 
 
@@ -242,8 +245,11 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
         uint8_t base[4];
         helper_addr_to_base_and_prefix(base, &prefix, addr, 5); //convert device addr to base+prefix and update device
 
-        //logitacker_devices_update_frame_counters_for_rf_address(p_device, prefix, rx_payload); //update device data
-        logitacker_devices_update_frame_counters_for_rf_address(addr, self->tmp_rx_payload);
+        logitacker_devices_unifying_device_t * p_device = NULL;
+        logitacker_devices_get_device(&p_device, addr);
+
+
+        if (p_device != NULL) logitacker_devices_device_update_classification(p_device, self->tmp_rx_payload);
 
 
         if (!(unifying_report_type == 0x00 && unifying_is_keep_alive) && len != 0) { //ignore keep-alive only frames and empty frames
@@ -291,12 +297,10 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
             }
 
             if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
-                // check if theres a device entry for the address
-                logitacker_devices_unifying_device_t * p_caps = logitacker_devices_get_device_by_rf_address(addr);
                 // check if device key is known
-                if (p_caps != NULL && p_caps->key_known) {
+                if (p_device != NULL && p_device->key_known) {
                     // try to decrypt frame
-                    if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_keyboard_report_decryption_buffer, p_caps->key, &self->tmp_rx_payload) == NRF_SUCCESS) {
+                    if (logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(m_keyboard_report_decryption_buffer, p_device->key, &self->tmp_rx_payload) == NRF_SUCCESS) {
                         NRF_LOG_INFO("Test decryption of keyboard payload:");
                         NRF_LOG_HEXDUMP_INFO(m_keyboard_report_decryption_buffer, 8);
                         //ToDo: print modifier

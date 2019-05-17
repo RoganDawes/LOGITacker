@@ -82,7 +82,7 @@ typedef struct {
 
     inject_task_t current_task;
 
-    logitacker_devices_unifying_device_t * p_caps;
+    logitacker_devices_unifying_device_t * p_device;
     logitacker_tx_payload_provider_t * p_payload_provider;
 } logitacker_processor_inject_ctx_t;
 
@@ -110,7 +110,7 @@ static logitacker_processor_inject_ctx_t m_static_inject_ctx; //we reuse the sam
 
 static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN] = {0};
-static logitacker_devices_unifying_device_t tmp_device_caps = {0};
+static logitacker_devices_unifying_device_t tmp_device = {0};
 static bool m_ringbuf_initialized;
 
 uint32_t ringbuf_available() {
@@ -461,7 +461,7 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
 
 void logitacker_processor_inject_process_task_string(logitacker_processor_inject_ctx_t *self) {
     NRF_LOG_INFO("process string injection: %s", self->current_task.p_data_c);
-    self->p_payload_provider = new_payload_provider_string(self->p_caps, self->current_task.lang, self->current_task.p_data_c);
+    self->p_payload_provider = new_payload_provider_string(self->p_device, self->current_task.lang, self->current_task.p_data_c);
     //while ((*p_pay_provider->p_get_next)(p_pay_provider, &tmp_pay)) {};
 
     //fetch first payload
@@ -577,12 +577,13 @@ logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, 
     p_ctx->timer_next_action = timer_next_action;
 
 
-    p_ctx->p_caps = logitacker_devices_get_device_by_rf_address(p_ctx->current_rf_address);
-    if (p_ctx->p_caps == NULL) {
+    p_ctx->p_device = NULL;
+    logitacker_devices_get_device(&p_ctx->p_device, p_ctx->current_rf_address);
+    if (p_ctx->p_device == NULL) {
         NRF_LOG_WARNING("device not found, creating capabilities");
-        tmp_device_caps.is_encrypted = false;
-        memcpy(tmp_device_caps.rf_address, p_ctx->current_rf_address, 5);
-        p_ctx->p_caps = &tmp_device_caps;
+        tmp_device.is_encrypted = false;
+        memcpy(tmp_device.rf_address, p_ctx->current_rf_address, 5);
+        p_ctx->p_device = &tmp_device;
     }
 
 

@@ -86,7 +86,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_rng.c \
   $(SDK_ROOT)/components/libraries/ringbuf/nrf_ringbuf.c \
   $(PROJ_DIR)/helper.c \
-  $(PROJ_DIR)/state.c \
   $(PROJ_DIR)/unifying.c \
   $(PROJ_DIR)/timestamp.c \
   $(PROJ_DIR)/main.c \
