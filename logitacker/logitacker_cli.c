@@ -20,7 +20,7 @@
 
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
 
-static char m_device_addr_str_list[LOGITACKER_FLASH_MAX_ENTRIES_DEVICE_SET_LIST][LOGITACKER_DEVICE_ADDR_STR_LEN];
+static char m_device_addr_str_list[LOGITACKER_DEVICES_DEVICE_LIST_MAX_ENTRIES][LOGITACKER_DEVICE_ADDR_STR_LEN];
 static int m_device_addr_str_list_len = 0;
 static char m_device_addr_str_list_first_entry[] = "all\x00";
 
@@ -118,22 +118,43 @@ static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
     logitacker_devices_unifying_device_t * p_device1 = NULL;
     logitacker_devices_unifying_device_t * p_device2 = NULL;
+    logitacker_devices_unifying_device_t * p_device3 = NULL;
     logitacker_devices_unifying_device_rf_address_t addr1 = {0x00, 0x01, 0x02, 0x03, 0x04};
     logitacker_devices_unifying_device_rf_address_t addr2 = {0x01, 0x02, 0x03, 0x04, 0x05};
+    logitacker_devices_unifying_device_rf_address_t addr3 = {0x01, 0x02, 0x03, 0x04, 0x02};
     logitacker_devices_create_device(&p_device1, addr1);
     logitacker_devices_create_device(&p_device2, addr2);
-    if (p_device1 != NULL) {
-        NRF_LOG_INFO("device1:");
-        NRF_LOG_HEXDUMP_INFO(p_device1, sizeof(logitacker_devices_unifying_device_t));
+    logitacker_devices_create_device(&p_device3, addr3);
+
+
+    logitacker_flash_store_device(p_device1);
+    logitacker_flash_store_device(p_device2);
+    logitacker_flash_store_device(p_device3);
+    logitacker_flash_list_stored_devices();
+
+    logitacker_flash_store_dongle(p_device1->p_dongle);
+    logitacker_flash_store_dongle(p_device2->p_dongle);
+    logitacker_flash_store_dongle(p_device3->p_dongle);
+    logitacker_flash_list_stored_dongles();
+
+    logitacker_devices_unifying_device_t tmp_device;
+
+    if (logitacker_flash_get_device(&tmp_device, p_device1->rf_address) == NRF_SUCCESS) {NRF_LOG_INFO("found device1 on flash");}
+    else {NRF_LOG_INFO("not found device1 on flash");}
+
+    logitacker_flash_delete_device(p_device1->rf_address);
+
+    if (logitacker_flash_get_device(&tmp_device, p_device1->rf_address) == NRF_SUCCESS) {NRF_LOG_INFO("found device1 on flash");}
+    else {NRF_LOG_INFO("not found device1 on flash");}
+
+    // test finding stored devices for a dongle
+    fds_find_token_t ftok;
+    memset(&ftok, 0x00, sizeof(fds_find_token_t));
+
+    NRF_LOG_INFO("Finding devices for device3 dongle");
+    while (logitacker_flash_get_next_device_for_dongle(&tmp_device, &ftok, p_device3->p_dongle) == NRF_SUCCESS) {
+        //do nothing as the get_next function already prints debug out
     }
-    logitacker_devices_create_device(&p_device2, addr1);
-
-
-    uint8_t test_data[] = {0x00, 0xC1, 0x00, 0x4E, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0};
-    unifying_payload_update_checksum(test_data, sizeof(test_data));
-
-    NRF_LOG_INFO("CRC test");
-    NRF_LOG_HEXDUMP_INFO(test_data, sizeof(test_data));
 }
 
 static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)

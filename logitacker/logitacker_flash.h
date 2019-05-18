@@ -1,31 +1,35 @@
 #ifndef LOGITACKER_FLASH_H
 #define LOGITACKER_FLASH_H
 
-#include <stdint.h>
+#include "stdint.h"
 #include "logitacker_devices.h"
+#include "fds.h"
 
 #define LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS 0x1000
 #define LOGITACKER_FLASH_KEY_GLOBAL_OPTIONS_LOGITACKER 0x1000
 
-#define LOGITACKER_FLASH_FILE_ID_DEVICE_SETS 0x1001
-#define LOGITACKER_FLASH_KEY_DEVICE_SET_LIST 0x1000
-#define LOGITACKER_FLASH_MAX_ENTRIES_DEVICE_SET_LIST 64
+#define LOGITACKER_FLASH_FILE_ID_DEVICES 0x1001
+#define LOGITACKER_FLASH_RECORD_KEY_DEVICES 0x1001
+#define LOGITACKER_FLASH_RECORD_SIZE_UNIFYING_DEVICE (sizeof(logitacker_devices_unifying_device_t) + 3) / 4
+#define LOGITACKER_FLASH_FILE_ID_DONGLES 0x1002
+#define LOGITACKER_FLASH_RECORD_KEY_DONGLES 0x1002
+#define LOGITACKER_FLASH_RECORD_SIZE_UNIFYING_DONGLE (sizeof(logitacker_devices_unifying_dongle_t) + 3) / 4
 
-typedef struct {
-    uint16_t * record_key;
-} logitacker_flash_device_list_entry_t;
 
-typedef struct {
-    uint16_t num_entries;
-    logitacker_flash_device_list_entry_t first_key;
-    logitacker_flash_device_list_entry_t next_free_key;
-} logitacker_flash_device_list_t;
+// note: these functions only handle device data, not the dongle data referenced by pointers
+uint32_t logitacker_flash_store_device(logitacker_devices_unifying_device_t * p_device);
+uint32_t logitacker_flash_delete_device(logitacker_devices_unifying_device_rf_address_t rf_address);
+uint32_t logitacker_flash_get_device(logitacker_devices_unifying_device_t * p_device, logitacker_devices_unifying_device_rf_address_t rf_address);
+uint32_t logitacker_flash_list_stored_devices();
+uint32_t logitacker_flash_get_next_device_for_dongle(logitacker_devices_unifying_device_t * p_device, fds_find_token_t * p_find_token, logitacker_devices_unifying_dongle_t * p_dongle);
 
-uint32_t logitacker_load_device_set_from_flash_by_addr(logitacker_devices_unifying_dongle_t * p_device_set, uint8_t rf_address[5]);
-uint32_t logitacker_load_device_set_from_flash_by_key(logitacker_devices_unifying_dongle_t * p_device_set, uint16_t key);
-uint32_t logitacker_remove_device_set_from_flash_by_addr(uint8_t rf_address[5]);
-uint32_t logitacker_remove_device_set_from_flash_by_key(uint16_t key);
-uint32_t logitacker_store_device_set_to_flash(logitacker_devices_unifying_dongle_t * p_device_set, uint16_t * out_key);
+// note: these functions only handle dongle data, not the device data referenced by pointers
+uint32_t logitacker_flash_store_dongle(logitacker_devices_unifying_dongle_t * p_dongle);
+uint32_t logitacker_flash_delete_dongle(logitacker_devices_unifying_device_rf_addr_base_t base_addr);
+uint32_t logitacker_flash_get_dongle(logitacker_devices_unifying_dongle_t * p_dongle, logitacker_devices_unifying_device_rf_addr_base_t base_addr);
+uint32_t logitacker_flash_list_stored_dongles();
+uint32_t logitacker_flash_get_dongle_for_device(logitacker_devices_unifying_dongle_t * p_dongle, logitacker_devices_unifying_device_t * p_device);
+
 
 uint32_t logitacker_flash_init();
 
