@@ -77,7 +77,7 @@ static void pair_device_address_str_list_get(size_t idx, nrf_cli_static_entry_t 
 }
 
 
-static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
 /*
     if (argc > 1)
@@ -110,7 +110,6 @@ static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
 */
     logitacker_devices_log_stats();
 
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "device set size %d\r\n", sizeof(logitacker_devices_unifying_dongle_t));
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_rf_address_t)   : %d\r\n", sizeof(logitacker_devices_unifying_device_rf_address_t));
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_rf_addr_base_t) : %d\r\n", sizeof(logitacker_devices_unifying_device_rf_addr_base_t));
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_t)              : %d\r\n", sizeof(logitacker_devices_unifying_device_t));
@@ -122,39 +121,89 @@ static void cmd_test(nrf_cli_t const * p_cli, size_t argc, char **argv)
     logitacker_devices_unifying_device_rf_address_t addr1 = {0x00, 0x01, 0x02, 0x03, 0x04};
     logitacker_devices_unifying_device_rf_address_t addr2 = {0x01, 0x02, 0x03, 0x04, 0x05};
     logitacker_devices_unifying_device_rf_address_t addr3 = {0x01, 0x02, 0x03, 0x04, 0x02};
+
+
     logitacker_devices_create_device(&p_device1, addr1);
     logitacker_devices_create_device(&p_device2, addr2);
     logitacker_devices_create_device(&p_device3, addr3);
 
-
+/*
     logitacker_flash_store_device(p_device1);
     logitacker_flash_store_device(p_device2);
     logitacker_flash_store_device(p_device3);
+*/
     logitacker_flash_list_stored_devices();
 
+/*
     logitacker_flash_store_dongle(p_device1->p_dongle);
     logitacker_flash_store_dongle(p_device2->p_dongle);
     logitacker_flash_store_dongle(p_device3->p_dongle);
+*/
     logitacker_flash_list_stored_dongles();
 
-    logitacker_devices_unifying_device_t tmp_device;
 
-    if (logitacker_flash_get_device(&tmp_device, p_device1->rf_address) == NRF_SUCCESS) {NRF_LOG_INFO("found device1 on flash");}
-    else {NRF_LOG_INFO("not found device1 on flash");}
 
     logitacker_flash_delete_device(p_device1->rf_address);
+    logitacker_flash_delete_device(p_device2->rf_address);
+    logitacker_flash_delete_device(p_device3->rf_address);
+    logitacker_flash_delete_dongle(p_device1->p_dongle->base_addr);
+    logitacker_flash_delete_dongle(p_device2->p_dongle->base_addr);
+    logitacker_flash_delete_dongle(p_device3->p_dongle->base_addr);
 
-    if (logitacker_flash_get_device(&tmp_device, p_device1->rf_address) == NRF_SUCCESS) {NRF_LOG_INFO("found device1 on flash");}
-    else {NRF_LOG_INFO("not found device1 on flash");}
+    logitacker_devices_store_dongle_to_flash(p_device2->p_dongle->base_addr);
 
-    // test finding stored devices for a dongle
-    fds_find_token_t ftok;
-    memset(&ftok, 0x00, sizeof(fds_find_token_t));
+    fds_stat_t fds_stats;
+    fds_stat(&fds_stats);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "CLIS STATS\r\n-------------------\r\n");
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "pages available: %d\r\n", fds_stats.pages_available);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "open records   : %d\r\n", fds_stats.open_records);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "valid records  : %d\r\n", fds_stats.valid_records);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "dirty records  : %d\r\n", fds_stats.dirty_records);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "words reserved : %d\r\n", fds_stats.words_reserved);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "words used     : %d\r\n", fds_stats.words_used);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "largest contig : %d\r\n", fds_stats.largest_contig);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "freeable words : %d\r\n", fds_stats.freeable_words);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "corruption     : %s\r\n", fds_stats.corruption ? "true" : "false");
 
-    NRF_LOG_INFO("Finding devices for device3 dongle");
-    while (logitacker_flash_get_next_device_for_dongle(&tmp_device, &ftok, p_device3->p_dongle) == NRF_SUCCESS) {
-        //do nothing as the get_next function already prints debug out
+    fds_gc();
+}
+
+static void cmd_test_b(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    logitacker_devices_unifying_device_t * p_device1 = NULL;
+    logitacker_devices_unifying_device_rf_address_t addr1 = {0x00, 0x99, 0x02, 0x03, 0x04};
+
+    for (int j=0; j<10; j++) {
+        for (int i=0; i<10;i++) {
+            addr1[0] = i+j*10;
+            addr1[4] = 1;
+            logitacker_devices_create_device(&p_device1, addr1);
+            addr1[4] = 2;
+            logitacker_devices_create_device(&p_device1, addr1);
+
+            logitacker_devices_store_dongle_to_flash(p_device1->p_dongle->base_addr);
+        }
+
+        for (int i=0; i<10;i++) {
+            addr1[0] = i+j*10;
+            addr1[4] = 1;
+            logitacker_devices_del_device(addr1);
+            addr1[4] = 2;
+            logitacker_devices_del_device(addr1);
+        }
+
     }
+
+}
+
+static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    fds_find_token_t ft;
+    memset(&ft, 0x00, sizeof(fds_find_token_t));
+    fds_record_desc_t rd;
+    while (fds_record_iterate(&rd,&ft) == FDS_SUCCESS) {
+        NRF_LOG_INFO("Deleting record...")
+        fds_record_delete(&rd);
+    }
+    fds_gc();
 }
 
 static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -450,7 +499,14 @@ static void cmd_options_pass_mouse(nrf_cli_t const * p_cli, size_t argc, char **
 }
 
 
-NRF_CLI_CMD_REGISTER(test, NULL, "Debug command to test code", cmd_test);
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_test)
+        {
+                NRF_CLI_CMD(a, NULL, "test a", cmd_test_a),
+                NRF_CLI_CMD(b, NULL, "test b", cmd_test_b),
+                NRF_CLI_CMD(c, NULL, "test b", cmd_test_c),
+                NRF_CLI_SUBCMD_SET_END
+        };
+NRF_CLI_CMD_REGISTER(test, &m_sub_test, "Debug command to test code", NULL);
 
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)

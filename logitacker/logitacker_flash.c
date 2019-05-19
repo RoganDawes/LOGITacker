@@ -79,8 +79,8 @@ uint32_t logitacker_flash_init() {
 }
 
 
-uint32_t logitacker_flash_get_record_desc_for_device(fds_record_desc_t * p_record_desc, logitacker_devices_unifying_device_rf_address_t rf_address);
-uint32_t logitacker_flash_get_record_desc_for_dongle(fds_record_desc_t * p_record_desc, logitacker_devices_unifying_device_rf_addr_base_t dongle_base_addr);
+uint32_t logitacker_flash_get_record_desc_for_device(fds_record_desc_t * p_record_desc, logitacker_devices_unifying_device_rf_address_t const rf_address);
+uint32_t logitacker_flash_get_record_desc_for_dongle(fds_record_desc_t * p_record_desc, logitacker_devices_unifying_device_rf_addr_base_t const dongle_base_addr);
 
 
 uint32_t logitacker_flash_store_device(logitacker_devices_unifying_device_t * p_device) {
@@ -142,7 +142,7 @@ uint32_t logitacker_flash_delete_device(logitacker_devices_unifying_device_rf_ad
     return NRF_ERROR_NOT_FOUND;
 }
 
-uint32_t logitacker_flash_get_device(logitacker_devices_unifying_device_t * p_device, logitacker_devices_unifying_device_rf_address_t rf_address) {
+uint32_t logitacker_flash_get_device(logitacker_devices_unifying_device_t * p_device, logitacker_devices_unifying_device_rf_address_t const rf_address) {
     fds_record_desc_t record_desc;
     fds_flash_record_t flash_record;
 
@@ -169,7 +169,7 @@ uint32_t logitacker_flash_get_device(logitacker_devices_unifying_device_t * p_de
     return NRF_ERROR_NOT_FOUND;
 }
 
-uint32_t logitacker_flash_get_record_desc_for_device(fds_record_desc_t * p_record_desc, logitacker_devices_unifying_device_rf_address_t rf_address) {
+uint32_t logitacker_flash_get_record_desc_for_device(fds_record_desc_t * p_record_desc, logitacker_devices_unifying_device_rf_address_t const rf_address) {
     fds_find_token_t ftok;
     fds_flash_record_t flash_record;
     memset(&ftok, 0x00, sizeof(fds_find_token_t));
@@ -273,7 +273,7 @@ uint32_t logitacker_flash_delete_dongle(logitacker_devices_unifying_device_rf_ad
 
 }
 
-uint32_t logitacker_flash_get_dongle(logitacker_devices_unifying_dongle_t * p_dongle, logitacker_devices_unifying_device_rf_addr_base_t base_addr) {
+uint32_t logitacker_flash_get_dongle(logitacker_devices_unifying_dongle_t * p_dongle, logitacker_devices_unifying_device_rf_addr_base_t const base_addr) {
     fds_record_desc_t record_desc;
     fds_flash_record_t flash_record;
 
@@ -337,7 +337,7 @@ uint32_t logitacker_flash_get_dongle_for_device(logitacker_devices_unifying_dong
 }
 
 
-uint32_t logitacker_flash_get_record_desc_for_dongle(fds_record_desc_t * p_record_desc, logitacker_devices_unifying_device_rf_addr_base_t dongle_base_addr) {
+uint32_t logitacker_flash_get_record_desc_for_dongle(fds_record_desc_t * p_record_desc, logitacker_devices_unifying_device_rf_addr_base_t const dongle_base_addr) {
     fds_find_token_t ftok;
     fds_flash_record_t flash_record;
     memset(&ftok, 0x00, sizeof(fds_find_token_t));

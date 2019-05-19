@@ -4,6 +4,8 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_DEVICES
 #include "nrf_log.h"
+#include "logitacker_flash.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 uint32_t logitacker_devices_del_device_(logitacker_devices_unifying_device_rf_address_t const rf_addr);
@@ -43,6 +45,12 @@ uint32_t logitacker_devices_create_dongle(logitacker_devices_unifying_dongle_t *
     VERIFY_TRUE(base_addr != NULL, NRF_ERROR_NULL);
     VERIFY_TRUE(pp_dongle != NULL, NRF_ERROR_NULL);
 
+    // try to get existing dongle first
+    if (logitacker_devices_get_dongle_by_base_addr(pp_dongle, base_addr) == NRF_SUCCESS) {
+        // exists already, return SUCCESS
+        return NRF_SUCCESS;
+    }
+
     // get next free entry
     int next_free_pos = get_next_free_dongle_list_entry_pos();
     if (next_free_pos == -1) return NRF_ERROR_NO_MEM;
@@ -61,6 +69,124 @@ uint32_t logitacker_devices_create_dongle(logitacker_devices_unifying_dongle_t *
     return NRF_SUCCESS;
 }
 
+uint32_t logitacker_devices_restore_dongle_from_flash(logitacker_devices_unifying_dongle_t **pp_dongle, logitacker_devices_unifying_device_rf_addr_base_t const base_addr) {
+    VERIFY_TRUE(base_addr != NULL, NRF_ERROR_NULL);
+    VERIFY_TRUE(pp_dongle != NULL, NRF_ERROR_NULL);
+
+    // Instead of restoring the dongle data, we restore each associated device, which involves restoring dongle data.
+    // This involves redundant flash reads and RAM writes, as for each device the dongle data is fetched again, an issue we ignore for now.
+
+    fds_find_token_t ftok;
+    memset(&ftok, 0x00, sizeof(fds_find_token_t));
+    logitacker_devices_unifying_device_t tmp_device_from_flash;
+
+    while (logitacker_flash_get_next_device_for_dongle(&tmp_device_from_flash, &ftok, *pp_dongle) == NRF_SUCCESS) {
+        //device for dongle found, we are only interested in the rf_address which we use to fully restore the respective device
+        logitacker_devices_unifying_device_t * dummy_device_pointer;
+        uint32_t res = logitacker_devices_restore_device_from_flash(&dummy_device_pointer, tmp_device_from_flash.rf_address);
+        if (res != NRF_SUCCESS) {
+            NRF_LOG_ERROR("error restoring device during dongle restore: %d", res);
+            return res; //abort
+        }
+    }
+
+    return NRF_SUCCESS;
+
+    /*
+    uint32_t res = logitacker_devices_create_dongle(pp_dongle, base_addr);
+    if (res != NRF_SUCCESS) {
+        NRF_LOG_ERROR("failed to reserve ram for dongle to load from flash");
+        return res;
+    }
+
+    // try to fill dongle with store data
+    res = logitacker_flash_get_dongle(*pp_dongle, base_addr);
+    if (res != NRF_SUCCESS) {
+        NRF_LOG_ERROR("dongle created in RAM but failed to load data from flash");
+        return res;
+    }
+
+    // try to load all devices for the dongle and link them properly
+    // test finding stored devices for a dongle
+    fds_find_token_t ftok;
+    memset(&ftok, 0x00, sizeof(fds_find_token_t));
+    logitacker_devices_unifying_device_t tmp_device_from_flash;
+    logitacker_devices_unifying_device_t * p_device_ram;
+
+    logitacker_devices_unifying_dongle_t * p_dongle = *pp_dongle;
+    while (logitacker_flash_get_next_device_for_dongle(&tmp_device_from_flash, &ftok, *pp_dongle) == NRF_SUCCESS) {
+        //device for dongle found
+        if (logitacker_devices_create_device(&p_device_ram, tmp_device_from_flash.rf_address) != NRF_SUCCESS) {
+            NRF_LOG_ERROR("failed to retrieve pointer to new device in ram");
+            return NRF_ERROR_NO_MEM;
+        }
+
+        //copy data from flash device to ram device
+        memcpy(p_device_ram, &tmp_device_from_flash, sizeof(logitacker_devices_unifying_device_t));
+
+        // fix pointers
+        p_dongle->p_connected_devices[p_dongle->num_connected_devices] = p_device_ram;
+        p_dongle->num_connected_devices++;
+        p_device_ram->p_dongle = p_dongle;
+
+    }
+    */
+    return NRF_SUCCESS;
+}
+
+uint32_t logitacker_devices_restore_device_from_flash(logitacker_devices_unifying_device_t **pp_device, logitacker_devices_unifying_device_rf_address_t const rf_address) {
+    VERIFY_TRUE(rf_address != NULL, NRF_ERROR_NULL);
+    VERIFY_TRUE(pp_device != NULL, NRF_ERROR_NULL);
+
+
+    // if device doesn't exist in RAM, we create it; otherwise we modify the exiting device, which would be returned by the create method
+    if (logitacker_devices_create_device(pp_device, rf_address) == NRF_SUCCESS) {
+        // device has been created in RAM, same goes for associated dongle if it wasn't there
+        logitacker_devices_unifying_device_t * p_device = *pp_device;
+        logitacker_devices_unifying_device_t tmp_device_flash;
+
+        //try to restore the device from flash
+        if (logitacker_flash_get_device(&tmp_device_flash, rf_address) == NRF_SUCCESS) {
+            // device loaded from flash to tmp struct, update pointer before overwriting device in RAM
+            tmp_device_flash.p_dongle = p_device->p_dongle;
+
+            // overwrite device in RAM
+            memcpy(p_device, &tmp_device_flash, sizeof(logitacker_devices_unifying_device_t));
+
+
+            //before returning, we try to update the dongle data, too as it is linked to device data
+            if (p_device->p_dongle == NULL) {
+                // should never happen
+                NRF_LOG_ERROR("RAM device points to no dongle after restoring from flash")
+                return NRF_ERROR_NULL;
+            }
+
+            logitacker_devices_unifying_dongle_t tmp_dongle_flash;
+            logitacker_devices_unifying_dongle_t * p_dongle_ram = p_device->p_dongle;
+            if (logitacker_flash_get_dongle(&tmp_dongle_flash, p_dongle_ram->base_addr) == NRF_SUCCESS) {
+                // update restored dongle data with correct device pointers and overwrite RAM version afterwards
+                tmp_dongle_flash.num_connected_devices = p_dongle_ram->num_connected_devices;
+                for (int i=0; i < p_dongle_ram->num_connected_devices; i++) tmp_dongle_flash.p_connected_devices[i] = p_dongle_ram->p_connected_devices[i];
+
+                // overwrite dongle stored in RAM with flash version
+                memcpy(p_dongle_ram, &tmp_dongle_flash, sizeof(logitacker_devices_unifying_dongle_t));
+            } else {
+                // not able to restore dongle data from flash, we don't error out but log a warning
+                NRF_LOG_WARNING("couldn't restore dongle data from flash for restored device");
+            }
+            return NRF_SUCCESS;
+        }
+
+        //couldn't load device from flash
+        return NRF_ERROR_NOT_FOUND;
+
+
+    } else {
+        // device couldn't be created
+        return NRF_ERROR_NO_MEM;
+    }
+
+}
 
 uint32_t logitacker_devices_get_dongle_by_base_addr(logitacker_devices_unifying_dongle_t **pp_dongle, logitacker_devices_unifying_device_rf_addr_base_t const base_addr) {
     VERIFY_TRUE(base_addr != NULL, NRF_ERROR_NULL);
@@ -94,6 +220,66 @@ uint32_t logitacker_devices_get_dongle_by_device_addr(logitacker_devices_unifyin
 
     return logitacker_devices_get_dongle_by_base_addr(pp_dongle, base_addr);
 }
+
+uint32_t logitacker_devices_store_dongle_to_flash(logitacker_devices_unifying_device_rf_addr_base_t const base_addr) {
+    VERIFY_TRUE(base_addr != NULL, NRF_ERROR_NULL);
+
+    logitacker_devices_unifying_dongle_t * p_dongle = NULL;
+    int dongle_idx = -1;
+    for (int i=0; i < LOGITACKER_DEVICES_DONGLE_LIST_MAX_ENTRIES; i++) {
+        if (m_loc_dongle_list_entry_used[i]) { // non empty entry
+            if (memcmp(m_loc_dongle_list[i].base_addr, base_addr, sizeof(logitacker_devices_unifying_device_rf_addr_base_t)) != 0) continue; //base addr doesn't match
+            // if here, we have a match
+            p_dongle = &m_loc_dongle_list[i];
+            dongle_idx = i;
+            break;
+        }
+    }
+
+    if (dongle_idx == -1) return NRF_ERROR_NOT_FOUND;
+
+    // store dongle
+    uint32_t res = logitacker_flash_store_dongle(p_dongle);
+    if (res != NRF_SUCCESS) return res;
+
+    // store each connected device
+    logitacker_devices_unifying_device_t * p_device = NULL;
+    for (int dev_idx=0; dev_idx < p_dongle->num_connected_devices; dev_idx++) {
+        p_device = p_dongle->p_connected_devices[dev_idx];
+        res = logitacker_flash_store_device(p_device);
+        if (res != NRF_SUCCESS) return res;
+    }
+
+    return NRF_SUCCESS;
+}
+
+uint32_t logitacker_devices_store_device_to_flash(logitacker_devices_unifying_device_rf_address_t const rf_addr) {
+    logitacker_devices_unifying_device_t * p_device = NULL;
+
+    // check if device exists
+    uint32_t res = logitacker_devices_get_device(&p_device, rf_addr);
+    if (res != NRF_SUCCESS) {
+        //exists already
+        NRF_LOG_INFO("device doesn't exist, can't store to flash");
+        return NRF_ERROR_NOT_FOUND;
+    }
+
+    // store device
+    res = logitacker_flash_store_device(p_device);
+    if (res != NRF_SUCCESS) return res;
+
+
+    // check if connected to dongle
+    logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
+    if (p_dongle != NULL) {
+        // try to store the dongle data, too
+        if (logitacker_flash_store_dongle(p_dongle) != NRF_SUCCESS) {
+            NRF_LOG_WARNING("Failed to store dongle data along with device data")
+        }
+    }
+    return NRF_SUCCESS;
+}
+
 
 uint32_t logitacker_devices_del_dongle(logitacker_devices_unifying_device_rf_addr_base_t const base_addr) {
     VERIFY_TRUE(base_addr != NULL, NRF_ERROR_NULL);
@@ -381,7 +567,7 @@ uint32_t logitacker_devices_create_device(logitacker_devices_unifying_device_t *
 uint32_t logitacker_devices_del_device(logitacker_devices_unifying_device_rf_address_t const rf_addr) {
     logitacker_devices_unifying_device_t * p_device = NULL;
 
-    // check if device already_exists, if yes return device
+    // check if device exists, if no return success
     if (logitacker_devices_get_device(&p_device, rf_addr) != NRF_SUCCESS) {
         //exists already
         NRF_LOG_INFO("device doesn't exist, no need to delete");
