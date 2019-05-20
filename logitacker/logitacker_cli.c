@@ -18,6 +18,7 @@
 #define CLI_EXAMPLE_MAX_CMD_LEN (33u)
 #define CLI_EXAMPLE_VALUE_BIGGER_THAN_STACK     (20000u)
 
+
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
 
 static char m_device_addr_str_list[LOGITACKER_DEVICES_DEVICE_LIST_MAX_ENTRIES][LOGITACKER_DEVICE_ADDR_STR_LEN];
@@ -39,7 +40,7 @@ static void device_address_str_list_update() {
 }
 
 // dynamic creation of command addresses
-static void remove_device_address_str_list_get(size_t idx, nrf_cli_static_entry_t *p_static)
+static void dynamic_device_addr_list_ram_wit_all(size_t idx, nrf_cli_static_entry_t *p_static)
 {
     // Must be sorted alphabetically to ensure correct CLI completion.
     p_static->handler  = NULL;
@@ -59,8 +60,42 @@ static void remove_device_address_str_list_get(size_t idx, nrf_cli_static_entry_
     }
 }
 
+
+static void print_logitacker_device_info(nrf_cli_t const * p_cli, const logitacker_devices_unifying_device_t * p_device) {
+    if (p_device == NULL) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "empty device pointer");
+        return;
+    }
+    logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
+    if (p_dongle == NULL) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "empty dongle pointer");
+        return;
+    }
+
+    char tmp_addr_str[16];
+    helper_addr_to_hex_str(tmp_addr_str, LOGITACKER_DEVICE_ADDR_LEN, p_device->rf_address);
+
+
+    bool dev_is_logitech = p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH;
+    nrf_cli_vt100_color_t outcol = NRF_CLI_VT100_COLOR_DEFAULT;
+    if (dev_is_logitech) outcol = NRF_CLI_VT100_COLOR_BLUE;
+    if (p_device->vuln_forced_pairing) outcol = NRF_CLI_VT100_COLOR_YELLOW;
+    if (p_device->vuln_plain_injection) outcol = NRF_CLI_VT100_COLOR_GREEN;
+    if (p_device->key_known) outcol = NRF_CLI_VT100_COLOR_RED;
+    nrf_cli_fprintf(p_cli, outcol, "%s %s, keyboard: %s (%s, %s), mouse: %s\r\n",
+        nrf_log_push(tmp_addr_str),
+        p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH ? "Logitech device" : "unknown device",
+        (p_device->report_types & LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD) > 0 ?  "yes" : "no",
+        (p_device->caps & LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION) > 0 ?  "encrypted" : "not encrypted",
+        p_device->key_known ?  "key ḱnown" : "key unknown",
+        (p_device->report_types & LOGITACKER_DEVICE_REPORT_TYPES_MOUSE) > 0 ?  "yes" : "no"
+        );
+
+}
+
+
 // dynamic creation of command addresses
-static void pair_device_address_str_list_get(size_t idx, nrf_cli_static_entry_t *p_static)
+static void dynamic_device_addr_list_ram(size_t idx, nrf_cli_static_entry_t *p_static)
 {
     // Must be sorted alphabetically to ensure correct CLI completion.
     p_static->handler  = NULL;
@@ -374,8 +409,8 @@ static void cmd_discover(nrf_cli_t const * p_cli, size_t argc, char **argv)
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: unknown parameter: %s\r\n", argv[0], argv[1]);
 }
 
-static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
-static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN];
+//static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
+//static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN];
 static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     logitacker_devices_list_iterator_t iter = {0};
     logitacker_devices_unifying_dongle_t * p_dongle = NULL;
@@ -385,6 +420,8 @@ static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
             for (int device_index=0; device_index < p_dongle->num_connected_devices; device_index++) {
                 p_device = p_dongle->p_connected_devices[device_index];
+
+/*
                 logitacker_device_frame_counter_t * p_counters = &p_device->frame_counters;
 
                 helper_base_and_prefix_to_addr(tmp_addr, p_dongle->base_addr, p_device->addr_prefix, 5);
@@ -397,6 +434,8 @@ static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
                 if (p_device->vuln_plain_injection) outcol = NRF_CLI_VT100_COLOR_GREEN;
                 if (p_device->key_known) outcol = NRF_CLI_VT100_COLOR_RED;
                 nrf_cli_fprintf(p_cli, outcol, "%s (activity %d, Logitech: %d, plain keystroke injection %d, forced pairing %d, link key known %d)\r\n", addr_str_buff, p_counters->overal, dev_is_logitech, p_device->vuln_plain_injection, p_device->vuln_forced_pairing, p_device->key_known);
+*/
+                print_logitacker_device_info(p_cli, p_device);
             }
         }
     }
@@ -420,6 +459,104 @@ static void cmd_devices_remove(nrf_cli_t const * p_cli, size_t argc, char **argv
         return;
     }
 }
+
+static void cmd_devices_store_save(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1)
+    {
+
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Storing device %s to flash\r\n", tmp_addr_str);
+        logitacker_devices_store_device_to_flash(addr);
+        return;
+    }
+}
+
+// dynamic creation of command addresses
+static void cmd_devices_store_delete(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1)
+    {
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Deleting device %s from flash\r\n", tmp_addr_str);
+        logitacker_devices_remove_device_from_flash(addr);
+        return;
+    }
+
+}
+
+static void cmd_devices_store_load(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1)
+    {
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Restoring device %s from flash\r\n", tmp_addr_str);
+        logitacker_devices_unifying_device_t * p_dummy_device;
+        logitacker_devices_restore_device_from_flash(&p_dummy_device, addr);
+        return;
+    }
+}
+
+static void cmd_devices_store_list_entries(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    fds_find_token_t ftok;
+    fds_record_desc_t record_desc;
+    fds_flash_record_t flash_record;
+    memset(&ftok, 0x00, sizeof(fds_find_token_t));
+
+    logitacker_devices_unifying_device_t tmp_device;
+    logitacker_devices_unifying_dongle_t tmp_dongle;
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "list of devices stored on flash:\r\n");
+    NRF_LOG_INFO("Devices on flash");
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, &ftok) == FDS_SUCCESS) {
+        if (fds_record_open(&record_desc, &flash_record) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("Failed to open record");
+            continue; // go on with next
+        }
+
+        logitacker_devices_unifying_device_t const * p_device = flash_record.p_data;
+
+        //we need a writable copy of device to assign dongle data
+        memcpy(&tmp_device, p_device, sizeof(logitacker_devices_unifying_device_t));
+
+
+
+        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("Failed to close record")
+        }
+
+        // load stored dongle (without dongle data, classification like "is logitech" would be missing)
+        if (logitacker_flash_get_dongle_for_device(&tmp_dongle, &tmp_device) == NRF_SUCCESS) tmp_device.p_dongle = &tmp_dongle;
+        print_logitacker_device_info(p_cli, &tmp_device);
+
+        /*
+        helper_addr_to_hex_str(addr_str, LOGITACKER_DEVICE_ADDR_LEN, p_device->rf_address);
+        NRF_LOG_INFO("Stored device %s", nrf_log_push(addr_str));
+        */
+    }
+}
+
 
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     logitacker_devices_del_all();
@@ -498,6 +635,49 @@ static void cmd_options_pass_mouse(nrf_cli_t const * p_cli, size_t argc, char **
     nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "mouse pass-through: %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
 }
 
+static void cmd_enum_passive(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1)
+    {
+
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Starting passive enumeration for device %s\r\n", tmp_addr_str);
+        logitacker_enter_mode_passive_enum(addr);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+    }
+}
+
+static void cmd_enum_active(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1)
+    {
+
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Starting active enumeration for device %s\r\n", tmp_addr_str);
+        logitacker_enter_mode_active_enum(addr);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+    }
+}
+
+
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_test)
         {
@@ -528,7 +708,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)
 NRF_CLI_CMD_REGISTER(discover, &m_sub_discover, "discover", cmd_discover);
 
 //device level 2
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_pairing_run_addr, pair_device_address_str_list_get);
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_pairing_run_addr, dynamic_device_addr_list_ram);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pairing)
 {
     NRF_CLI_CMD(sniff, NULL, "Sniff pairing.", cmd_pairing_sniff),
@@ -537,7 +717,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pairing)
 };
 NRF_CLI_CMD_REGISTER(pairing, &m_sub_pairing, "discover", cmd_pairing);
 
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, pair_device_address_str_list_get);
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ram);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 {
     NRF_CLI_CMD(target, &m_sub_inject_target_addr, "inject given string", cmd_inject_target),
@@ -546,13 +726,35 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 };
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);
 
+//device level 3
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_delete_list, dynamic_device_addr_list_ram_wit_all);
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_save_list, dynamic_device_addr_list_ram);
 //device level 2
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_devices_remove_addr_collection, remove_device_address_str_list_get);
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices_store)
+{
+    NRF_CLI_CMD(list, NULL, "list devices stored on flash", cmd_devices_store_list_entries),
+    NRF_CLI_CMD(load, NULL, "inject given string", cmd_devices_store_load),
+    NRF_CLI_CMD(save, &m_sub_device_store_save_list, "inject given string", cmd_devices_store_save),
+    NRF_CLI_CMD(delete, &m_sub_device_store_delete_list, "inject given string", cmd_devices_store_delete),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_devices_remove_addr_collection, dynamic_device_addr_list_ram_wit_all);
 //devices level 1 (handles auto-complete from level 2 as parameter)
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices)
 {
+        NRF_CLI_CMD(store, &m_sub_devices_store, "handle devices on flash", NULL),
         NRF_CLI_CMD(remove, &m_sub_devices_remove_addr_collection, "remove given device", cmd_devices_remove),
         NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(devices, &m_sub_devices, "List discovered devices", cmd_devices);
+
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram);
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_enum)
+{
+        NRF_CLI_CMD(active, &m_sub_enum_device_list, "active enumeration of given device", cmd_enum_active),
+        NRF_CLI_CMD(passive, &m_sub_enum_device_list, "passive enumeration of given device", cmd_enum_passive),
+        NRF_CLI_SUBCMD_SET_END
+};
+NRF_CLI_CMD_REGISTER(enum, &m_sub_enum, "start device passive or active enumeration", NULL);
 

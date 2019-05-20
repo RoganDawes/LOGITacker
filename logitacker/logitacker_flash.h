@@ -18,7 +18,7 @@
 
 // note: these functions only handle device data, not the dongle data referenced by pointers
 uint32_t logitacker_flash_store_device(logitacker_devices_unifying_device_t * p_device);
-uint32_t logitacker_flash_delete_device(logitacker_devices_unifying_device_rf_address_t rf_address);
+uint32_t logitacker_flash_delete_device(logitacker_devices_unifying_device_rf_address_t const rf_address);
 uint32_t logitacker_flash_get_device(logitacker_devices_unifying_device_t * p_device, logitacker_devices_unifying_device_rf_address_t const rf_address);
 uint32_t logitacker_flash_list_stored_devices();
 uint32_t logitacker_flash_get_next_device_for_dongle(logitacker_devices_unifying_device_t * p_device, fds_find_token_t * p_find_token, logitacker_devices_unifying_dongle_t * p_dongle);

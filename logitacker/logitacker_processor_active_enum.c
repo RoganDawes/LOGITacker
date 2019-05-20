@@ -67,6 +67,8 @@ typedef struct {
 
     nrf_esb_payload_t tmp_tx_payload;
     nrf_esb_payload_t tmp_rx_payload;
+
+    logitacker_devices_unifying_dongle_t * p_dongle;
 } logitacker_processor_active_enum_ctx_t;
 
 static logitacker_processor_t m_processor = {0};
@@ -149,6 +151,8 @@ void processor_active_enum_init_func_(logitacker_processor_active_enum_ctx_t *se
     // clear TX/RX payload buffers (just to be sure)
     memset(&self->tmp_tx_payload, 0, sizeof(self->tmp_tx_payload)); //unset TX payload
     memset(&self->tmp_rx_payload, 0, sizeof(self->tmp_rx_payload)); //unset RX payload
+
+    self->p_dongle = NULL;
 
     // prepare test TX payload (first report will be a pairing request)
     self->inner_loop_count = 0;
@@ -244,14 +248,13 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                 goto ACTIVE_ENUM_FINISHED;
             }
 
-            if (self->next_prefix == 0x00) {
+            if (self->next_prefix == 0x01) { // note next prefix wasn't update,yet - thus it represents the prefix for which TX failed
                 //if prefix 0x00 isn't reachable, it is unlikely that this is a Logitech dongle, thus we remove the device from the list and abort enumeration
-                NRF_LOG_INFO("The dongle for this device isn't in range, device will be removed from list")
+                NRF_LOG_INFO("Address prefix ox00 not reachable, either no Unifying device or dongle not in range ... stop neighbor discovery");
                 logitacker_devices_unifying_dongle_t *p_dongle = NULL;
-
                 logitacker_devices_get_dongle_by_device_addr(&p_dongle, self->current_rf_address);
                 if (p_dongle != NULL) {
-                    logitacker_devices_del_dongle(p_dongle->base_addr);
+                    //logitacker_devices_del_dongle(p_dongle->base_addr);
 
                     //abort enumeration
                     self->phase = ACTIVE_ENUM_PHASE_FINISHED;
@@ -261,10 +264,10 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 
             }
 
-            // continue with next prefix, return if first prefixe has been reached again
+            // continue with next prefix, return if first prefix has been reached again
             if (processor_active_enum_advance_to_next_addr_prefix(self)) goto ACTIVE_ENUM_FINISHED;
 
-            //re-transmit last frame (payload still enqued)
+            //re-transmit last frame (payload is still enqueued)
             nrf_esb_start_tx();
 
 
@@ -330,8 +333,10 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
             } else {
                 // we are done with this device
 
-                // continue with next prefix, return if first prefixe has been reached again
-                if (processor_active_enum_advance_to_next_addr_prefix(self)) goto ACTIVE_ENUM_FINISHED;
+                // continue with next prefix, return if first prefix has been reached again
+                if (processor_active_enum_advance_to_next_addr_prefix(self)) {
+                    goto ACTIVE_ENUM_FINISHED;
+                }
 
                 // start next transmission
                 if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
@@ -367,7 +372,9 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 void processor_active_enum_add_device_address_to_list(logitacker_processor_active_enum_ctx_t *self) {
     logitacker_devices_unifying_device_t * p_device = NULL;
     logitacker_devices_create_device(&p_device, self->current_rf_address);
+
     if (p_device != NULL) {
+        if (p_device->p_dongle != NULL) self->p_dongle = p_device->p_dongle;
         NRF_LOG_INFO("device address %s added/updated", addr_str_buff);
     } else {
         NRF_LOG_INFO("failed to add/update device address %s", addr_str_buff);
@@ -380,6 +387,7 @@ bool processor_active_enum_advance_to_next_addr_prefix(logitacker_processor_acti
     if (self->next_prefix == self->known_prefix) {
         self->phase = ACTIVE_ENUM_PHASE_FINISHED;
         NRF_LOG_INFO("Tested all possible neighbours");
+        if (self->p_dongle != NULL) self->p_dongle->active_enumeration_finished = true;
         return true;
     }
 

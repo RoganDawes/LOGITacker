@@ -2586,7 +2586,7 @@
 
 // <o> NRF_CLI_PRINTF_BUFF_SIZE - Maximum print buffer size. 
 #ifndef NRF_CLI_PRINTF_BUFF_SIZE
-#define NRF_CLI_PRINTF_BUFF_SIZE 23
+#define NRF_CLI_PRINTF_BUFF_SIZE 51
 #endif
 
 // <e> NRF_CLI_HISTORY_ENABLED - Enable CLI history mode.
@@ -2864,7 +2864,7 @@
 // <1024=> 1024 
 
 #ifndef NRF_LOG_STR_PUSH_BUFFER_SIZE
-#define NRF_LOG_STR_PUSH_BUFFER_SIZE 128
+#define NRF_LOG_STR_PUSH_BUFFER_SIZE 1024
 #endif
 
 // <o> NRF_LOG_STR_PUSH_BUFFER_SIZE  - Size of the buffer dedicated for strings stored using @ref NRF_LOG_PUSH.

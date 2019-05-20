@@ -287,7 +287,12 @@ void discovery_process_rx() {
                             case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
                                 break;
                             case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
-                                logitacker_enter_mode_active_enum(addr);
+                                if (!p_device->p_dongle->active_enumeration_finished) {
+                                    logitacker_enter_mode_active_enum(addr);
+                                } else {
+                                    NRF_LOG_INFO("active enumeration for device already performed, continue deiscovery")
+                                }
+
                                 break;
                             case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
                                 logitacker_enter_mode_passive_enum(addr);

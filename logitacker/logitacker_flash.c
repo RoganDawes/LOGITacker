@@ -126,7 +126,7 @@ uint32_t logitacker_flash_list_stored_devices() {
     return NRF_SUCCESS;
 }
 
-uint32_t logitacker_flash_delete_device(logitacker_devices_unifying_device_rf_address_t rf_address) {
+uint32_t logitacker_flash_delete_device(logitacker_devices_unifying_device_rf_address_t const rf_address) {
     fds_find_token_t ftok;
     fds_record_desc_t record_desc;
     memset(&ftok, 0x00, sizeof(fds_find_token_t));

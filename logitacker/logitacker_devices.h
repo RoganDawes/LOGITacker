@@ -126,6 +126,7 @@ typedef struct logitacker_device_unifying_dongle {
 
     bool is_texas_instruments;
     bool is_nordic;
+    bool active_enumeration_finished;
 
     logitacker_devices_dongle_classification_t classification;
 
@@ -155,6 +156,7 @@ uint32_t logitacker_devices_remove_device_from_dongle(logitacker_devices_unifyin
 uint32_t logitacker_devices_create_device(logitacker_devices_unifying_device_t ** pp_device, logitacker_devices_unifying_device_rf_address_t const rf_addr);
 uint32_t logitacker_devices_restore_device_from_flash(logitacker_devices_unifying_device_t **pp_device, logitacker_devices_unifying_device_rf_address_t const rf_address);
 uint32_t logitacker_devices_store_device_to_flash(logitacker_devices_unifying_device_rf_address_t const rf_addr);
+uint32_t logitacker_devices_remove_device_from_flash(logitacker_devices_unifying_device_rf_address_t const rf_addr);
 uint32_t logitacker_devices_get_device(logitacker_devices_unifying_device_t ** pp_device, logitacker_devices_unifying_device_rf_address_t const rf_addr);
 uint32_t logitacker_devices_del_device(logitacker_devices_unifying_device_rf_address_t const rf_addr);
 uint32_t logitacker_devices_del_all();

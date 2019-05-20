@@ -280,6 +280,32 @@ uint32_t logitacker_devices_store_device_to_flash(logitacker_devices_unifying_de
     return NRF_SUCCESS;
 }
 
+uint32_t logitacker_devices_remove_device_from_flash(logitacker_devices_unifying_device_rf_address_t const rf_addr) {
+    // check if device exists
+    uint32_t res = logitacker_flash_delete_device(rf_addr);
+    if (res != NRF_SUCCESS) {
+        //exists already
+        NRF_LOG_INFO("can't remove device from flash");
+        return NRF_ERROR_NOT_FOUND;
+    }
+
+    logitacker_devices_unifying_device_t device_dummy;
+    logitacker_devices_unifying_dongle_t dongle_flash;
+    // fill dongle's base address
+    for (int i=0; i <4; i--) dongle_flash.base_addr[i] = rf_addr[3-i];
+    fds_find_token_t ftok;
+    memset(&ftok, 0x00, sizeof(fds_find_token_t));
+
+    // one single attempt to fetch a device for the dongle - if it fails, no more device are stored for this dongle and we delete the dongle, too
+    if (logitacker_flash_get_next_device_for_dongle(&device_dummy, &ftok, &dongle_flash) != NRF_SUCCESS) {
+        // no more stored device attached to dongle, remove from flash
+        NRF_LOG_INFO("no more devices attached to dongle on flash, removing stored dongle");
+        logitacker_flash_delete_dongle(dongle_flash.base_addr);
+    }
+
+    return NRF_SUCCESS;
+}
+
 
 uint32_t logitacker_devices_del_dongle(logitacker_devices_unifying_device_rf_addr_base_t const base_addr) {
     VERIFY_TRUE(base_addr != NULL, NRF_ERROR_NULL);
@@ -621,7 +647,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
     if (logitech_cksm) {
         p_frame_counters->logitech_chksm++;
 
-        NRF_LOG_INFO("... valid Logitech CRC");
+        NRF_LOG_DEBUG("... valid Logitech CRC");
         //test if frame has valid logitech checksum
         if (p_dongle->classification == DONGLE_CLASSIFICATION_UNKNOWN) {
             p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
