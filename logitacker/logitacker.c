@@ -270,7 +270,16 @@ void discovery_process_rx() {
             NRF_LOG_HEXDUMP_DEBUG(p_rx_payload->data, p_rx_payload->length);
 
             logitacker_devices_unifying_device_t *p_device = NULL;
-            logitacker_devices_create_device(&p_device, addr);
+
+            // check if deiscovered device already exists in RAM
+            if (logitacker_devices_get_device(&p_device, addr) != NRF_SUCCESS) {
+                // try to restore device from flash
+                if (logitacker_devices_restore_device_from_flash(&p_device, addr) != NRF_SUCCESS) {
+                    // restore from flash failed, create in ram
+                    logitacker_devices_create_device(&p_device, addr);
+                }
+
+            }
 
             // update device counters
             //bool isLogitech = false;

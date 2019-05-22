@@ -21,9 +21,40 @@
 
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
 
+#define STORED_DEVICES_AUTOCOMPLETE_LIST_MAX_ENTRIES 60
+static char m_stored_device_addr_str_list[STORED_DEVICES_AUTOCOMPLETE_LIST_MAX_ENTRIES][LOGITACKER_DEVICE_ADDR_STR_LEN];
+static int m_stored_device_addr_str_list_len = 0;
 static char m_device_addr_str_list[LOGITACKER_DEVICES_DEVICE_LIST_MAX_ENTRIES][LOGITACKER_DEVICE_ADDR_STR_LEN];
 static int m_device_addr_str_list_len = 0;
 static char m_device_addr_str_list_first_entry[] = "all\x00";
+
+static void stored_devices_str_list_update() {
+    m_stored_device_addr_str_list_len = 1;
+    memcpy(&m_stored_device_addr_str_list[0], m_device_addr_str_list_first_entry, sizeof(m_device_addr_str_list_first_entry));
+
+    fds_find_token_t ftok;
+    fds_record_desc_t record_desc;
+    fds_flash_record_t flash_record;
+    memset(&ftok, 0x00, sizeof(fds_find_token_t));
+
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, &ftok) == FDS_SUCCESS &&
+    m_stored_device_addr_str_list_len <= STORED_DEVICES_AUTOCOMPLETE_LIST_MAX_ENTRIES) {
+        if (fds_record_open(&record_desc, &flash_record) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("Failed to open record");
+            continue; // go on with next
+        }
+
+        logitacker_devices_unifying_device_t const * p_device = flash_record.p_data;
+        helper_addr_to_hex_str(m_stored_device_addr_str_list[m_stored_device_addr_str_list_len], LOGITACKER_DEVICE_ADDR_LEN, p_device->rf_address);
+        m_stored_device_addr_str_list_len++;
+
+
+        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("Failed to close record");
+        }
+    }
+
+}
 
 static void device_address_str_list_update() {
     m_device_addr_str_list_len = 1;
@@ -40,7 +71,7 @@ static void device_address_str_list_update() {
 }
 
 // dynamic creation of command addresses
-static void dynamic_device_addr_list_ram_wit_all(size_t idx, nrf_cli_static_entry_t *p_static)
+static void dynamic_device_addr_list_ram_with_all(size_t idx, nrf_cli_static_entry_t *p_static)
 {
     // Must be sorted alphabetically to ensure correct CLI completion.
     p_static->handler  = NULL;
@@ -59,6 +90,64 @@ static void dynamic_device_addr_list_ram_wit_all(size_t idx, nrf_cli_static_entr
         p_static->p_syntax = NULL;
     }
 }
+
+// dynamic creation of command addresses
+static void dynamic_device_addr_list_ram(size_t idx, nrf_cli_static_entry_t *p_static)
+{
+    // Must be sorted alphabetically to ensure correct CLI completion.
+    p_static->handler  = NULL;
+    p_static->p_subcmd = NULL;
+    p_static->p_help   = "Connect with address.";
+
+    if (idx == 0) device_address_str_list_update();
+
+    if (idx < m_device_addr_str_list_len-1) {
+        p_static->p_syntax = m_device_addr_str_list[idx+1]; //ignore first entry
+    } else {
+        p_static->p_syntax = NULL;
+    }
+}
+
+/*
+// dynamic creation of command addresses
+static void dynamic_device_addr_list_stored_with_all(size_t idx, nrf_cli_static_entry_t *p_static)
+{
+    // Must be sorted alphabetically to ensure correct CLI completion.
+    p_static->handler  = NULL;
+    p_static->p_subcmd = NULL;
+    p_static->p_help   = "Connect with address.";
+
+
+    if (idx == 0) {
+        stored_devices_str_list_update(); // update list if idx 0 is requested
+        p_static->p_syntax = m_device_addr_str_list[0];
+        p_static->handler = NULL;
+        p_static->p_help = "remove all devices";
+    } else if (idx < m_stored_device_addr_str_list_len) {
+        p_static->p_syntax = m_stored_device_addr_str_list[idx];
+    } else {
+        p_static->p_syntax = NULL;
+    }
+}
+ */
+
+// dynamic creation of command addresses
+static void dynamic_device_addr_list_stored(size_t idx, nrf_cli_static_entry_t *p_static)
+{
+    // Must be sorted alphabetically to ensure correct CLI completion.
+    p_static->handler  = NULL;
+    p_static->p_subcmd = NULL;
+    p_static->p_help   = "Connect with address.";
+
+    if (idx == 0) stored_devices_str_list_update();
+
+    if (idx < m_stored_device_addr_str_list_len-1) {
+        p_static->p_syntax = m_stored_device_addr_str_list[idx+1]; //ignore first entry
+    } else {
+        p_static->p_syntax = NULL;
+    }
+}
+
 
 
 static void print_logitacker_device_info(nrf_cli_t const * p_cli, const logitacker_devices_unifying_device_t * p_device) {
@@ -93,23 +182,6 @@ static void print_logitacker_device_info(nrf_cli_t const * p_cli, const logitack
 
 }
 
-
-// dynamic creation of command addresses
-static void dynamic_device_addr_list_ram(size_t idx, nrf_cli_static_entry_t *p_static)
-{
-    // Must be sorted alphabetically to ensure correct CLI completion.
-    p_static->handler  = NULL;
-    p_static->p_subcmd = NULL;
-    p_static->p_help   = "Connect with address.";
-
-    if (idx == 0) device_address_str_list_update();
-
-    if (idx < m_device_addr_str_list_len-1) {
-        p_static->p_syntax = m_device_addr_str_list[idx+1]; //ignore first entry
-    } else {
-        p_static->p_syntax = NULL;
-    }
-}
 
 
 static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -727,19 +799,21 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);
 
 //device level 3
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_delete_list, dynamic_device_addr_list_ram_wit_all);
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_load_list, dynamic_device_addr_list_stored);
+//NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_delete_list, dynamic_device_addr_list_stored_with_all);
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_delete_list, dynamic_device_addr_list_stored); // don't offer delete all option for flash
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_save_list, dynamic_device_addr_list_ram);
 //device level 2
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices_store)
 {
     NRF_CLI_CMD(list, NULL, "list devices stored on flash", cmd_devices_store_list_entries),
-    NRF_CLI_CMD(load, NULL, "inject given string", cmd_devices_store_load),
+    NRF_CLI_CMD(load, &m_sub_device_store_load_list, "inject given string", cmd_devices_store_load),
     NRF_CLI_CMD(save, &m_sub_device_store_save_list, "inject given string", cmd_devices_store_save),
     NRF_CLI_CMD(delete, &m_sub_device_store_delete_list, "inject given string", cmd_devices_store_delete),
     NRF_CLI_SUBCMD_SET_END
 };
 
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_devices_remove_addr_collection, dynamic_device_addr_list_ram_wit_all);
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_devices_remove_addr_collection, dynamic_device_addr_list_ram_with_all);
 //devices level 1 (handles auto-complete from level 2 as parameter)
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices)
 {

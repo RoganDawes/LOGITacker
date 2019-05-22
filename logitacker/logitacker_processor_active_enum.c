@@ -371,7 +371,13 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
 
 void processor_active_enum_add_device_address_to_list(logitacker_processor_active_enum_ctx_t *self) {
     logitacker_devices_unifying_device_t * p_device = NULL;
-    logitacker_devices_create_device(&p_device, self->current_rf_address);
+
+    // try to restore device from flash
+    if (logitacker_devices_restore_device_from_flash(&p_device, self->current_rf_address) != NRF_SUCCESS) {
+        // restore from flash failed, create in ram
+        logitacker_devices_create_device(&p_device, self->current_rf_address);
+    }
+
 
     if (p_device != NULL) {
         if (p_device->p_dongle != NULL) self->p_dongle = p_device->p_dongle;
