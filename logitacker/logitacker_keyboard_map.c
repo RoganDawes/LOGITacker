@@ -1,4 +1,5 @@
-#include <libraries/log/nrf_log_ctrl.h>
+#include "helper.h"
+#include "nrf_log_ctrl.h"
 #include "stdlib.h"
 #include "logitacker_keyboard_map.h"
 #include "utf.h"
@@ -9,12 +10,120 @@ NRF_LOG_MODULE_REGISTER();
 
 
 /* maps the given HID keycode to a string representation */
-char* keycode_to_str(enum keys keycode) {
+char* keycode_to_str(logitacker_keyboard_map_hid_keys_t keycode) {
     switch (keycode) {
         ALL_KEYCODES(KEYCODE_SWITCH_CASE)
         default:
             return "UNKNOWN HID KEY";
     }
+}
+/* maps the given HID keycode string to hid keycode */
+#define KEYCODE_IF_STRCMP(nameval, val) if (strcmp(STRINGIFY(nameval), key_str) == 0) return val;
+logitacker_keyboard_map_hid_keys_t str_to_keycode(char * key_str) {
+
+    ALIAS_KEYCODES(KEYCODE_IF_STRCMP)
+    ALL_KEYCODES(KEYCODE_IF_STRCMP)
+
+    NRF_LOG_INFO("No mapping for %s", nrf_log_push(key_str));
+    return 0x00; // NONE
+}
+
+uint32_t logitacker_keyboard_map_combo_str_to_hid_report(char const *in_str,
+                                                       hid_keyboard_report_t *p_out_report,
+                                                       logitacker_keyboard_map_lang_t in_layout) {
+    VERIFY_TRUE(in_str != NULL, NRF_ERROR_NULL);
+    VERIFY_TRUE(p_out_report != NULL, NRF_ERROR_NULL);
+
+    //clear output report
+    memset(p_out_report, 0x00, sizeof(hid_keyboard_report_t));
+
+    //hid_keyboard_report_t tmp_report = {0};
+    char tmp[256];
+    char * str_copy = tmp;
+
+    uint8_t resultKeyCount = 0; // keeps track of number of keys added to the report (max are 6)
+
+    strncpy(str_copy, in_str, sizeof(tmp)-1);
+
+    // tokenize str
+    char * token;
+    int i = 0;
+    while (resultKeyCount < 6 && (token = helper_strsep(&str_copy, " ")) != NULL) {
+        NRF_LOG_INFO("Token %d: %s", i++, nrf_log_push(token));
+
+        // if the token has length 1, it is likely an ASCII char and we want to stay language agnostic (f.e. a 'Y' for DE layout should result in HID_KEY_Z)
+        if (strlen(token) == 1) {
+            // if [A-Z] turn to lower
+            if (token[0] >= 'A' && token[0] <= 'Z') token[0] += 0x20; // turn lower
+
+            //convert char to wchar
+            char tokenStr[2] = {token[0], 0x00};
+            uint32_t c_utf; //stores decoded unicode codepoint (wchar) of next UTF-8 rune
+            utf8DecodeRune(tokenStr, 0, &c_utf);
+
+            // retrieve HID reports for current wchar (language agnostic)
+            hid_keyboard_report_t *p_hid_report_sequence = NULL;
+            uint32_t hid_report_sequence_len = 0;
+            uint32_t err = logitacker_keyboard_map_wc_to_hid_reports(&p_hid_report_sequence, &hid_report_sequence_len, in_layout, c_utf);
+
+            if (err != NRF_SUCCESS || hid_report_sequence_len == 0) continue; // skip this token if it doesn't result in a report sequence
+
+            // we only regard the first report of the sequence in our combo (no dead key support on this path, multiple calls to press have to be used to emulate dead keys)
+            p_out_report->mod |= p_hid_report_sequence[0].mod; //copy modifier
+            for (uint8_t keypos=0; keypos < 6 && resultKeyCount < 6; keypos++) {
+                uint8_t keyCode = p_hid_report_sequence[0].keys[keypos];
+                if (keyCode != 0x00) {
+                    // no empty key, add to resulting report
+                    p_out_report->keys[resultKeyCount++] = keyCode;
+                }
+            }
+            continue; // go on with next token
+        } // end of handling of single char tokens
+
+        // try to map token directly to HID keycode
+        uint8_t keyCode = str_to_keycode(token);
+        if (keyCode != 0x00) {
+            // if we have a modifier key (0xe0..0xe7) handle it like this, otherwise handle it as hid_key
+            if (keyCode > 0xdf && keyCode < 0xe8) {
+                // translate keyCode corresponding to modifier key to respective mask bit in modifier byte of output report
+                switch (keyCode) {
+                    case HID_KEY_RIGHTALT:
+                        p_out_report->mod |= HID_MOD_KEY_RIGHT_ALT;
+                        break;
+                    case HID_KEY_RIGHTCTRL:
+                        p_out_report->mod |= HID_MOD_KEY_RIGHT_CONTROL;
+                        break;
+                    case HID_KEY_RIGHTSHIFT:
+                        p_out_report->mod |= HID_MOD_KEY_RIGHT_SHIFT;
+                        break;
+                    case HID_KEY_RIGHTMETA:
+                        p_out_report->mod |= HID_MOD_KEY_RIGHT_GUI;
+                        break;
+                    case HID_KEY_LEFTALT:
+                        p_out_report->mod |= HID_MOD_KEY_LEFT_ALT;
+                        break;
+                    case HID_KEY_LEFTCTRL:
+                        p_out_report->mod |= HID_MOD_KEY_LEFT_CONTROL;
+                        break;
+                    case HID_KEY_LEFTSHIFT:
+                        p_out_report->mod |= HID_MOD_KEY_LEFT_SHIFT;
+                        break;
+                    case HID_KEY_LEFTMETA:
+                        p_out_report->mod |= HID_MOD_KEY_LEFT_GUI;
+                        break;
+                    default:
+                        break;
+                }
+
+            } else {
+                // no empty key, add to resulting report
+                p_out_report->keys[resultKeyCount++] = keyCode;
+            }
+        }
+
+    }
+
+    return NRF_SUCCESS;
 }
 
 #define LAYOUT_SWITCH_CASE(nameval, val) case nameval: {*p_out_report_seq=(void*)val; *out_rep_seq_len=sizeof(val) ;return NRF_SUCCESS; }
@@ -108,6 +217,7 @@ uint32_t logitacker_keyboard_map_u8_str_to_hid_reports(logitacker_keyboard_map_u
 
 }
 
+/*
 
 char * test_key = "ÜÄüäHello world with abcÜ";
 
@@ -127,7 +237,6 @@ void test_string_to_reports(void) {
         NRF_LOG_HEXDUMP_INFO(rep_seq_result, rep_seq_result_size); //log !raw! resulting report array
     }
 }
-
 
 void logitacker_keyboard_map_test(void) {
     NRF_LOG_HEXDUMP_INFO(test_key, strlen(test_key));
@@ -203,3 +312,4 @@ void logitacker_keyboard_map_test(void) {
     //
     test_string_to_reports(); //iterarte over string and produce reports
 }
+*/

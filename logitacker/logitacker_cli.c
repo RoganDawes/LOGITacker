@@ -20,6 +20,7 @@
 
 
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
+static void cmd_inject_press(nrf_cli_t const * p_cli, size_t argc, char **argv);
 
 #define STORED_DEVICES_AUTOCOMPLETE_LIST_MAX_ENTRIES 60
 static char m_stored_device_addr_str_list[STORED_DEVICES_AUTOCOMPLETE_LIST_MAX_ENTRIES][LOGITACKER_DEVICE_ADDR_STR_LEN];
@@ -276,30 +277,14 @@ static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
 }
 
 static void cmd_test_b(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    logitacker_devices_unifying_device_t * p_device1 = NULL;
-    logitacker_devices_unifying_device_rf_address_t addr1 = {0x00, 0x99, 0x02, 0x03, 0x04};
 
-    for (int j=0; j<10; j++) {
-        for (int i=0; i<10;i++) {
-            addr1[0] = i+j*10;
-            addr1[4] = 1;
-            logitacker_devices_create_device(&p_device1, addr1);
-            addr1[4] = 2;
-            logitacker_devices_create_device(&p_device1, addr1);
-
-            logitacker_devices_store_dongle_to_flash(p_device1->p_dongle->base_addr);
-        }
-
-        for (int i=0; i<10;i++) {
-            addr1[0] = i+j*10;
-            addr1[4] = 1;
-            logitacker_devices_del_device(addr1);
-            addr1[4] = 2;
-            logitacker_devices_del_device(addr1);
-        }
-
+    /*
+    if (argc > 1) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "Keycode for %s: %02x\r\n", argv[1], str_to_keycode(argv[1]));
     }
+    */
 
+    cmd_inject_press(p_cli, argc, argv);
 }
 
 static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -355,6 +340,35 @@ static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
         logitacker_injection_string(LANGUAGE_LAYOUT_DE, argv[i]);
         logitacker_injection_string(LANGUAGE_LAYOUT_DE, " ");
     }
+}
+
+static void cmd_inject_press(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    char press_str[NRF_CLI_CMD_BUFF_SIZE] = {0};
+    int str_buf_remaining = sizeof(press_str)-1; //keep one byte for terminating 0x00
+    for (int i=1; i<argc && str_buf_remaining>0; i++) {
+        if (i>1) strcat(press_str, " ");
+        str_buf_remaining--;
+        int len = strlen(argv[i]);
+        if (len > str_buf_remaining) len = str_buf_remaining;
+        strncat(press_str, argv[i], len);
+        str_buf_remaining -= len;
+    }
+
+    NRF_LOG_INFO("parsing '%s' to HID key combo report:", nrf_log_push(press_str));
+
+    /*
+    if (argc > 1) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "Keycode for %s: %02x\r\n", argv[1], str_to_keycode(argv[1]));
+    }
+    */
+
+
+
+    hid_keyboard_report_t tmp_report;
+    logitacker_keyboard_map_combo_str_to_hid_report(press_str, &tmp_report, LANGUAGE_LAYOUT_DE);
+    NRF_LOG_HEXDUMP_INFO(&tmp_report, sizeof(hid_keyboard_report_t));
+
+    logitacker_injection_press(LANGUAGE_LAYOUT_DE, press_str);
 }
 
 
@@ -794,6 +808,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 {
     NRF_CLI_CMD(target, &m_sub_inject_target_addr, "inject given string", cmd_inject_target),
     NRF_CLI_CMD(string,   NULL, "inject given string", cmd_inject_string),
+    NRF_CLI_CMD(press,   NULL, "inject key combo given as string", cmd_inject_press),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);

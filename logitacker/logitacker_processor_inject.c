@@ -13,6 +13,7 @@
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_INJECT
 #include "nrf_log.h"
 #include "logitacker_tx_pay_provider_string_to_keys.h"
+#include "logitacker_tx_payload_provider_press_to_keys.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -163,6 +164,15 @@ bool push_task_delay(uint32_t delay_ms) {
     tmp_task.type = INJECT_TASK_TYPE_DELAY;
     return push_task(tmp_task);
 
+}
+
+bool push_task_press(logitacker_keyboard_map_lang_t lang, char * str_combo) {
+    inject_task_t tmp_task = {0};
+    tmp_task.data_len = sizeof(str_combo) + 1; //include terminating 0x00
+    tmp_task.p_data_c = str_combo;
+    tmp_task.type = INJECT_TASK_TYPE_PRESS_KEYS;
+    tmp_task.lang = lang;
+    return push_task(tmp_task);
 }
 
 bool pop_task(inject_task_t * p_task) {
@@ -317,6 +327,7 @@ void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *sel
                 free_task(self->current_task);
                 break;
             }
+            case INJECT_TASK_TYPE_PRESS_KEYS:
             case INJECT_TASK_TYPE_TYPE_STRING:
             {
                 // if timer is called, write (and auto transmit) current ESB payload
@@ -477,6 +488,24 @@ void logitacker_processor_inject_process_task_string(logitacker_processor_inject
     app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL);
 }
 
+void logitacker_processor_inject_process_task_press(logitacker_processor_inject_ctx_t *self) {
+    NRF_LOG_INFO("process key-combo injection: %s", self->current_task.p_data_c);
+    self->p_payload_provider = new_payload_provider_press(self->p_device, self->current_task.lang, self->current_task.p_data_c);
+    //while ((*p_pay_provider->p_get_next)(p_pay_provider, &tmp_pay)) {};
+
+    //fetch first payload
+    if (!(*self->p_payload_provider->p_get_next)(self->p_payload_provider, &self->tmp_tx_payload)) {
+        //failed to fetch first payload
+        NRF_LOG_WARNING("failed to fetch initial RF report from payload provider");
+        return;
+    }
+
+    self->state = INJECT_STATE_WORKING;
+
+    //start injection
+    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL);
+}
+
 void logitacker_processor_inject_process_task_delay(logitacker_processor_inject_ctx_t *self) {
     NRF_LOG_INFO("process delay injection: %d milliseconds", self->current_task.delay_ms);
     self->p_payload_provider = NULL;
@@ -508,6 +537,9 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
     }
 
     switch (self->current_task.type) {
+        case INJECT_TASK_TYPE_PRESS_KEYS:
+            logitacker_processor_inject_process_task_press(self);
+            break;
         case INJECT_TASK_TYPE_TYPE_STRING:
             logitacker_processor_inject_process_task_string(self);
             break;
@@ -536,6 +568,27 @@ void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inj
     }
 
     push_task_string(lang, str);
+
+    if (self->state == INJECT_STATE_IDLE) {
+        logitacker_processor_inject_run_next_task(self);
+    }
+}
+
+void logitacker_processor_inject_press(logitacker_processor_t * p_processor_inject, logitacker_keyboard_map_lang_t lang, char * combo_str) {
+    if (p_processor_inject == NULL) {
+        NRF_LOG_ERROR("logitacker processor is NULL");
+        return;
+    }
+
+    logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
+    if (self == NULL) {
+        NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return;
+    }
+
+
+    push_task_press(lang, combo_str);
+
 
     if (self->state == INJECT_STATE_IDLE) {
         logitacker_processor_inject_run_next_task(self);
@@ -581,7 +634,7 @@ logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, 
     logitacker_devices_get_device(&p_ctx->p_device, p_ctx->current_rf_address);
     if (p_ctx->p_device == NULL) {
         NRF_LOG_WARNING("device not found, creating capabilities");
-        tmp_device.is_encrypted = false;
+        //tmp_device.is_encrypted = false;
         memcpy(tmp_device.rf_address, p_ctx->current_rf_address, 5);
         p_ctx->p_device = &tmp_device;
     }

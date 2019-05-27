@@ -174,31 +174,40 @@ typedef char HID_mod_code_t;
     PROCESSING_FUNC(RIGHTMETA, 0xe7)			\
 
 
-
 #define KEYCODE_ASSIGN_ENUM(name, val) CONCAT_2(HID_KEY_,name)=val,
 #define KEYCODE_SWITCH_CASE(nameval, val) case val: { return STRINGIFY(CONCAT_2(HID_KEY_,nameval)); }
 
 // define enum with HID key codes
-enum keys {
+typedef enum keys {
     ALL_KEYCODES(KEYCODE_ASSIGN_ENUM)
-};
+} logitacker_keyboard_map_hid_keys_t;
 
-#if 0
+#define ALIAS_KEYCODES(PROCESSING_FUNC)         \
+    PROCESSING_FUNC(RETURN, HID_KEY_ENTER)  	\
+    PROCESSING_FUNC(ESCAPE, HID_KEY_ESC)	    \
+    PROCESSING_FUNC(TABULATOR, HID_KEY_TAB)	    \
+    PROCESSING_FUNC(CAPS, HID_KEY_CAPSLOCK)     \
+    PROCESSING_FUNC(PRINT, HID_KEY_SYSRQ)		\
+    PROCESSING_FUNC(PRINTSCREEN, HID_KEY_SYSRQ)	\
+    PROCESSING_FUNC(SCROLL, HID_KEY_SCROLLLOCK)	\
+    PROCESSING_FUNC(BREAK, HID_KEY_PAUSE)		\
+    PROCESSING_FUNC(INS, HID_KEY_INSERT)		\
+    PROCESSING_FUNC(DEL, HID_KEY_DELETE)		\
+    PROCESSING_FUNC(RIGHTARROW, HID_KEY_RIGHT)	\
+    PROCESSING_FUNC(LEFTARROW, HID_KEY_LEFT)	\
+    PROCESSING_FUNC(DOWNARROW, HID_KEY_DOWN)	\
+    PROCESSING_FUNC(UPARROW, HID_KEY_UP)		\
+    PROCESSING_FUNC(NUM, HID_KEY_NUMLOCK)		\
+    PROCESSING_FUNC(APP, HID_KEY_COMPOSE)		\
+    PROCESSING_FUNC(MENU, HID_KEY_COMPOSE)		\
+    PROCESSING_FUNC(CTRL, HID_KEY_LEFTCTRL)		\
+    PROCESSING_FUNC(CONTROL, HID_KEY_LEFTCTRL)	\
+    PROCESSING_FUNC(SHIFT, HID_KEY_LEFTSHIFT)	\
+    PROCESSING_FUNC(ALT, HID_KEY_LEFTALT)		\
+    PROCESSING_FUNC(GUI, HID_KEY_LEFTMETA)		\
+    PROCESSING_FUNC(COMMAND, HID_KEY_LEFTMETA)	\
+    PROCESSING_FUNC(WINDOWS, HID_KEY_LEFTMETA)	\
 
-typedef struct  {
-    HID_key_code_t keycode;
-    char *name;
-} hid_key_list_entry_t;
-
-#define KEYCODE_ADD_ARRAY(nameval, val) { .keycode=val, .name=STRINGIFY(CONCAT_2(HID_KEY_,nameval))},
-
-// define arrays assigning strings to keycodes (switch case jump table based on macros would be easier, but keycodes are easier to extend
-static const hid_key_list_entry_t key_list[] = {
-    ALL_KEYCODES(KEYCODE_ADD_ARRAY)
-};
-
-#define KEYCODE_TO_STR(keycode_val) ({char* retval="UNKNOWN HID KEY"; for(int keypos=0; keypos<sizeof(key_list)/sizeof(key_list[0]);keypos++) { if (key_list[keypos].keycode == keycode_val) { retval=key_list[keypos].name; break; } }; retval;})
-#endif
 
 #define HID_MOD_KEY_NONE            0x00
 #define HID_MOD_KEY_LEFT_CONTROL    0x01
@@ -613,6 +622,15 @@ uint32_t logitacker_keyboard_map_u8_str_to_hid_reports(logitacker_keyboard_map_u
                                                        uint32_t *out_next_rep_seq_len,
                                                        logitacker_keyboard_map_lang_t in_layout);
 
-void logitacker_keyboard_map_test(void);
+
+uint32_t logitacker_keyboard_map_combo_str_to_hid_report(char const *in_str,
+                                                         hid_keyboard_report_t *p_out_report,
+                                                         logitacker_keyboard_map_lang_t in_layout);
+
+//del the following
+//void logitacker_keyboard_map_test(void);
+logitacker_keyboard_map_hid_keys_t str_to_keycode(char * key_str);
+
+
 
 #endif //HELPER_MAP_H__

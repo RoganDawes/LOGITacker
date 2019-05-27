@@ -10,5 +10,6 @@ logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, 
 
 void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inject, logitacker_keyboard_map_lang_t lang, char * str);
 void logitacker_processor_inject_delay(logitacker_processor_t * p_processor_inject, uint32_t delay_ms);
+void logitacker_processor_inject_press(logitacker_processor_t * p_processor_inject, logitacker_keyboard_map_lang_t lang, char * combo_str);
 
 #endif //LOGITACKER_PROCESSOR_INJECT_H

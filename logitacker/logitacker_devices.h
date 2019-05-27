@@ -107,11 +107,12 @@ typedef struct logitacker_device_unifying_device {
 
     bool key_known;
 
-    bool is_encrypted; //applies to RF key reports
+    //bool is_encrypted; //applies to RF key reports
 
     bool has_enough_whitened_reports;
     bool has_single_whitened_report;
 
+    uint32_t last_used_aes_ctr;
     logitacker_device_frame_counter_t frame_counters;
 } logitacker_devices_unifying_device_t;
 
@@ -164,7 +165,7 @@ uint32_t logitacker_devices_get_next_device(logitacker_devices_unifying_device_t
 
 uint32_t logitacker_devices_device_update_classification(logitacker_devices_unifying_device_t * p_device, nrf_esb_payload_t frame);
 
-uint32_t logitacker_devices_generate_keyboard_frame(logitacker_devices_unifying_device_t *p_caps,
+uint32_t logitacker_devices_generate_keyboard_frame(logitacker_devices_unifying_device_t *p_device,
                                                     nrf_esb_payload_t *p_result_payload,
                                                     hid_keyboard_report_t const *const p_in_hid_report);
 

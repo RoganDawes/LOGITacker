@@ -52,6 +52,7 @@ typedef enum {
     LOGITACKER_MAINSTATE_IDLE
 } logitacker_mainstate_t;
 
+char g_logitacker_cli_name[32];
 
 uint32_t logitacker_init();
 
@@ -70,6 +71,7 @@ void logitacker_enter_mode_injection(uint8_t const *rf_address);
 
 void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout, char * str);
 void logitacker_injection_delay(uint32_t delay_ms);
+void logitacker_injection_press(logitacker_keyboard_map_lang_t language_layout, char * str);
 
 #ifdef __cplusplus
 }

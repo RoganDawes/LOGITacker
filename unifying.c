@@ -197,7 +197,7 @@ bool unifying_payload_validate_checksum(uint8_t * p_array, uint8_t paylen) {
     return p_array[paylen-1] == chksum;
 }
 
-uint32_t unifyingExtractCounterFromEncKbdFrame(nrf_esb_payload_t frame, uint32_t *p_counter) {
+uint32_t unifying_extract_counter_from_encrypted_keyboard_frame(nrf_esb_payload_t frame, uint32_t *p_counter) {
     // assure frame is encrypted keyboard
     if (frame.length != 22) return NRF_ERROR_INVALID_LENGTH;
     if ((frame.data[1] & 0x1f) != UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) return NRF_ERROR_INVALID_DATA;
@@ -327,7 +327,7 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
         p_record->isEncrytedKeyRelease = false;
         memcpy(p_record->data, frame.data, frame.length);
         if (p_record->reportType == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {
-            unifyingExtractCounterFromEncKbdFrame(frame, &p_record->counter);
+            unifying_extract_counter_from_encrypted_keyboard_frame(frame, &p_record->counter);
             p_record->resulted_in_LED_report = false; //not known for now
         }
 
@@ -417,7 +417,7 @@ void unifying_frame_classify_log(nrf_esb_payload_t frame) {
         case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
             //counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
             counter = 0;
-            if (unifyingExtractCounterFromEncKbdFrame(frame, &counter) == NRF_SUCCESS) {
+            if (unifying_extract_counter_from_encrypted_keyboard_frame(frame, &counter) == NRF_SUCCESS) {
                 NRF_LOG_INFO("%sEncrypted keyboard, counter %08x", UNIFYING_CLASSIFY_LOG_PREFIX, counter);
 
             }

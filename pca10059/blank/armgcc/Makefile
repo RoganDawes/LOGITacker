@@ -102,6 +102,7 @@ SRC_FILES += \
   $(PROJ_DIR)/logitacker/logitacker_processor_pair_device.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_inject.c \
   $(PROJ_DIR)/logitacker/logitacker_tx_pay_provider_string_to_keys.c \
+  $(PROJ_DIR)/logitacker/logitacker_tx_payload_provider_press_to_keys.c \
   $(PROJ_DIR)/logitacker/logitacker_keyboard_map.c \
   $(PROJ_DIR)/logitacker/logitacker_devices.c \
   $(PROJ_DIR)/logitacker/logitacker_radio.c \

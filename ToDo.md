@@ -18,6 +18,7 @@
 - maybe: Introduce user provided meta data, like "site name" for discovery and custom device name, to make it easier to re-identify specific devices stored on flash
 (raw RF addresses require noting down additional info) - this is low prio, as it requires additional relationships for data stored on flash, which means runtime-reference-creation
 and thus brings all nice errors of pointer arithmetics (missing Golang here)
+- account for re-transmits (passive enum, pair sniffing) - **must have for on-stage demos**
 
 # Analysis
 - capabilities to send in new HID++ messages (maybe re-write device capabilities)

@@ -89,4 +89,23 @@ uint32_t helper_hex_str_to_addr(uint8_t * p_result_addr, uint8_t len, char const
     return NRF_SUCCESS;
 }
 
+// Return the next DELIM-delimited token from *STRINGP terminating it with a '\0', and update *STRINGP to point past it.
 
+char *helper_strsep (char **stringp, const char *delim) {
+    char *token_start, *token_end;
+    token_start = *stringp;
+    if (token_start == NULL)
+        return NULL;
+    /* Find the end of the token.  */
+    token_end = token_start + strcspn (token_start, delim);
+    if (*token_end)
+    {
+        // Terminate the token and set *STRINGP past NUL character.
+        *token_end++ = '\0';
+        *stringp = token_end;
+    }
+    else
+        // No more delimiters; this is the last token.
+        *stringp = NULL;
+    return token_start;
+}

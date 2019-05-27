@@ -199,6 +199,8 @@ void logitacker_enter_mode_discovery() {
     nrf_esb_stop_rx(); //stop rx in case running
 
     m_state_local.mainstate = LOGITACKER_MAINSTATE_DISCOVERY;
+    sprintf(g_logitacker_cli_name, "LOGITacker (discovery) $ ");
+
 
     m_state_local.current_bsp_event_handler = discovery_event_handler_bsp;
     m_state_local.current_esb_event_handler = discovery_event_handler_esb; // process RX_RECEIVED
@@ -523,6 +525,8 @@ void logitacker_enter_mode_passive_enum(uint8_t *rf_address) {
     m_state_local.current_esb_event_handler = NULL;
     m_state_local.current_timer_event_handler = NULL;
 
+    m_state_local.mainstate = LOGITACKER_MAINSTATE_PASSIVE_ENUMERATION;
+    sprintf(g_logitacker_cli_name, "LOGITacker (passive enum) $ ");
 }
 
 
@@ -543,6 +547,7 @@ void logitacker_enter_mode_pairing_sniff() {
     nrf_esb_stop_rx(); //stop rx in case running
 
     m_state_local.mainstate = LOGITACKER_MAINSTATE_SNIFF_PAIRING;
+    sprintf(g_logitacker_cli_name, "LOGITacker (sniff pairing) $ ");
     m_state_local.current_bsp_event_handler = NULL;
     m_state_local.current_radio_event_handler = NULL;
     m_state_local.current_esb_event_handler = pairing_sniff_event_handler_esb;
@@ -602,6 +607,7 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
     m_state_local.current_timer_event_handler = NULL;
 
     m_state_local.mainstate = LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION;
+    sprintf(g_logitacker_cli_name, "LOGITacker (active enum) $ ");
 }
 
 static uint8_t temp_dev_id = 1;
@@ -638,6 +644,8 @@ void logitacker_enter_mode_pair_device(uint8_t const *rf_address) {
     m_state_local.current_timer_event_handler = NULL;
 
     m_state_local.mainstate = LOGITACKER_MAINSTATE_PAIR_DEVICE;
+    sprintf(g_logitacker_cli_name, "LOGITacker (pair device) $ ");
+
 }
 
 void logitacker_enter_mode_injection(uint8_t const *rf_address) {
@@ -652,6 +660,17 @@ void logitacker_enter_mode_injection(uint8_t const *rf_address) {
     m_state_local.current_timer_event_handler = NULL;
 
     m_state_local.mainstate = LOGITACKER_MAINSTATE_INJECT;
+    sprintf(g_logitacker_cli_name, "LOGITacker (injection) $ ");
+
+}
+
+void logitacker_injection_press(logitacker_keyboard_map_lang_t language_layout, char * str) {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    logitacker_processor_inject_press(p_processor, language_layout, str);
 }
 
 void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout, char * str) {
@@ -682,6 +701,7 @@ void clocks_start( void )
 
 
 uint32_t logitacker_init() {
+    sprintf(g_logitacker_cli_name, "LOGITacker $ ");
     logitacker_flash_init();
     logitacker_options_restore_from_flash(); // try to restore options from flash (updates stats like boot count)
     logitacker_options_store_to_flash(); // store back updated options

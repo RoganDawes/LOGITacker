@@ -140,7 +140,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
 
 
 NRF_CLI_CDC_ACM_DEF(m_cli_cdc_acm_transport);
-NRF_CLI_DEF(m_cli_cdc_acm, "logitacker $ ", &m_cli_cdc_acm_transport.transport, '\r', 20);
+NRF_CLI_DEF(m_cli_cdc_acm, g_logitacker_cli_name, &m_cli_cdc_acm_transport.transport, '\r', 20);
 
 
 
