@@ -13,6 +13,7 @@
 #include "helper.h"
 #include "unifying.h"
 #include "logitacker_flash.h"
+#include "logitacker_processor_inject.h"
 
 #define CLI_EXAMPLE_MAX_CMD_CNT (20u)
 #define CLI_EXAMPLE_MAX_CMD_LEN (33u)
@@ -278,13 +279,88 @@ static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 static void cmd_test_b(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
-    /*
-    if (argc > 1) {
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "Keycode for %s: %02x\r\n", argv[1], str_to_keycode(argv[1]));
-    }
-    */
+/*
+    bool push_success;
 
-    cmd_inject_press(p_cli, argc, argv);
+    push_success = push_task_delay(0x400);
+    if (!push_success) return;
+    push_success = push_task_string(LANGUAGE_LAYOUT_DE, "1111");
+    //if (!push_success) return;
+    push_success = push_task_delay(0x2000);
+    //if (!push_success) return;
+    push_success = push_task_string(LANGUAGE_LAYOUT_DE, "22222");
+    //if (!push_success) return;
+    push_success = push_task_string(LANGUAGE_LAYOUT_DE, "333333");
+    //if (!push_success) return;
+
+
+    bool pop_succes;
+    inject_task_t tmp_task = {0};
+
+    pop_succes = pop_task(&tmp_task);
+    if (pop_succes) {
+        if (tmp_task.data_len > 0) {
+            NRF_LOG_INFO("task data:");
+            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
+        }
+        free_task(tmp_task);
+    }
+
+    pop_succes = pop_task(&tmp_task);
+    if (pop_succes) {
+        if (tmp_task.data_len > 0) {
+            NRF_LOG_INFO("task data:");
+            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
+        }
+        free_task(tmp_task);
+    }
+
+    pop_succes = pop_task(&tmp_task);
+    if (pop_succes) {
+        if (tmp_task.data_len > 0) {
+            NRF_LOG_INFO("task data:");
+            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
+        }
+        free_task(tmp_task);
+    }
+
+    pop_succes = pop_task(&tmp_task);
+    if (pop_succes) {
+        if (tmp_task.data_len > 0) {
+            NRF_LOG_INFO("task data:");
+            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
+        }
+        free_task(tmp_task);
+    }
+
+    pop_succes = pop_task(&tmp_task);
+    if (pop_succes) {
+        if (tmp_task.data_len > 0) {
+            NRF_LOG_INFO("task data:");
+            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
+        }
+        free_task(tmp_task);
+    }
+
+    pop_succes = pop_task(&tmp_task);
+    if (pop_succes) {
+        if (tmp_task.data_len > 0) {
+            NRF_LOG_INFO("task data:");
+            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
+        }
+        free_task(tmp_task);
+    }
+
+    pop_succes = pop_task(&tmp_task);
+    if (pop_succes) {
+        if (tmp_task.data_len > 0) {
+            NRF_LOG_INFO("task data:");
+            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
+        }
+        free_task(tmp_task);
+    }
+*/
+
 }
 
 static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -296,6 +372,9 @@ static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
         fds_record_delete(&rd);
     }
     fds_gc();
+}
+
+static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -328,18 +407,30 @@ static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 }
 
-static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-}
-
 static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     //let's inject a 5s delay upfront
-    logitacker_injection_delay(5000);
+    //logitacker_injection_delay(5000);
 
     for (int i=1; i<argc;i++) {
         logitacker_injection_string(LANGUAGE_LAYOUT_DE, argv[i]);
         logitacker_injection_string(LANGUAGE_LAYOUT_DE, " ");
     }
+}
+
+static void cmd_inject_delay(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    if (argc > 1) {
+        uint32_t delay_ms;
+        if (sscanf(argv[1], "%lu", &delay_ms) != 1) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid delay, argument has to be unsigned int\r\n");
+        };
+
+        logitacker_injection_delay(delay_ms);
+        return;
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid delay, argument has to be unsigned int\r\n");
 }
 
 static void cmd_inject_press(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -809,6 +900,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
     NRF_CLI_CMD(target, &m_sub_inject_target_addr, "inject given string", cmd_inject_target),
     NRF_CLI_CMD(string,   NULL, "inject given string", cmd_inject_string),
     NRF_CLI_CMD(press,   NULL, "inject key combo given as string", cmd_inject_press),
+    NRF_CLI_CMD(delay,   NULL, "delay injection", cmd_inject_delay),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);

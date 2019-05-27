@@ -1,15 +1,15 @@
 # development
 - adaptive timeout on passive enum (keep alive / set keep alive adoption)
 - more language layouts
-- key `press` method for injection (handling shortcuts)
-- flash storage of device data
+- [done] key `press` method for injection (handling shortcuts)
+- [done] flash storage of device data
 - auto delete devices from list (not spotted for a while / dongle not reachable in active enum)
 - automation: active enum --> passive enum --> discovery (default)
 - abort conditions for passive enum (too many non-Unifying frames, no frames after timeout, enough frames of interesting types received, interesting != keep-alive)
 - [done for keyboard] mirror input reports to HID keyboard/mouse interface
 - pass sniffed frames on HID raw
 - passive enum keyboard reports to string: modifiers have to be added, change logging to use single line
-- cli: auto complete for `devices store load` and `devices store delete` (maybe option to store full dongle)
+- [done] cli: auto complete for `devices store load` and `devices store delete` (maybe option to store full dongle)
 - flash storage automation: optional auto store for
     1) devices with sniffed pairing and encryption capability (chances are low to capture pairing in flight --> must have)
     2) devices which respond to plain keystroke injection during active enum
@@ -19,6 +19,7 @@
 (raw RF addresses require noting down additional info) - this is low prio, as it requires additional relationships for data stored on flash, which means runtime-reference-creation
 and thus brings all nice errors of pointer arithmetics (missing Golang here)
 - account for re-transmits (passive enum, pair sniffing) - **must have for on-stage demos**
+- BSP: proper LED driving and button interaction for various modes
 
 # Analysis
 - capabilities to send in new HID++ messages (maybe re-write device capabilities)
@@ -26,7 +27,7 @@ and thus brings all nice errors of pointer arithmetics (missing Golang here)
 - check if there's a way to use a "sub-shell" in nrf_cli to emulate an interactive shell for the Unifying backdoor
 
 
-# exceprt features / general notes
+# excerpt features / general notes
 - done: UTF8 string parser
 - done: UTF8 string to hid report translator
 - done: hid report to RF frame translator (only plain, encrypted is ToDo)
