@@ -279,88 +279,6 @@ static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 static void cmd_test_b(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
-/*
-    bool push_success;
-
-    push_success = push_task_delay(0x400);
-    if (!push_success) return;
-    push_success = push_task_string(LANGUAGE_LAYOUT_DE, "1111");
-    //if (!push_success) return;
-    push_success = push_task_delay(0x2000);
-    //if (!push_success) return;
-    push_success = push_task_string(LANGUAGE_LAYOUT_DE, "22222");
-    //if (!push_success) return;
-    push_success = push_task_string(LANGUAGE_LAYOUT_DE, "333333");
-    //if (!push_success) return;
-
-
-    bool pop_succes;
-    inject_task_t tmp_task = {0};
-
-    pop_succes = pop_task(&tmp_task);
-    if (pop_succes) {
-        if (tmp_task.data_len > 0) {
-            NRF_LOG_INFO("task data:");
-            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
-        }
-        free_task(tmp_task);
-    }
-
-    pop_succes = pop_task(&tmp_task);
-    if (pop_succes) {
-        if (tmp_task.data_len > 0) {
-            NRF_LOG_INFO("task data:");
-            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
-        }
-        free_task(tmp_task);
-    }
-
-    pop_succes = pop_task(&tmp_task);
-    if (pop_succes) {
-        if (tmp_task.data_len > 0) {
-            NRF_LOG_INFO("task data:");
-            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
-        }
-        free_task(tmp_task);
-    }
-
-    pop_succes = pop_task(&tmp_task);
-    if (pop_succes) {
-        if (tmp_task.data_len > 0) {
-            NRF_LOG_INFO("task data:");
-            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
-        }
-        free_task(tmp_task);
-    }
-
-    pop_succes = pop_task(&tmp_task);
-    if (pop_succes) {
-        if (tmp_task.data_len > 0) {
-            NRF_LOG_INFO("task data:");
-            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
-        }
-        free_task(tmp_task);
-    }
-
-    pop_succes = pop_task(&tmp_task);
-    if (pop_succes) {
-        if (tmp_task.data_len > 0) {
-            NRF_LOG_INFO("task data:");
-            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
-        }
-        free_task(tmp_task);
-    }
-
-    pop_succes = pop_task(&tmp_task);
-    if (pop_succes) {
-        if (tmp_task.data_len > 0) {
-            NRF_LOG_INFO("task data:");
-            NRF_LOG_HEXDUMP_INFO(tmp_task.p_data_u8, tmp_task.data_len);
-        }
-        free_task(tmp_task);
-    }
-*/
-
 }
 
 static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -407,14 +325,39 @@ static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 }
 
+/*
+static void cmd_inject_pause(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    logitacker_injection_start_execution(false);
+}
+*/
+
+static void cmd_inject_execute(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    logitacker_injection_start_execution(true);
+}
+
+static void cmd_inject_clear(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    logitacker_injection_clear();
+}
+
+static void cmd_inject_list(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    logitacker_injection_list_tasks(p_cli);
+}
+
 static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-    //let's inject a 5s delay upfront
-    //logitacker_injection_delay(5000);
+    char press_str[NRF_CLI_CMD_BUFF_SIZE] = {0};
+    int str_buf_remaining = sizeof(press_str)-1; //keep one byte for terminating 0x00
+    for (int i=1; i<argc && str_buf_remaining>0; i++) {
+        if (i>1) strcat(press_str, " ");
+        str_buf_remaining--;
+        int len = strlen(argv[i]);
+        if (len > str_buf_remaining) len = str_buf_remaining;
+        strncat(press_str, argv[i], len);
+        str_buf_remaining -= len;
+    }
 
     for (int i=1; i<argc;i++) {
-        logitacker_injection_string(LANGUAGE_LAYOUT_DE, argv[i]);
-        logitacker_injection_string(LANGUAGE_LAYOUT_DE, " ");
+        logitacker_injection_string(LANGUAGE_LAYOUT_DE, press_str);
     }
 }
 
@@ -651,7 +594,7 @@ static void cmd_devices_store_save(nrf_cli_t const * p_cli, size_t argc, char **
         char tmp_addr_str[16];
         helper_addr_to_hex_str(tmp_addr_str, 5, addr);
         nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Storing device %s to flash\r\n", tmp_addr_str);
-        logitacker_devices_store_device_to_flash(addr);
+        logitacker_devices_store_ram_device_to_flash(addr);
         return;
     }
 }
@@ -763,9 +706,11 @@ static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv)
         }
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\ncurrent options\r\n===============\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discovery : %s\r\n", discover_on_hit_str);
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard pass-through          : %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmouse pass-through             : %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discovery          : %s\r\n", discover_on_hit_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard pass-through                   : %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmouse pass-through                      : %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store plain injectable devices     : %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store devices from sniffed pairing : %s\r\n", g_logitacker_global_config.auto_store_sniffed_pairing_devices ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n======\r\n");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot count                     : %d\r\n", g_logitacker_global_config.stats.boot_count);
 
@@ -898,6 +843,9 @@ NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ra
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 {
     NRF_CLI_CMD(target, &m_sub_inject_target_addr, "inject given string", cmd_inject_target),
+    NRF_CLI_CMD(clear,   NULL, "clear current injection tasks", cmd_inject_clear),
+    NRF_CLI_CMD(execute,   NULL, "execute current script", cmd_inject_execute),
+    NRF_CLI_CMD(list,   NULL, "list current injection script", cmd_inject_list),
     NRF_CLI_CMD(string,   NULL, "inject given string", cmd_inject_string),
     NRF_CLI_CMD(press,   NULL, "inject key combo given as string", cmd_inject_press),
     NRF_CLI_CMD(delay,   NULL, "delay injection", cmd_inject_delay),

@@ -1,3 +1,4 @@
+#include "nrf_cli.h"
 #include "logitacker.h"
 #include "logitacker_bsp.h"
 #include "logitacker_radio.h"
@@ -444,27 +445,51 @@ void pairing_sniff_event_handler_esb(nrf_esb_evt_t *p_event) {
 
                     //retrieve device or add new and update data
                     logitacker_devices_unifying_device_t * p_device = NULL;
-                    logitacker_devices_get_device(&p_device, m_device_pair_info.device_rf_address);
-                    if (p_device == NULL) {
-                        //couldn't fetch device, try to create
-                        logitacker_devices_create_device(&p_device, m_device_pair_info.device_rf_address);
-                    }
+                    //couldn't fetch device, try to create (gets existing one in case it is already defined)
+                    logitacker_devices_create_device(&p_device, m_device_pair_info.device_rf_address);
                     if (p_device == NULL) {
                         NRF_LOG_ERROR("failed adding device entry for pairing sniff result");
                     } else {
-                        // update device caps
+                        // copy pairing info to device data
                         memcpy(p_device->serial, m_device_pair_info.device_serial, 4);
                         memcpy(p_device->device_name, m_device_pair_info.device_name, m_device_pair_info.device_name_len);
                         memcpy(p_device->key, m_device_pair_info.device_key, 16);
                         memcpy(p_device->raw_key_data, m_device_pair_info.device_raw_key_material, 16);
-                        memcpy(p_device->rf_address, m_device_pair_info.device_rf_address, 16);
+                        memcpy(p_device->rf_address, m_device_pair_info.device_rf_address, 5);
                         memcpy(p_device->wpid, m_device_pair_info.device_wpid, 2);
+                        p_device->caps = m_device_pair_info.device_caps;
+                        p_device->report_types = m_device_pair_info.device_report_types;
+
+
                         if (p_device->p_dongle == NULL) {
                             NRF_LOG_ERROR("device doesn't point to dongle");
                         } else {
-                            memcpy(p_device->p_dongle->wpid, m_device_pair_info.dongle_wpid, 2);
+                            logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
+                            memcpy(p_dongle->wpid, m_device_pair_info.dongle_wpid, 2);
+
+                            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
+                            if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x02) p_dongle->is_nordic = true;
+                            if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x08) p_dongle->is_texas_instruments = true;
+
                         }
                         p_device->key_known = m_device_pair_info.key_material_complete;
+
+                        // if auto store is enabled, store to flash
+                        if (g_logitacker_global_config.auto_store_sniffed_pairing_devices) {
+                            //check if already stored
+                            logitacker_devices_unifying_device_t dummy_device;
+                            if (logitacker_flash_get_device(&dummy_device, p_device->rf_address) != NRF_SUCCESS) {
+                                // not existing on flash create it
+                                if (logitacker_devices_store_ram_device_to_flash(p_device->rf_address) == NRF_SUCCESS) {
+                                    NRF_LOG_INFO("device automatically stored to flash");
+                                } else {
+                                    NRF_LOG_WARNING("failed to store device to flash");
+                                }
+                            } else {
+                                NRF_LOG_INFO("device already exists on flash");
+                            }
+                        }
+
                     }
 
                     pairing_sniff_on_success();
@@ -680,6 +705,42 @@ void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout,
     }
 
     logitacker_processor_inject_string(p_processor, language_layout, str);
+}
+
+
+
+void logitacker_injection_clear() {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    logitacker_processor_inject_clear_tasks(p_processor);
+    NRF_LOG_INFO("Injection tasks cleared");
+}
+
+void logitacker_injection_list_tasks(nrf_cli_t const * p_cli) {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    logitacker_processor_inject_list_tasks(p_processor, p_cli);
+
+}
+
+void logitacker_injection_start_execution(bool execute) {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    logitacker_processor_inject_start_execution(p_processor, execute);
+    if (execute) {
+        NRF_LOG_INFO("Injection processing resumed");
+    } else {
+        NRF_LOG_INFO("Injection processing paused");
+    }
 }
 
 void logitacker_injection_delay(uint32_t delay_ms) {

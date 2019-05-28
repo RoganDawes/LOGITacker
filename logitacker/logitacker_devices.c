@@ -6,6 +6,7 @@
 #include "nrf_log.h"
 #include "logitacker_flash.h"
 #include "logitacker_unifying_crypto.h"
+#include "logitacker_options.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -254,7 +255,7 @@ uint32_t logitacker_devices_store_dongle_to_flash(logitacker_devices_unifying_de
     return NRF_SUCCESS;
 }
 
-uint32_t logitacker_devices_store_device_to_flash(logitacker_devices_unifying_device_rf_address_t const rf_addr) {
+uint32_t logitacker_devices_store_ram_device_to_flash(logitacker_devices_unifying_device_rf_address_t const rf_addr) {
     logitacker_devices_unifying_device_t * p_device = NULL;
 
     // check if device exists
@@ -654,7 +655,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
             p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
         }
     } else {
-        NRF_LOG_INFO("... INVALID Logitech CRC");
+        NRF_LOG_DEBUG("... INVALID Logitech CRC");
         //dealing with situation where Logitech CRC is wrong due to RX/TX errors isn't needed, as at this point the ESB CRC was already valid
         if (p_dongle->classification == DONGLE_CLASSIFICATION_UNKNOWN) {
             p_dongle->classification = DONGLE_CLASSIFICATION_IS_NOT_LOGITECH;
@@ -662,6 +663,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
         return NRF_SUCCESS;
     }
 
+    bool autostore = false;
 
     switch (unifying_report_type) {
         case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
@@ -693,6 +695,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
         case UNIFYING_RF_REPORT_PLAIN_KEYBOARD:
             p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
             p_device->vuln_plain_injection = true;
+            if (g_logitacker_global_config.auto_store_plain_injectable) autostore = true;
             break;
         case UNIFYING_RF_REPORT_PLAIN_MOUSE:
             if (len != 10) return NRF_ERROR_INVALID_DATA;
@@ -711,6 +714,23 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
             break;
     }
 
+
+
+    if (autostore) {
+        NRF_LOG_INFO("Try to auto store");
+        //check if already stored
+        logitacker_devices_unifying_device_t dummy_device;
+        if (logitacker_flash_get_device(&dummy_device, p_device->rf_address) != NRF_SUCCESS) {
+            // not existing on flash create it
+            if (logitacker_devices_store_ram_device_to_flash(p_device->rf_address) == NRF_SUCCESS) {
+                NRF_LOG_INFO("device automatically stored to flash");
+            } else {
+                NRF_LOG_WARNING("error storing device to flash automatically");
+            }
+        } else {
+            NRF_LOG_INFO("device exists on flash already and has NOT been overwritten");
+        }
+    }
     return NRF_SUCCESS;
 }
 

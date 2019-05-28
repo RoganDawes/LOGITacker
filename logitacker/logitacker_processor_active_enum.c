@@ -9,6 +9,9 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_ACTIVE_ENUM
 #include "nrf_log.h"
+#include "logitacker_options.h"
+#include "logitacker_flash.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 
@@ -302,7 +305,29 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: devices accepts plain keystroke injection (LED test succeeded)");
                         logitacker_devices_get_device(&p_device, self->current_rf_address);
-                        if (p_device != NULL) p_device->vuln_plain_injection = true;
+                        if (p_device != NULL) {
+                            p_device->vuln_plain_injection = true;
+                            // set proper device capabilities and report types
+                            p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
+                            p_device->caps &= ~LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION;
+                            if (p_device->p_dongle != NULL) {
+                                p_device->p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
+                            }
+
+                            // if auto store is enabled, store to flash
+                            if (g_logitacker_global_config.auto_store_plain_injectable) {
+                                //check if already stored
+                                logitacker_devices_unifying_device_t dummy_device;
+                                if (logitacker_flash_get_device(&dummy_device, p_device->rf_address) != NRF_SUCCESS) {
+                                    // not existing on flash create it
+                                    if (logitacker_devices_store_ram_device_to_flash(p_device->rf_address) == NRF_SUCCESS) {
+                                        NRF_LOG_INFO("device automatically stored to flash");
+                                    }
+                                } else {
+                                    NRF_LOG_INFO("device already exists on flash");
+                                }
+                            }
+                        }
                     } else if (rf_report_type == UNIFYING_RF_REPORT_PAIRING && device_id == PAIRING_REQ_MARKER_BYTE) { //data[0] holds byte used in request
                         //device supports plain injection
                         NRF_LOG_INFO("ATTACK VECTOR: forced pairing seems possible");
@@ -313,7 +338,7 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                             if (p_dongle != NULL) {
                                 // dongle wpid is in response (byte 8,9)
                                 memcpy(p_dongle->wpid, &self->tmp_rx_payload.data[9], 2);
-                                if (p_device->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x02) p_dongle->is_nordic = true;
+                                if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x02) p_dongle->is_nordic = true;
                                 if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x08) p_dongle->is_texas_instruments = true;
                                 NRF_LOG_INFO("Dongle WPID is %.2X%.2X (TI: %s, Nordic: %s)", p_dongle->wpid[0], p_dongle->wpid[1], p_dongle->is_texas_instruments ? "yes" : "no", p_dongle->is_nordic ? "yes" : "no");
                             }

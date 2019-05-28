@@ -1,3 +1,4 @@
+#include "nrf_cli.h"
 #include "logitacker_processor_inject.h"
 
 #include "nrf.h"
@@ -8,7 +9,7 @@
 #include "logitacker_devices.h"
 #include "logitacker_tx_payload_provider.h"
 #include "unifying.h"
-#include "nrf_ringbuf.h"
+#include "ringbuf.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_INJECT
 #include "nrf_log.h"
@@ -21,18 +22,19 @@ NRF_LOG_MODULE_REGISTER();
 #define INJECT_RETRANSMIT_BEFORE_FAIL 10
 #define INJECT_RINGBUF_BYTES (1<<15) //Very large 32KB ring buffer
 
-NRF_RINGBUF_DEF(m_test_ringbuf, INJECT_RINGBUF_BYTES);
+#define INJECT_MAX_TASK_DATA_SIZE 256
+
+RINGBUF_DEF(m_ringbuf, INJECT_RINGBUF_BYTES);
 
 
 typedef enum inject_task_type inject_task_type_t;
 typedef struct inject_task inject_task_t;
 
-uint32_t ringbuf_available();
 bool push_task_delay(uint32_t delay_ms);
 bool push_task_string(logitacker_keyboard_map_lang_t lang, char * str);
 bool push_task(inject_task_t task);
-bool pop_task(inject_task_t * p_task);
-bool free_task(inject_task_t task);
+bool pop_task(inject_task_t * p_task, uint8_t * p_task_data_buf);
+bool peek_task(inject_task_t * p_task, uint8_t * p_task_data_buf);
 bool flush_tasks();
 
 // ToDo: change to initialized -> idle -> working -> idle -> not_initialized (SUCCESS/FAIL states aren't needed, proper events could be fired while processing)
@@ -56,7 +58,8 @@ typedef struct inject_task {
     size_t data_len;
     logitacker_keyboard_map_lang_t lang;
     uint32_t delay_ms;
-    bool finished; // ToDo: not needed, only one task at a time -> covered by inject_state_t
+//    bool finished; // ToDo: not needed, only one task at a time -> covered by inject_state_t
+
 
     union {
         uint8_t* p_data_u8;
@@ -74,7 +77,7 @@ typedef struct {
 
     uint8_t tx_delay_ms;
 
-    bool receiver_in_range;
+//    bool receiver_in_range;
     app_timer_id_t timer_next_action;
 
     inject_state_t state;
@@ -84,7 +87,9 @@ typedef struct {
 
     int retransmit_counter;
 
+    bool execute;
     inject_task_t current_task;
+    uint8_t current_task_data[INJECT_MAX_TASK_DATA_SIZE];
 
     logitacker_devices_unifying_device_t * p_device;
     logitacker_tx_payload_provider_t * p_payload_provider;
@@ -117,9 +122,7 @@ static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN] = {0};
 static logitacker_devices_unifying_device_t tmp_device = {0};
 static bool m_ringbuf_initialized;
 
-uint32_t ringbuf_available() {
-    return m_test_ringbuf.bufsize_mask + 1 - (m_test_ringbuf.p_cb->wr_idx -  m_test_ringbuf.p_cb->rd_idx);
-}
+
 
 bool push_task(inject_task_t task) {
     // push header
@@ -127,14 +130,19 @@ bool push_task(inject_task_t task) {
     size_t len_data = task.data_len;
     size_t len = len_hdr + len_data;
 
-    if (len > ringbuf_available()) {
+    if (len_data > INJECT_MAX_TASK_DATA_SIZE) {
+        NRF_LOG_ERROR("task data exceeds max size (%d of %d maximum allowed)", len_data, INJECT_MAX_TASK_DATA_SIZE);
+        return false;
+    }
+
+    if (len > ringbuf_available_fetch(&m_ringbuf)) {
         NRF_LOG_ERROR("Not enough memory in ring buffer");
         return false;
     }
 
     uint32_t err_res;
 
-    err_res = nrf_ringbuf_cpy_put(&m_test_ringbuf, (uint8_t*) &task, &len_hdr);
+    err_res = ringbuf_push_data(&m_ringbuf, (uint8_t *) &task, &len_hdr);
     if (len_hdr != sizeof(inject_task_t)) {
         NRF_LOG_ERROR("push_task hasn't written full header");
         return false; //this means memory leak, as it can't be read back
@@ -149,16 +157,16 @@ bool push_task(inject_task_t task) {
 
     if (len_data > 0) { //f.e. delay task has no body
         NRF_LOG_DEBUG("ringbuf wr_idx before putting data.");
-        NRF_LOG_HEXDUMP_DEBUG(&m_test_ringbuf.p_cb->wr_idx, 4);
+        NRF_LOG_HEXDUMP_DEBUG(&m_ringbuf.p_cb->wr_idx, 4);
 
-        nrf_ringbuf_cpy_put(&m_test_ringbuf, task.p_data_u8, &len_data);
+        ringbuf_push_data(&m_ringbuf, task.p_data_u8, &len_data);
         if (len_data != task.data_len) {
             NRF_LOG_ERROR("push_task hasn't written full data");
             return false; //this means memory leak, as it can't be read back
         }
 
         NRF_LOG_DEBUG("ringbuf wr_idx after putting data.");
-        NRF_LOG_HEXDUMP_DEBUG(&m_test_ringbuf.p_cb->wr_idx, 4);
+        NRF_LOG_HEXDUMP_DEBUG(&m_ringbuf.p_cb->wr_idx, 4);
 
     }
 
@@ -193,57 +201,45 @@ bool push_task_press(logitacker_keyboard_map_lang_t lang, char * str_combo) {
     return push_task(tmp_task);
 }
 
-bool pop_task(inject_task_t * p_task) {
-    if (ringbuf_available() == INJECT_RINGBUF_BYTES) {
-        NRF_LOG_ERROR("No more elements to pop in ring buffer");
-        goto label_error_flush_ringbuf;
+bool pop_task(inject_task_t * p_task, uint8_t * p_task_data_buf) {
+    VERIFY_PARAM_NOT_NULL(p_task);
+    VERIFY_PARAM_NOT_NULL(p_task_data_buf);
+    if (ringbuf_available_fetch(&m_ringbuf) == INJECT_RINGBUF_BYTES) {
+        NRF_LOG_INFO("No more elements to pop in ring buffer");
+        goto label_error_flush_ringbuf; // reinit buffer to set read/write pointers to beginning
     }
 
     uint32_t err_code;
 
-    size_t read_len = sizeof(inject_task_t);
-
-    // alternate usage of nrf_ringbuf_cpy_get and nrf_ringbuf_get messes up ringbuf.p_cn->tmp_rd_idx
-    // thus always nrf_ringbuf_get is used
-    /*
-    nrf_ringbuf_cpy_get(&m_test_ringbuf, (uint8_t *) p_task, &read_len);
-    if (read_len != sizeof(inject_task_t)) {
-        NRF_LOG_ERROR("pop_task wasn't able to read full header");
-        return false; //this means memory leak, as we can't use the data
+    // get copy of task header
+    size_t read_len_task = sizeof(inject_task_t);
+    err_code = ringbuf_fetch_data(&m_ringbuf, (uint8_t *) p_task, &read_len_task);
+    if (read_len_task != sizeof(inject_task_t)) {
+        NRF_LOG_ERROR("pop_task wasn't able to read full task header");
+        goto label_error_flush_ringbuf; // flush whole buffer and return
     }
-    */
-
-    uint8_t * p_task_hdr_data = NULL;
-    nrf_ringbuf_get(&m_test_ringbuf, &p_task_hdr_data, &read_len, true);
-    if (read_len != sizeof(inject_task_t)) {
-        NRF_LOG_ERROR("pop_task wasn't able to read full header");
-        goto label_error_flush_ringbuf;
-    }
-    memcpy(p_task, p_task_hdr_data, sizeof(inject_task_t));
-    nrf_ringbuf_free(&m_test_ringbuf, sizeof(inject_task_t));
-
-
-    NRF_LOG_DEBUG("Popped task header:");
-    NRF_LOG_HEXDUMP_DEBUG(p_task, sizeof(inject_task_t));
-
-
-    // bugfix: tmp_rd_idx doesn't follow rd_idx if nrf_ringbuf_get and nrf_ring_buf_cpy_get are used alternating
-    //nrf_ringbuf_free(&m_test_ringbuf, 0); // free nothing, but update p_cb->tmp_rd_idx to p_cb->rd_idx
-    //    m_test_ringbuf.p_cb->tmp_rd_idx = m_test_ringbuf.p_cb->rd_idx;
-
-
-
-
-    read_len = p_task->data_len;
-    err_code = nrf_ringbuf_get(&m_test_ringbuf, &(p_task->p_data_u8), &read_len, true); //update data pointer of task to ringbuf region with task data
     if (err_code != NRF_SUCCESS) {
-        NRF_LOG_ERROR("pop_task wasn't able to get a pointer to the body data");
-        goto label_error_flush_ringbuf;
+        NRF_LOG_ERROR("pop_task wasn't able to read task header, error: %d", err_code);
+        goto label_error_flush_ringbuf; // flush whole buffer and return
     }
 
-    if (read_len != p_task->data_len) {
-        NRF_LOG_INFO("wrong data size popped from ringbuf: %d instead of %d", read_len, p_task->data_len);
+    // fix data pointer of popped task, to point to provided data array
+    p_task->p_data_u8 = p_task_data_buf;
+
+    //read back copy of task data
+    size_t read_len_task_data = p_task->data_len;
+    if (p_task->data_len > INJECT_MAX_TASK_DATA_SIZE) {
+        NRF_LOG_ERROR("pop_task: task data exceeds max size (%d of %d maximum allowed)", read_len_task, INJECT_MAX_TASK_DATA_SIZE);
         goto label_error_flush_ringbuf;
+    }
+    err_code = ringbuf_fetch_data(&m_ringbuf, (uint8_t *) p_task_data_buf, &read_len_task_data);
+    if (read_len_task_data != p_task->data_len) {
+        NRF_LOG_ERROR("pop_task wasn't able to read full task data");
+        goto label_error_flush_ringbuf; // flush whole buffer and return
+    }
+    if (err_code != NRF_SUCCESS) {
+        NRF_LOG_ERROR("pop_task wasn't able to read task data, error: %d", err_code);
+        goto label_error_flush_ringbuf; // flush whole buffer and return
     }
 
 
@@ -255,30 +251,90 @@ bool pop_task(inject_task_t * p_task) {
         p_task->type = INJECT_TASK_TYPE_DELAY;
         flush_tasks();
         return false;
+
+
 }
 
+bool peek_task(inject_task_t * p_task, uint8_t * p_task_data_buf) {
+    VERIFY_PARAM_NOT_NULL(p_task);
+    VERIFY_PARAM_NOT_NULL(p_task_data_buf);
+    if (ringbuf_available_peek(&m_ringbuf) == INJECT_RINGBUF_BYTES) {
+        NRF_LOG_INFO("No more elements to peek in ring buffer");
+        goto label_reset_peek; // reinit buffer to set read/write pointers to beginning
+    }
+
+    uint32_t err_code;
+
+    // get copy of task header
+    size_t read_len_task = sizeof(inject_task_t);
+    err_code = ringbuf_peek_data(&m_ringbuf, (uint8_t *) p_task, &read_len_task);
+    if (read_len_task != sizeof(inject_task_t)) {
+        NRF_LOG_ERROR("pop_task wasn't able to read full task header");
+        goto label_reset_peek; // flush whole buffer and return
+    }
+    if (err_code != NRF_SUCCESS) {
+        NRF_LOG_ERROR("pop_task wasn't able to read task header, error: %d", err_code);
+        goto label_reset_peek; // flush whole buffer and return
+    }
+
+    // fix data pointer of popped task, to point to provided data array
+    p_task->p_data_u8 = p_task_data_buf;
+
+    //read back copy of task data
+    size_t read_len_task_data = p_task->data_len;
+    if (p_task->data_len > INJECT_MAX_TASK_DATA_SIZE) {
+        NRF_LOG_ERROR("pop_task: task data exceeds max size (%d of %d maximum allowed)", read_len_task, INJECT_MAX_TASK_DATA_SIZE);
+        goto label_reset_peek;
+    }
+    err_code = ringbuf_peek_data(&m_ringbuf, (uint8_t *) p_task_data_buf, &read_len_task_data);
+    if (read_len_task_data != p_task->data_len) {
+        NRF_LOG_ERROR("pop_task wasn't able to read full task data");
+        goto label_reset_peek; // flush whole buffer and return
+    }
+    if (err_code != NRF_SUCCESS) {
+        NRF_LOG_ERROR("pop_task wasn't able to read task data, error: %d", err_code);
+        goto label_reset_peek; // flush whole buffer and return
+    }
+
+
+    return true;
+
+    label_reset_peek:
+        p_task->data_len = 0;
+        p_task->delay_ms = 0;
+        p_task->type = INJECT_TASK_TYPE_DELAY;
+    ringbuf_peek_rewind(&m_ringbuf);
+        return false;
+
+
+}
+
+
+/*
 bool free_task(inject_task_t task) {
     uint32_t err_res;
     NRF_LOG_DEBUG("Free task, len %d", task.data_len);
 
-    NRF_LOG_DEBUG("ringbuf tmp_rd_idx before free...");
-    NRF_LOG_HEXDUMP_DEBUG(&m_test_ringbuf.p_cb->tmp_rd_idx, 4);
+    NRF_LOG_DEBUG("ringbuf peek_rd_idx before free...");
+    NRF_LOG_HEXDUMP_DEBUG(&m_ringbuf.p_cb->peek_rd_idx, 4);
 
-    err_res = nrf_ringbuf_free(&m_test_ringbuf, task.data_len);
+    err_res = ringbuf_free(&m_ringbuf, task.data_len);
     if (err_res != NRF_SUCCESS) {
         NRF_LOG_INFO("ERROR FREEING RINGBUF %d", err_res)
     } else {
         NRF_LOG_INFO("SUCCESS FREEING RINGBUF %d", err_res)
     }
 
-    NRF_LOG_DEBUG("ringbuf tmp_rd_idx after free...");
-    NRF_LOG_HEXDUMP_DEBUG(&m_test_ringbuf.p_cb->tmp_rd_idx, 4);
+    NRF_LOG_DEBUG("ringbuf peek_rd_idx after free...");
+    NRF_LOG_HEXDUMP_DEBUG(&m_ringbuf.p_cb->peek_rd_idx, 4);
 
     return err_res == NRF_SUCCESS;
 }
+*/
 
 bool flush_tasks() {
-    nrf_ringbuf_init(&m_test_ringbuf);
+    NRF_LOG_WARNING("flushing task buffer");
+    ringbuf_reset(&m_ringbuf);
     return true;
 }
 
@@ -345,7 +401,7 @@ void processor_inject_init_func_(logitacker_processor_inject_ctx_t *self) {
     // prepare test TX payload (first report will be a pairing request)
     self->tmp_tx_payload.noack = false;
     self->state = INJECT_STATE_IDLE;
-    self->current_task.finished = true; // set initial task to finished
+//    self->current_task.finished = true; // set initial task to finished
 
     self->retransmit_counter = 0;
 
@@ -435,22 +491,29 @@ void transfer_state(logitacker_processor_inject_ctx_t *self, inject_state_t new_
             self->state = new_state;
             reset_payload_provider = true;
             run_next_task = true;
+            self->state = new_state; // turn back to idle state
+            self->execute = false; //pause execution
             break;
         case INJECT_STATE_SUCCEEDED:
             // ToDo: callback notify
+            NRF_LOG_INFO("inject task succeeded"); // placeholder for callback
+
+            //transfer state to IDLE
             app_timer_stop(self->timer_next_action);
             self->retransmit_counter = 0;
             reset_payload_provider = true;
             run_next_task = true;
-            self->state = new_state;
+            //self->state = new_state;
+            self->state = INJECT_STATE_IDLE; // turn back to idle state
             break;
         case INJECT_STATE_FAILED:
             // ToDo: callback notify
+            NRF_LOG_INFO("inject task failed"); // placeholder for callback
             app_timer_stop(self->timer_next_action);
             self->retransmit_counter = 0;
             reset_payload_provider = true;
             run_next_task = true;
-            self->state = new_state;
+            self->state = INJECT_STATE_IDLE; // turn back to idle state
             break;
         default:
             self->state = new_state;
@@ -463,9 +526,9 @@ void transfer_state(logitacker_processor_inject_ctx_t *self, inject_state_t new_
 
 
     if (run_next_task) {
-        self->current_task.finished = true;
-        free_task(self->current_task);
-        logitacker_processor_inject_run_next_task(self);
+        //self->current_task.finished = true;
+        //free_task(self->current_task);
+        if (self->execute) logitacker_processor_inject_run_next_task(self);
     }
 }
 
@@ -532,6 +595,7 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
         }
     }
 
+    /*
 
     if (self->state == INJECT_STATE_SUCCEEDED) {
         NRF_LOG_WARNING("Injection succeeded, run next task");
@@ -541,6 +605,7 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
 
         return;
     }
+     */
 
     return;
 }
@@ -611,14 +676,22 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
     }
 
     // pop task
-    if (!self->current_task.finished) {
+//    if (!self->current_task.finished) {
+    if (self->state != INJECT_STATE_IDLE) {
         NRF_LOG_ERROR("current task not finished");
         return;
     }
-    if (!pop_task(&self->current_task)) {
-        NRF_LOG_INFO("No more tasks scheduled");
+    if (!peek_task(&self->current_task, self->current_task_data)) {
+
+        NRF_LOG_INFO("No more tasks scheduled or error fetching next task");
         //self->state = INJECT_STATE_IDLE;
         transfer_state(self, INJECT_STATE_IDLE);
+
+        // reset peek pointer to beginning of task buffer
+        ringbuf_peek_rewind(&m_ringbuf);
+        self->execute = false;
+
+
         //logitacker_enter_mode_discovery();
         return;
     }
@@ -635,7 +708,7 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
             break;
         default:
             NRF_LOG_ERROR("unhandled task type %d, dropped ...", self->current_task.type);
-            self->current_task.finished = true;
+            //self->current_task.finished = true;
             transfer_state(self, INJECT_STATE_FAILED);
             //free_task(self->current_task);
 
@@ -658,7 +731,7 @@ void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inj
     push_task_string(lang, str);
 
     if (self->state == INJECT_STATE_IDLE) {
-        logitacker_processor_inject_run_next_task(self);
+        if (self->execute) logitacker_processor_inject_run_next_task(self);
     }
 }
 
@@ -679,7 +752,7 @@ void logitacker_processor_inject_press(logitacker_processor_t * p_processor_inje
 
 
     if (self->state == INJECT_STATE_IDLE) {
-        logitacker_processor_inject_run_next_task(self);
+        if (self->execute) logitacker_processor_inject_run_next_task(self);
     }
 }
 
@@ -698,14 +771,88 @@ void logitacker_processor_inject_delay(logitacker_processor_t * p_processor_inje
     push_task_delay(delay_ms);
 
     if (self->state == INJECT_STATE_IDLE) {
-        logitacker_processor_inject_run_next_task(self);
+        if (self->execute) logitacker_processor_inject_run_next_task(self);
     }
 
 }
 
+void logitacker_processor_inject_list_tasks(logitacker_processor_t *p_processor_inject, nrf_cli_t const * p_cli) {
+    if (p_processor_inject == NULL) {
+        NRF_LOG_ERROR("logitacker processor is NULL");
+        return;
+    }
+
+    logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
+    if (self == NULL) {
+        NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return;
+    }
+
+    inject_task_t task = {0};
+    uint8_t task_data[INJECT_MAX_TASK_DATA_SIZE];
+    ringbuf_peek_rewind(&m_ringbuf);
+    uint32_t task_num = 1;
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "script start\r\n", task_num);
+    while (peek_task(&task, task_data)) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%04d: inject ", task_num);
+        switch (task.type) {
+            case INJECT_TASK_TYPE_DELAY:
+                nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "delay ");
+                nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%d\r\n", task.delay_ms);
+                break;
+            case INJECT_TASK_TYPE_TYPE_STRING:
+                nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "string ");
+                nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%s\r\n", task_data);
+                break;
+            case INJECT_TASK_TYPE_PRESS_KEYS:
+                nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "press ");
+                nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%s\r\n", task_data);
+                break;
+            default:
+                nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%04d: unknown task type %d\r\n", task_num, task.type);
+                break;
+        }
+        task_num++;
+    }
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "script end\r\n", task_num);
+    ringbuf_peek_rewind(&m_ringbuf);
+}
+
+void logitacker_processor_inject_clear_tasks(logitacker_processor_t *p_processor_inject) {
+    if (p_processor_inject == NULL) {
+        NRF_LOG_ERROR("logitacker processor is NULL");
+        return;
+    }
+
+    logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
+    if (self == NULL) {
+        NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return;
+    }
+
+    ringbuf_reset(&m_ringbuf);
+}
+
+void logitacker_processor_inject_start_execution(logitacker_processor_t *p_processor_inject, bool execute) {
+    if (p_processor_inject == NULL) {
+        NRF_LOG_ERROR("logitacker processor is NULL");
+        return;
+    }
+
+    logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
+    if (self == NULL) {
+        NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return;
+    }
+
+    self->execute = execute;
+    if (self->execute) logitacker_processor_inject_run_next_task(self);
+}
+
 logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, app_timer_id_t timer_next_action) {
     if (!m_ringbuf_initialized) {
-        nrf_ringbuf_init(&m_test_ringbuf);
+        ringbuf_reset(&m_ringbuf);
         m_ringbuf_initialized = true;
     }
 
@@ -716,7 +863,7 @@ logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, 
     //initialize member variables
     memcpy(p_ctx->current_rf_address, target_rf_address, 5);
     p_ctx->timer_next_action = timer_next_action;
-
+    p_ctx->execute = false;
 
     p_ctx->p_device = NULL;
     logitacker_devices_get_device(&p_ctx->p_device, p_ctx->current_rf_address);

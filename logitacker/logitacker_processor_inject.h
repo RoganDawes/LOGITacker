@@ -12,4 +12,9 @@ void logitacker_processor_inject_string(logitacker_processor_t * p_processor_inj
 void logitacker_processor_inject_delay(logitacker_processor_t * p_processor_inject, uint32_t delay_ms);
 void logitacker_processor_inject_press(logitacker_processor_t * p_processor_inject, logitacker_keyboard_map_lang_t lang, char * combo_str);
 
+void logitacker_processor_inject_start_execution(logitacker_processor_t *p_processor_inject, bool execute);
+void logitacker_processor_inject_clear_tasks(logitacker_processor_t *p_processor_inject);
+void logitacker_processor_inject_list_tasks(logitacker_processor_t *p_processor_inject, nrf_cli_t const * p_cli);
+
+
 #endif //LOGITACKER_PROCESSOR_INJECT_H

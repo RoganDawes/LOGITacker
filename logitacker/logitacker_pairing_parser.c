@@ -164,6 +164,8 @@ uint32_t logitacker_pairing_parser_print(logitacker_pairing_info_t * pi) {
     NRF_LOG_INFO("Device report types: 0x%.8x", pi->device_report_types);
     NRF_LOG_INFO("Device usability info: 0x%.2x", pi->device_usability_info);
     NRF_LOG_INFO("Dongle WPID: 0x%.2x%.2x", pi->dongle_wpid[0], pi->dongle_wpid[1]);
+    NRF_LOG_INFO("Device caps: 0x%.2x", pi->device_caps);
+    NRF_LOG_INFO("Device report types: 0x%.8x", pi->device_report_types);
     if (pi->key_material_complete) {
         NRF_LOG_INFO("Device raw key material:")
         NRF_LOG_HEXDUMP_INFO(pi->device_raw_key_material, sizeof(pi->device_raw_key_material));

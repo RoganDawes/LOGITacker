@@ -6,7 +6,8 @@ extern "C" {
 #endif
 
 
-#include <stdint.h>
+#include "stdint.h"
+#include "nrf_cli.h"
 #include "nrf_esb_illegalmod.h"
 #include "logitacker_keyboard_map.h"
 
@@ -72,6 +73,9 @@ void logitacker_enter_mode_injection(uint8_t const *rf_address);
 void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout, char * str);
 void logitacker_injection_delay(uint32_t delay_ms);
 void logitacker_injection_press(logitacker_keyboard_map_lang_t language_layout, char * str);
+void logitacker_injection_start_execution(bool execute);
+void logitacker_injection_clear();
+void logitacker_injection_list_tasks(nrf_cli_t const * p_cli);
 
 #ifdef __cplusplus
 }

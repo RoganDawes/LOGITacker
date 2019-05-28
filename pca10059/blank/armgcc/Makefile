@@ -84,7 +84,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_init.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_shared.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_rng.c \
-  $(SDK_ROOT)/components/libraries/ringbuf/nrf_ringbuf.c \
   $(PROJ_DIR)/helper.c \
   $(PROJ_DIR)/unifying.c \
   $(PROJ_DIR)/timestamp.c \
@@ -92,6 +91,7 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
+  $(PROJ_DIR)/ringbuf/ringbuf.c \
   $(PROJ_DIR)/logitacker/logitacker_flash.c \
   $(PROJ_DIR)/logitacker/logitacker_cli.c \
   $(PROJ_DIR)/logitacker/logitacker_options.c \
@@ -136,6 +136,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/kbd \
   $(SDK_ROOT)/components/libraries/balloc \
   $(PROJ_DIR)/esb_illegalmod \
+  $(PROJ_DIR)/ringbuf \
   $(PROJ_DIR)/logitacker \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/components/libraries/usbd/class/hid \
