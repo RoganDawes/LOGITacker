@@ -15,6 +15,7 @@ void logitacker_processor_inject_press(logitacker_processor_t * p_processor_inje
 void logitacker_processor_inject_start_execution(logitacker_processor_t *p_processor_inject, bool execute);
 void logitacker_processor_inject_clear_tasks(logitacker_processor_t *p_processor_inject);
 void logitacker_processor_inject_list_tasks(logitacker_processor_t *p_processor_inject, nrf_cli_t const * p_cli);
+void logitacker_processor_inject_remove_last_task(logitacker_processor_t *p_processor_inject);
 
 
 #endif //LOGITACKER_PROCESSOR_INJECT_H

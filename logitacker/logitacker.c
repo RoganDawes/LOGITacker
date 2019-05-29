@@ -251,6 +251,16 @@ void logitacker_injection_clear() {
     NRF_LOG_INFO("Injection tasks cleared");
 }
 
+void logitacker_injection_remove_last_task() {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    logitacker_processor_inject_remove_last_task(p_processor);
+    NRF_LOG_INFO("Injection removed last task");
+}
+
 void logitacker_injection_list_tasks(nrf_cli_t const * p_cli) {
     if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");

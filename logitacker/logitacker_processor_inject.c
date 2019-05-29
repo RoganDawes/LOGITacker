@@ -58,14 +58,19 @@ typedef struct inject_task {
     size_t data_len;
     logitacker_keyboard_map_lang_t lang;
     uint32_t delay_ms;
-//    bool finished; // ToDo: not needed, only one task at a time -> covered by inject_state_t
-
 
     union {
         uint8_t* p_data_u8;
         char* p_data_c;
     };
 } inject_task_t;
+
+typedef struct {
+    char task_set_name[64];
+    uint16_t task_set_storage_record_id;
+    uint16_t task_set_storage_file_id;
+
+} logitacker_inject_script_meta_t;
 
 typedef struct {
 //    logitacker_mainstate_t * p_logitacker_mainstate;
@@ -77,22 +82,20 @@ typedef struct {
 
     uint8_t tx_delay_ms;
 
-//    bool receiver_in_range;
     app_timer_id_t timer_next_action;
-
     inject_state_t state;
-
     nrf_esb_payload_t tmp_tx_payload;
-//    nrf_esb_payload_t tmp_rx_payload;
 
     int retransmit_counter;
 
-    bool execute;
-    inject_task_t current_task;
-    uint8_t current_task_data[INJECT_MAX_TASK_DATA_SIZE];
+    bool execute; //indicates if new tasks are executed immediately (true) or enqueued (false)
+    inject_task_t current_task; //current task from queue (header data)
+    uint8_t current_task_data[INJECT_MAX_TASK_DATA_SIZE]; //current task from queue (content)
 
     logitacker_devices_unifying_device_t * p_device;
-    logitacker_tx_payload_provider_t * p_payload_provider;
+    logitacker_tx_payload_provider_t * p_payload_provider; // depends on current task, provides TX payloads, till task has finished
+
+    logitacker_inject_script_meta_t script_meta;
 } logitacker_processor_inject_ctx_t;
 
 
@@ -439,7 +442,7 @@ void processor_inject_deinit_func_(logitacker_processor_inject_ctx_t *self) {
     self->state = INJECT_STATE_NOT_INITIALIZED;
     self->retransmit_counter = 0;
 
-    flush_tasks();
+    //flush_tasks(); //we keep the tasks
     nrf_esb_enable_all_channel_tx_failover(false); // disable all channel failover
 }
 
@@ -816,6 +819,50 @@ void logitacker_processor_inject_list_tasks(logitacker_processor_t *p_processor_
         task_num++;
     }
     nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "script end\r\n", task_num);
+    ringbuf_peek_rewind(&m_ringbuf);
+}
+
+void logitacker_processor_inject_remove_last_task(logitacker_processor_t *p_processor_inject) {
+    if (p_processor_inject == NULL) {
+        NRF_LOG_ERROR("logitacker processor is NULL");
+        return;
+    }
+
+    logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
+    if (self == NULL) {
+        NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return;
+    }
+
+    if (ringbuf_available_fetch(&m_ringbuf) == 0) {
+        // ringbuf is empty
+        NRF_LOG_INFO("no task to remove left");
+        return;
+    }
+
+    inject_task_t task = {0};
+    uint8_t task_data[INJECT_MAX_TASK_DATA_SIZE];
+    ringbuf_peek_rewind(&m_ringbuf);
+
+
+    uint32_t old_read_index = m_ringbuf.p_cb->peek_rd_idx;
+    bool not_last_task = true;
+    while (not_last_task) {
+        uint32_t last_rd_idx = old_read_index;
+        old_read_index = m_ringbuf.p_cb->peek_rd_idx;
+        not_last_task = peek_task(&task, task_data);
+        if (!not_last_task) {
+            old_read_index = last_rd_idx;
+            not_last_task = false; //if no more data left to read, the task of this iteration was the last one
+        }
+    }
+
+    //old_read_index points to buffer pos before last task, update write index
+    char tmp_str_idx[50];
+    sprintf(tmp_str_idx, "Set write index %ld to %ld", m_ringbuf.p_cb->wr_idx, old_read_index);
+    NRF_LOG_INFO("%s", nrf_log_push(tmp_str_idx));
+
+    m_ringbuf.p_cb->wr_idx = old_read_index;
     ringbuf_peek_rewind(&m_ringbuf);
 }
 

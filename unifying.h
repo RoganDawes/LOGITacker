@@ -117,31 +117,15 @@ typedef void (* unifying_event_handler_t)(unifying_evt_t const * p_event);
 typedef void (* unifying_replay_ack_payload_handler_t) (unifying_rf_record_set_t *p_rs, nrf_esb_payload_t const *p_ack_payload);
 
 void unifying_init(unifying_event_handler_t event_handler);
-uint32_t restoreDeviceInfoFromFlash(uint16_t deviceRecordIndex, device_info_t *deviceInfo);
-uint32_t restoreDeviceWhitenedReportsFromFlash(uint16_t deviceRecordIndex, whitened_replay_frames_t *reports);
-uint32_t updateDeviceInfoOnFlash(uint16_t deviceRecordIndex, device_info_t *deviceInfo);
-uint32_t updateDeviceWhitenedReportsOnFlash(uint16_t deviceRecordIndex, whitened_replay_frames_t *reports);
-//bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen); 
 bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen);
 bool unifying_payload_validate_checksum(uint8_t * p_array, uint8_t paylen);
 void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType, bool *p_outHasKeepAliveSet);
 void unifying_frame_classify_log(nrf_esb_payload_t frame);
 uint32_t unifying_extract_counter_from_encrypted_keyboard_frame(nrf_esb_payload_t frame, uint32_t *p_counter);
-/*
-unifying_replay_records
-
-replay_realtime:        if enabled frames are played back with recording speed and gaps filled with keep alives (every 8ms)
-                        if disabled frames are played back with 8ms interval
-keep_alives_to_insert   if replay_realtime is disabled, this number of 8ms keep-alives is inserted after each frame (helps
-                        to correlate received ack payloads to replayed frames)
-*/
 void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert);
-bool unifying_record_rf_frame(nrf_esb_payload_t frame);
 void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num);
 bool unifying_replay_records_LED_bruteforce_done(uint8_t pipe_num);
 
-// returns true if the given esb event was consumed by unifying module
-bool unifying_process_esb_event(nrf_esb_evt_t *p_event);
 
 
 #endif

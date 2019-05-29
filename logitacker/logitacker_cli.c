@@ -293,6 +293,7 @@ static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    nrf_cli_help_print(p_cli, NULL, 0);
 }
 
 static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -339,6 +340,10 @@ static void cmd_inject_clear(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     logitacker_injection_clear();
 }
 
+static void cmd_inject_undo(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    logitacker_injection_remove_last_task();
+}
+
 static void cmd_inject_list(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     logitacker_injection_list_tasks(p_cli);
 }
@@ -356,9 +361,7 @@ static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
         str_buf_remaining -= len;
     }
 
-    for (int i=1; i<argc;i++) {
-        logitacker_injection_string(LANGUAGE_LAYOUT_DE, press_str);
-    }
+    logitacker_injection_string(LANGUAGE_LAYOUT_DE, press_str);
 }
 
 static void cmd_inject_delay(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -885,13 +888,14 @@ NRF_CLI_CMD_REGISTER(pairing, &m_sub_pairing, "discover", cmd_pairing);
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ram);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 {
-    NRF_CLI_CMD(target, &m_sub_inject_target_addr, "inject given string", cmd_inject_target),
-    NRF_CLI_CMD(clear,   NULL, "clear current injection tasks", cmd_inject_clear),
-    NRF_CLI_CMD(execute,   NULL, "execute current script", cmd_inject_execute),
+    NRF_CLI_CMD(target, &m_sub_inject_target_addr, "set injection target", cmd_inject_target),
+    NRF_CLI_CMD(clear,   NULL, "clear current script (injection tasks)", cmd_inject_clear),
+    NRF_CLI_CMD(undo,   NULL, "delete last command from script (last injection task)", cmd_inject_undo),
+    NRF_CLI_CMD(execute,   NULL, "run current script against injection target", cmd_inject_execute),
     NRF_CLI_CMD(list,   NULL, "list current injection script", cmd_inject_list),
-    NRF_CLI_CMD(string,   NULL, "inject given string", cmd_inject_string),
-    NRF_CLI_CMD(press,   NULL, "inject key combo given as string", cmd_inject_press),
-    NRF_CLI_CMD(delay,   NULL, "delay injection", cmd_inject_delay),
+    NRF_CLI_CMD(string,   NULL, "add task to script - inject given string", cmd_inject_string),
+    NRF_CLI_CMD(press,   NULL, "add task to script - inject given key combo", cmd_inject_press),
+    NRF_CLI_CMD(delay,   NULL, "add task to script - delay injection", cmd_inject_delay),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);
