@@ -6,11 +6,11 @@
 #include "string.h"
 #include "logitacker_devices.h"
 #include "unifying.h"
+#include "logitacker_options.h"
+#include "logitacker_flash.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_ACTIVE_ENUM
 #include "nrf_log.h"
-#include "logitacker_options.h"
-#include "logitacker_flash.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -52,7 +52,7 @@ typedef enum {
 
 
 typedef struct {
-    logitacker_mainstate_t * p_logitacker_mainstate;
+//    logitacker_mainstate_t * p_logitacker_mainstate;
 
     uint8_t inner_loop_count; // how many successfull transmissions to RF address of current prefix
     uint8_t led_count;
@@ -131,7 +131,7 @@ void processor_active_enum_init_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_active_enum_init_func_(logitacker_processor_active_enum_ctx_t *self) {
-    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION;
+//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION;
     self->tx_delay_ms = ACTIVE_ENUM_TX_DELAY_MS;
 
     //helper_addr_to_base_and_prefix(m_state_local.substate_active_enumeration.base_addr, &m_state_local.substate_active_enumeration.known_prefix, rf_address, LOGITACKER_DEVICE_ADDR_LEN);
@@ -166,7 +166,7 @@ void processor_active_enum_init_func_(logitacker_processor_active_enum_ctx_t *se
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
     nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
     nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
-    nrf_esb_set_retransmit_count(1);
+    nrf_esb_set_retransmit_count(2);
     nrf_esb_set_retransmit_delay(250);
     nrf_esb_set_tx_power(NRF_ESB_TX_POWER_8DBM);
 
@@ -181,7 +181,7 @@ void processor_active_enum_deinit_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_active_enum_deinit_func_(logitacker_processor_active_enum_ctx_t *self) {
-    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
+//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
 
     NRF_LOG_INFO("DEINIT active enumeration for address %s", addr_str_buff);
 
@@ -251,9 +251,11 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                 goto ACTIVE_ENUM_FINISHED;
             }
 
-            if (self->next_prefix == 0x01) { // note next prefix wasn't update,yet - thus it represents the prefix for which TX failed
+            if (self->current_rf_address[4] == 0x00) { // note next prefix wasn't update,yet - thus it represents the prefix for which TX failed
                 //if prefix 0x00 isn't reachable, it is unlikely that this is a Logitech dongle, thus we remove the device from the list and abort enumeration
-                NRF_LOG_INFO("Address prefix ox00 not reachable, either no Unifying device or dongle not in range ... stop neighbor discovery");
+                NRF_LOG_INFO("Address prefix 0x00 not reachable, either no Unifying device or dongle not in range");
+//                NRF_LOG_INFO("Address prefix 0x00 not reachable, either no Unifying device or dongle not in range ... stop neighbor discovery");
+/*
                 logitacker_devices_unifying_dongle_t *p_dongle = NULL;
                 logitacker_devices_get_dongle_by_device_addr(&p_dongle, self->current_rf_address);
                 if (p_dongle != NULL) {
@@ -264,7 +266,7 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                     goto ACTIVE_ENUM_FINISHED;
                     //p_dongle->is_logitech = false;
                 }
-
+*/
             }
 
             // continue with next prefix, return if first prefix has been reached again

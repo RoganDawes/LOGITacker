@@ -2560,7 +2560,7 @@
 
 // <o> NRF_CLI_CMD_BUFF_SIZE - Maximum buffer size for a single command. 
 #ifndef NRF_CLI_CMD_BUFF_SIZE
-#define NRF_CLI_CMD_BUFF_SIZE 768
+#define NRF_CLI_CMD_BUFF_SIZE 300
 #endif
 
 // <q> NRF_CLI_ECHO_STATUS  - CLI echo status. If set, echo is ON.
@@ -2586,7 +2586,7 @@
 
 // <o> NRF_CLI_PRINTF_BUFF_SIZE - Maximum print buffer size. 
 #ifndef NRF_CLI_PRINTF_BUFF_SIZE
-#define NRF_CLI_PRINTF_BUFF_SIZE 256
+#define NRF_CLI_PRINTF_BUFF_SIZE 1024
 #endif
 
 // <e> NRF_CLI_HISTORY_ENABLED - Enable CLI history mode.

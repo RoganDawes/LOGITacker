@@ -12,6 +12,7 @@ typedef struct {
     bool pass_through_keyboard;
     bool pass_through_mouse;
     logitacker_discovery_on_new_address_t discovery_on_new_address_action; //not only state, persistent config
+    logitacker_pairing_sniff_on_success_t pairing_sniff_on_success_action; //not only state, persistent config
 
     bool auto_store_plain_injectable;
     bool auto_store_sniffed_pairing_devices;
@@ -21,6 +22,7 @@ typedef struct {
 
 const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING,
+    .pairing_sniff_on_success_action = LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION,
     .pass_through_mouse = false,
     .pass_through_keyboard = false,
     .auto_store_sniffed_pairing_devices = true,

@@ -405,10 +405,9 @@ static void cmd_inject_press(nrf_cli_t const * p_cli, size_t argc, char **argv) 
     logitacker_injection_press(LANGUAGE_LAYOUT_DE, press_str);
 }
 
-
+/*
 static void cmd_discover_onhit(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-        /* Extra defined dummy option */
     static const nrf_cli_getopt_option_t opt[] = {
         NRF_CLI_OPT("continue","c", "stay in discovery mode when RF address found"),
         NRF_CLI_OPT("passive_enum", "p","start passive enumeration when RF address found"),
@@ -445,6 +444,26 @@ static void cmd_discover_onhit(nrf_cli_t const * p_cli, size_t argc, char **argv
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "No mode change\r\n");
     }
 
+}
+*/
+static void cmd_discover_onhit_activeenum(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start active enumeration of new RF address\r\n");
+    return;
+}
+
+static void cmd_discover_onhit_passiveenum(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start passive enumeration of new RF address\r\n");
+    return;
+}
+
+static void cmd_discover_onhit_continue(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: continue\r\n");
 }
 
 static void cmd_pairing_sniff(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -705,8 +724,26 @@ static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv)
                 break;
         }
 
+        char * pair_sniff_success_action_str = "unknown";
+
+        switch (g_logitacker_global_config.pairing_sniff_on_success_action) {
+            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_CONTINUE:
+                pair_sniff_success_action_str = "continue sniff pairing";
+                break;
+            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION:
+                pair_sniff_success_action_str = "start active enumeration after successfully sniffed pairing";
+                break;
+            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION:
+                pair_sniff_success_action_str = "start passive enumeration after successfully sniffed pairing";
+                break;
+            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY:
+                pair_sniff_success_action_str = "enter device discovery mode after successfully sniffed pairing";
+                break;
+        }
+
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\ncurrent options\r\n===============\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discovery          : %s\r\n", discover_on_hit_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after sniffed pairing            : %s\r\n", pair_sniff_success_action_str);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard pass-through                   : %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmouse pass-through                      : %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store plain injectable devices     : %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
@@ -821,10 +858,16 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
 };
 NRF_CLI_CMD_REGISTER(options, &m_sub_options, "options", cmd_options);
 
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover_onhit)
+{
+    NRF_CLI_CMD(continue,   NULL, "stay in discovery mode.", cmd_discover_onhit_continue),
+    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_discover_onhit_activeenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_discover_onhit_passiveenum),
+    NRF_CLI_SUBCMD_SET_END
+};NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)
 {
     NRF_CLI_CMD(run,   NULL, "Enter discovery mode.", cmd_discover_run),
-    NRF_CLI_CMD(onhit, NULL, "Set behavior on discovered address.", cmd_discover_onhit),
+    NRF_CLI_CMD(onhit, &m_sub_discover_onhit, "action on discovered address.", NULL),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(discover, &m_sub_discover, "discover", cmd_discover);

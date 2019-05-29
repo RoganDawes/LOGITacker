@@ -68,7 +68,7 @@ typedef struct inject_task {
 } inject_task_t;
 
 typedef struct {
-    logitacker_mainstate_t * p_logitacker_mainstate;
+//    logitacker_mainstate_t * p_logitacker_mainstate;
 
     uint8_t current_rf_address[5];
 
@@ -375,7 +375,7 @@ void processor_inject_bsp_handler_func_(logitacker_processor_inject_ctx_t *self,
 
 
 void processor_inject_init_func_(logitacker_processor_inject_ctx_t *self) {
-    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_INJECT;
+//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_INJECT;
     self->tx_delay_ms = INJECT_TX_DELAY_MS;
 
     helper_addr_to_base_and_prefix(self->base_addr, &self->prefix, self->current_rf_address, LOGITACKER_DEVICE_ADDR_LEN);
@@ -415,7 +415,7 @@ void processor_inject_init_func_(logitacker_processor_inject_ctx_t *self) {
 }
 
 void processor_inject_deinit_func_(logitacker_processor_inject_ctx_t *self) {
-    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
+//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
 
     NRF_LOG_INFO("Stop injection mode for address %s", addr_str_buff);
 

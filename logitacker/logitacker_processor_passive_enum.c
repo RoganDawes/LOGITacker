@@ -18,7 +18,7 @@ NRF_LOG_MODULE_REGISTER();
 
 
 typedef struct {
-    logitacker_mainstate_t * p_logitacker_mainstate;
+    //logitacker_mainstate_t * p_logitacker_mainstate;
     uint8_t current_rf_address[5];
 
     uint8_t base_addr[4];
@@ -52,8 +52,8 @@ void processor_passive_enum_bsp_handler_func_(logitacker_processor_passive_enum_
 
 void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self);
 
-logitacker_processor_t * contruct_processor_passive_enum_instance(logitacker_processor_passive_enum_ctx_t *const active_enum_ctx) {
-    m_processor.p_ctx = active_enum_ctx;
+logitacker_processor_t * contruct_processor_passive_enum_instance(logitacker_processor_passive_enum_ctx_t *const passive_enum_ctx) {
+    m_processor.p_ctx = passive_enum_ctx;
 
     m_processor.p_init_func = processor_passive_enum_init_func;
     m_processor.p_deinit_func = processor_passive_enum_deinit_func;
@@ -79,7 +79,7 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
 
-    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_PASSIVE_ENUMERATION;
+//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_PASSIVE_ENUMERATION;
 
     //reset device state
     memset(self->devices, 0, sizeof(self->devices));
@@ -161,7 +161,7 @@ void processor_passive_enum_deinit_func_(logitacker_processor_passive_enum_ctx_t
     radio_stop_channel_hopping(); // disable channel hopping
     nrf_esb_stop_rx(); //stop rx in case running
 
-    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
+//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
 
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
 }

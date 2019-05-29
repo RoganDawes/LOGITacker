@@ -97,6 +97,8 @@ SRC_FILES += \
   $(PROJ_DIR)/logitacker/logitacker_options.c \
   $(PROJ_DIR)/logitacker/logitacker_usb.c \
   $(PROJ_DIR)/logitacker/logitacker_processor.c \
+  $(PROJ_DIR)/logitacker/logitacker_processor_discover.c \
+  $(PROJ_DIR)/logitacker/logitacker_processor_pair_sniff.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_active_enum.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_passive_enum.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_pair_device.c \
