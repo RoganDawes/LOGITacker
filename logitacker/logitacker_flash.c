@@ -3,9 +3,11 @@
 #include "logitacker_flash.h"
 #include "sdk_common.h"
 #include "fds.h"
+#include "logitacker_processor_inject.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_FLASH
 #include "nrf_log.h"
+
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -62,6 +64,12 @@ uint32_t logitacker_flash_init() {
     uint32_t ret = fds_register(fds_callback);
     if (ret != NRF_SUCCESS) {
         NRF_LOG_ERROR("failed to initialize flash-storage, event handler registration failed: %d", ret);
+        return ret;
+    }
+
+    ret = fds_register(logitacker_processor_inject_fds_event_handler);
+    if (ret != NRF_SUCCESS) {
+        NRF_LOG_ERROR("failed to register FDS event handler for script processor: %d", ret);
         return ret;
     }
 

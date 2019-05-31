@@ -1,3 +1,4 @@
+#include <libraries/fds/fds.h>
 #include "nrf_cli.h"
 #include "logitacker_processor_inject.h"
 
@@ -10,11 +11,13 @@
 #include "logitacker_tx_payload_provider.h"
 #include "unifying.h"
 #include "ringbuf.h"
+#include "fds.h"
+#include "logitacker_tx_pay_provider_string_to_keys.h"
+#include "logitacker_tx_payload_provider_press_to_keys.h"
+#include "logitacker_flash.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_INJECT
 #include "nrf_log.h"
-#include "logitacker_tx_pay_provider_string_to_keys.h"
-#include "logitacker_tx_payload_provider_press_to_keys.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -44,6 +47,13 @@ typedef enum {
     INJECT_STATE_SUCCEEDED,
     INJECT_STATE_FAILED,
     INJECT_STATE_NOT_INITIALIZED,
+    INJECT_STATE_FDS_WRITE_RUNNING,
+    INJECT_STATE_FDS_DELETE_RUNNING,
+    INJECT_STATE_FDS_WRITE_FAILED,
+    INJECT_STATE_FDS_WRITE_SUCCEEDED,
+    INJECT_STATE_FDS_READ_RUNNING,
+    INJECT_STATE_FDS_READ_FAILED,
+    INJECT_STATE_FDS_READ_SUCCEEDED,
 } inject_state_t;
 
 
@@ -125,6 +135,31 @@ static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN] = {0};
 static logitacker_devices_unifying_device_t tmp_device = {0};
 static bool m_ringbuf_initialized;
 
+/* start of FDS script storage relevant data */
+
+#define SCRIPT_NAME_CHAR_COUNT_MAX 32
+
+typedef struct stored_script_fds_info {
+    char script_name[SCRIPT_NAME_CHAR_COUNT_MAX];
+    uint16_t script_tasks_record_id;
+    uint16_t script_tasks_file_id;
+} stored_script_fds_info_t;
+
+typedef enum {
+    FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER,
+    FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_DATA,
+    FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_SCRIPT_INFO,
+} fds_op_write_script_sub_state_t;
+
+
+static stored_script_fds_info_t m_current_fds_op_fds_script_info;
+static inject_task_t m_current_fds_op_task = {0};
+static uint8_t m_current_fds_op_task_data[INJECT_MAX_TASK_DATA_SIZE];
+static fds_record_t m_current_fds_op_record;
+//static bool m_current_fds_op_write_task_sub_op_header_write_task_header; // storing tasks to flash involves two steps per task: 1) storing task (header), 2) storing task data (array of variable size); this boolean keeps track of current storage step
+static logitacker_processor_inject_ctx_t *m_current_fds_op_proc_inj_ctx;
+static fds_op_write_script_sub_state_t m_current_fds_op_write_script_sub_state;
+/* end of FDS script storage relevant data */
 
 
 bool push_task(inject_task_t task) {
@@ -517,6 +552,26 @@ void transfer_state(logitacker_processor_inject_ctx_t *self, inject_state_t new_
             reset_payload_provider = true;
             run_next_task = true;
             self->state = INJECT_STATE_IDLE; // turn back to idle state
+            break;
+        case INJECT_STATE_FDS_WRITE_FAILED:
+            NRF_LOG_INFO("FDS_WRITE_FAILED");
+            // ToDo: callback notify
+            self->state = INJECT_STATE_IDLE;
+            break;
+        case INJECT_STATE_FDS_WRITE_SUCCEEDED:
+            NRF_LOG_INFO("FDS_WRITE_SUCCEEDED");
+            // ToDo: callback notify
+            self->state = INJECT_STATE_IDLE;
+            break;
+        case INJECT_STATE_FDS_READ_FAILED:
+            NRF_LOG_INFO("FDS_READ_FAILED");
+            // ToDo: callback notify
+            self->state = INJECT_STATE_IDLE;
+            break;
+        case INJECT_STATE_FDS_READ_SUCCEEDED:
+            NRF_LOG_INFO("FDS_READ_SUCCEEDED");
+            // ToDo: callback notify
+            self->state = INJECT_STATE_IDLE;
             break;
         default:
             self->state = new_state;
@@ -923,4 +978,344 @@ logitacker_processor_t * new_processor_inject(uint8_t const *target_rf_address, 
 
 
     return contruct_processor_inject_instance(&m_static_inject_ctx);
+}
+
+
+
+
+/*
+ * SCRIPT FLASH STORAGE
+ * - a script consists of several tasks and the respective task data
+ * - each stored script is describe by a stored_script_fds_info_ struct (script_name, FDS_FILE_ID of tasks / tasks data, FDS_RECORD_ID of tasks/tasks data)
+ *
+ *
+ */
+
+
+void logitacker_processor_inject_fds_event_handler(fds_evt_t const * p_evt) {
+    if (m_current_fds_op_proc_inj_ctx->state == INJECT_STATE_IDLE) {
+        NRF_LOG_INFO("FDS event handler for scripting: IDLE ... ignoring event");
+        return;
+    }
+
+
+    if (m_current_fds_op_proc_inj_ctx->state == INJECT_STATE_FDS_WRITE_RUNNING && p_evt->id == FDS_EVT_WRITE) {
+        NRF_LOG_INFO("FDS_EVENT_WRITE");
+        if (p_evt->result == FDS_SUCCESS)
+        {
+            switch (m_current_fds_op_write_script_sub_state) {
+                case FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER:
+                {
+                    NRF_LOG_INFO("Task header written successfully, writing next task data ...")
+                    // start  writing task data
+
+                    m_current_fds_op_write_script_sub_state = FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_DATA; //indicate that next write operation contained task data
+                    m_current_fds_op_record.file_id = m_current_fds_op_fds_script_info.script_tasks_file_id;
+                    m_current_fds_op_record.key = m_current_fds_op_fds_script_info.script_tasks_record_id;
+                    m_current_fds_op_record.data.length_words = (m_current_fds_op_task.data_len + 3) / 4; // this will write one word, even if task data length is zero (tasks of type delay)
+                    m_current_fds_op_record.data.p_data = &m_current_fds_op_task_data;
+                    if (fds_record_write(NULL, &m_current_fds_op_record) != NRF_SUCCESS) {
+                        NRF_LOG_ERROR("failed to write task for script storage")
+                        transfer_state(m_current_fds_op_proc_inj_ctx, INJECT_STATE_FDS_WRITE_FAILED);
+                        return;
+                    }
+                    break;
+                }
+                case FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_DATA:
+                {
+                    NRF_LOG_INFO("Task data written successfully, writing next task header ...");
+                    // if here, next step would be to write the next task header, thus we try to fetch the next task
+                    // load first task to tmp vars
+                    if (!peek_task(&m_current_fds_op_task, m_current_fds_op_task_data)) {
+                        // script content written successfully, go on with script info
+
+                        NRF_LOG_ERROR("No more tasks left to store, writing script info ...");
+                        m_current_fds_op_write_script_sub_state = FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_SCRIPT_INFO;
+                        m_current_fds_op_record.file_id = LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO;
+                        m_current_fds_op_record.key = LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO;
+                        m_current_fds_op_record.data.length_words = (sizeof(stored_script_fds_info_t) + 3) / 4; // this will write one word, even if task data length is zero (tasks of type delay)
+                        m_current_fds_op_record.data.p_data = &m_current_fds_op_fds_script_info;
+                        if (fds_record_write(NULL, &m_current_fds_op_record) != NRF_SUCCESS) {
+                            NRF_LOG_ERROR("failed to write script info for script storage")
+                            transfer_state(m_current_fds_op_proc_inj_ctx, INJECT_STATE_FDS_WRITE_FAILED);
+                            return;
+                        }
+                        return;
+                    }
+
+                    // initiate storage of next task header
+                    m_current_fds_op_write_script_sub_state = FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER;
+                    m_current_fds_op_record.file_id = m_current_fds_op_fds_script_info.script_tasks_file_id;
+                    m_current_fds_op_record.key = m_current_fds_op_fds_script_info.script_tasks_record_id;
+                    m_current_fds_op_record.data.length_words = (sizeof(inject_task_t) + 3) / 4;
+                    m_current_fds_op_record.data.p_data = &m_current_fds_op_task;
+                    if (fds_record_write(NULL, &m_current_fds_op_record) != NRF_SUCCESS) {
+                        NRF_LOG_ERROR("failed to write task header for script storage")
+                        transfer_state(m_current_fds_op_proc_inj_ctx, INJECT_STATE_FDS_WRITE_FAILED);
+                        return;
+                    }
+                    break;
+                }
+                case FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_SCRIPT_INFO:
+                {
+                    NRF_LOG_INFO("Script successfully written to flash ...");
+                    transfer_state(m_current_fds_op_proc_inj_ctx, INJECT_STATE_FDS_WRITE_SUCCEEDED);
+                    return;
+                }
+            }
+
+        } else {
+            // script storage failed
+            NRF_LOG_ERROR("failed to store script to flash, FDS error result: %d", p_evt->result);
+            transfer_state(m_current_fds_op_proc_inj_ctx, INJECT_STATE_FDS_WRITE_FAILED);
+            return;
+
+        }
+    }
+
+    /*
+    // runs in thread mode
+    //helper_log_priority("fds_evt_handler");
+    switch (p_evt->id)
+    {
+        case FDS_EVT_WRITE:
+        {
+
+            NRF_LOG_INFO("FDS_EVENT_WRITE");
+            if (p_evt->result == FDS_SUCCESS)
+            {
+                NRF_LOG_INFO("Record ID:\t0x%04x",  p_evt->write.record_id);
+                NRF_LOG_INFO("File ID:\t0x%04x",    p_evt->write.file_id);
+                NRF_LOG_INFO("Record key:\t0x%04x", p_evt->write.record_key);
+            }
+        } break;
+
+        case FDS_EVT_DEL_RECORD:
+        {
+            NRF_LOG_INFO("FDS_EVENT_DEL_RECORD");
+            if (p_evt->result == FDS_SUCCESS)
+            {
+                NRF_LOG_INFO("Record ID:\t0x%04x",  p_evt->del.record_id);
+                NRF_LOG_INFO("File ID:\t0x%04x",    p_evt->del.file_id);
+                NRF_LOG_INFO("Record key:\t0x%04x", p_evt->del.record_key);
+            }
+            //m_delete_all.pending = false;
+        } break;
+
+        default:
+            break;
+    }
+
+    */
+}
+
+uint32_t find_stored_script_info_by_name(const char *script_name, stored_script_fds_info_t *p_stored_script_info) {
+    VERIFY_PARAM_NOT_NULL(script_name);
+    VERIFY_PARAM_NOT_NULL(p_stored_script_info);
+
+    fds_find_token_t ftoken;
+    memset(&ftoken, 0x00, sizeof(fds_find_token_t));
+    fds_flash_record_t flash_record;
+    fds_record_desc_t fds_record_desc;
+
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
+        if (fds_record_open(&fds_record_desc, &flash_record) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("Failed to open record");
+            continue; // go on with next
+        }
+
+        stored_script_fds_info_t const * p_stored_tasks_fds_info_tmp = flash_record.p_data;
+        // compare script_name
+        if (strcmp(p_stored_tasks_fds_info_tmp->script_name, script_name) == 0) {
+            // string found
+            memcpy(p_stored_script_info, p_stored_tasks_fds_info_tmp, sizeof(stored_script_fds_info_t));
+            fds_record_close(&fds_record_desc);
+            return NRF_SUCCESS;
+        }
+
+        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("Failed to close record");
+        }
+    }
+
+    return NRF_ERROR_NOT_FOUND;
+}
+
+
+
+
+bool store_current_tasks_to_flash(logitacker_processor_t *p_processor_inject, const char * script_name) {
+    if (p_processor_inject == NULL) {
+        NRF_LOG_ERROR("logitacker processor is NULL");
+        return false;
+    }
+
+    logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
+    if (self == NULL) {
+        NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return false;
+    }
+
+    if (self->state != INJECT_STATE_IDLE) {
+        NRF_LOG_ERROR("can't store script to flash, injection processor not in IDLE state: %d", self->state);
+        return false;
+    }
+
+    // indicate that a FDS write operation is ongoing
+    transfer_state(self, INJECT_STATE_FDS_WRITE_RUNNING);
+
+
+    // an use first unused key)
+    // 3) create stored_script_fds_info for next usable record_key
+
+    // check if script name already exists (overwrite of existing scripts isn't allowed)
+    stored_script_fds_info_t tmp_stfi;
+    if (find_stored_script_info_by_name(script_name, &tmp_stfi) == NRF_SUCCESS) {
+        NRF_LOG_ERROR("store_current_task_to_flash: script name already used");
+        transfer_state(self, INJECT_STATE_IDLE);
+        return false;
+    }
+
+    // determine next available FDS file ID for script storage
+    fds_record_desc_t fds_record_desc;
+    fds_find_token_t ftoken;
+    memset(&ftoken, 0x00, sizeof(fds_find_token_t));
+    uint16_t last_used_id = LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS-1;
+    for (uint16_t test_id = LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS; (fds_record_find(test_id, LOGITACKER_FLASH_RECORD_ID_STORED_SCRIPT_TASKS, &fds_record_desc, &ftoken) == FDS_SUCCESS) && (test_id < LOGITACKER_FLASH_MAXIMUM_FILE_ID_STORED_SCRIPT_TASKS); test_id++) {
+        last_used_id = test_id; //update last used ID, as test ID is in use
+    }
+    uint16_t next_usable_id = last_used_id+1;
+    if (next_usable_id > LOGITACKER_FLASH_MAXIMUM_FILE_ID_STORED_SCRIPT_TASKS) {
+        // limit reached
+        NRF_LOG_ERROR("limit of maximum storable scripts reached")
+        transfer_state(self, INJECT_STATE_IDLE);
+        return false;
+    }
+
+
+    // fill stored_script_fds_info_t data struct (don't store yet)
+    m_current_fds_op_fds_script_info.script_tasks_file_id = next_usable_id;
+    m_current_fds_op_fds_script_info.script_tasks_record_id = LOGITACKER_FLASH_RECORD_ID_STORED_SCRIPT_TASKS;
+    size_t slen = strlen(script_name);
+    slen = slen > SCRIPT_NAME_CHAR_COUNT_MAX ? SCRIPT_NAME_CHAR_COUNT_MAX : slen;
+    memcpy(m_current_fds_op_fds_script_info.script_name, script_name, slen);
+
+
+    ringbuf_peek_rewind(&m_ringbuf); // rewind ringbuf
+
+    m_current_fds_op_proc_inj_ctx = self;
+
+    // load first task to tmp vars
+    if (!peek_task(&m_current_fds_op_task, m_current_fds_op_task_data)) {
+        NRF_LOG_ERROR("Failed to load first task for script storage, can't store empty script")
+        transfer_state(self, INJECT_STATE_IDLE);
+        return false;
+    }
+
+    // start first write operation
+    m_current_fds_op_write_script_sub_state = FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER;
+    m_current_fds_op_record.file_id = m_current_fds_op_fds_script_info.script_tasks_file_id;
+    m_current_fds_op_record.key = m_current_fds_op_fds_script_info.script_tasks_record_id;
+    m_current_fds_op_record.data.length_words = (sizeof(inject_task_t) + 3) / 4;
+    m_current_fds_op_record.data.p_data = &m_current_fds_op_task;
+    if (fds_record_write(NULL, &m_current_fds_op_record) != NRF_SUCCESS) {
+        NRF_LOG_ERROR("failed to write first task for script storage")
+        transfer_state(self, INJECT_STATE_FDS_WRITE_FAILED);
+        return false;
+    }
+
+    return true;
+}
+
+bool load_tasks_from_flash(logitacker_processor_t *p_processor_inject, const char * script_name) {
+    if (p_processor_inject == NULL) {
+        NRF_LOG_ERROR("logitacker processor is NULL");
+        return false;
+    }
+
+    logitacker_processor_inject_ctx_t * self = (logitacker_processor_inject_ctx_t *) p_processor_inject->p_ctx;
+    if (self == NULL) {
+        NRF_LOG_ERROR("logitacker processor inject context is NULL");
+        return false;
+    }
+
+    if (self->state != INJECT_STATE_IDLE) {
+        NRF_LOG_ERROR("can't load script from flash, injection processor not in IDLE state: %d", self->state);
+        return false;
+    }
+
+    // indicate that a FDS write operation is ongoing
+    transfer_state(self, INJECT_STATE_FDS_READ_RUNNING);
+
+
+    // an use first unused key)
+    // 3) create stored_script_fds_info for next usable record_key
+
+    // check if script name already exists (overwrite of existing scripts isn't allowed)
+    if (find_stored_script_info_by_name(script_name, &m_current_fds_op_fds_script_info) != NRF_SUCCESS) {
+        NRF_LOG_ERROR("load_tasks_from_flash: script name not found");
+        transfer_state(self, INJECT_STATE_FDS_READ_FAILED);
+        return false;
+    }
+
+    NRF_LOG_INFO("script %s file_id %04x record id %04x", script_name, m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_fds_op_fds_script_info.script_tasks_record_id);
+
+    // flush current tasks
+    flush_tasks();
+
+    // start iterating over tasks
+    fds_find_token_t ftoken;
+    memset(&ftoken, 0x00, sizeof(fds_find_token_t));
+    fds_record_desc_t fds_record_desc;
+    fds_flash_record_t fds_flash_record;
+    while (fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_fds_op_fds_script_info.script_tasks_record_id, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
+        // open task header
+        if (fds_record_open(&fds_record_desc, &fds_flash_record) != FDS_SUCCESS) {
+            NRF_LOG_ERROR("load_tasks_from_flash: failed to read task header");
+            transfer_state(self, INJECT_STATE_FDS_READ_FAILED);
+            return false;
+        }
+
+        memcpy(&m_current_fds_op_task, fds_flash_record.p_data, sizeof(inject_task_t));
+
+        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+            NRF_LOG_ERROR("load_tasks_from_flash: failed to close task header record");
+            transfer_state(self, INJECT_STATE_FDS_READ_FAILED);
+            return false;
+        }
+
+        NRF_LOG_INFO("task type: %d", m_current_fds_op_task.type);
+
+        // try to load next record, which should be the task data
+        if (fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_fds_op_fds_script_info.script_tasks_record_id, &fds_record_desc, &ftoken) != FDS_SUCCESS) {
+            NRF_LOG_ERROR("load_tasks_from_flash: failed to read task data");
+            transfer_state(self, INJECT_STATE_FDS_READ_FAILED);
+            return false;
+        }
+
+        // open task data
+        if (fds_record_open(&fds_record_desc, &fds_flash_record) != FDS_SUCCESS) {
+            NRF_LOG_ERROR("load_tasks_from_flash: failed to open task data");
+            transfer_state(self, INJECT_STATE_FDS_READ_FAILED);
+            return false;
+        }
+
+        memcpy(&m_current_fds_op_task_data, fds_flash_record.p_data, m_current_fds_op_task.data_len);
+
+        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+            NRF_LOG_ERROR("load_tasks_from_flash: failed to close task data record");
+            transfer_state(self, INJECT_STATE_FDS_READ_FAILED);
+            return false;
+        }
+
+        m_current_fds_op_task.p_data_u8 = m_current_fds_op_task_data; // fix pointer of loaded task
+
+        // ad task to current tasks
+        push_task(m_current_fds_op_task);
+
+    }
+
+    // all tasks read if here
+    transfer_state(self, INJECT_STATE_FDS_READ_SUCCEEDED);
+    return true;
 }

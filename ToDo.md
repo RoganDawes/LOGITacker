@@ -21,6 +21,10 @@ and thus brings all nice errors of pointer arithmetics (missing Golang here)
 - account for re-transmits (passive enum, pair sniffing) - **must have for on-stage demos**
 - BSP: proper LED driving and button interaction for various modes
 - injection: allow entering inject mode without given RF address (block execution unless target RF address is set, instead)
+- [done] storing scripts
+- [done] loading scripts
+- script FDS: deletion, list stored scripts
+- injection: abort command for long typing scripts
 
 # Analysis
 - capabilities to send in new HID++ messages (maybe re-write device capabilities)

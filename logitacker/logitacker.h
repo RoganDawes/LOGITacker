@@ -77,6 +77,8 @@ void logitacker_injection_start_execution(bool execute);
 void logitacker_injection_clear();
 void logitacker_injection_list_tasks(nrf_cli_t const * p_cli);
 void logitacker_injection_remove_last_task();
+void logitacker_injection_store_script(char * name);
+void logitacker_injection_load_script(char * name);
 #ifdef __cplusplus
 }
 #endif

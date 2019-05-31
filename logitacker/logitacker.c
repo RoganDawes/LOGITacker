@@ -261,6 +261,32 @@ void logitacker_injection_remove_last_task() {
     NRF_LOG_INFO("Injection removed last task");
 }
 
+void logitacker_injection_store_script(char * name) {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    if (store_current_tasks_to_flash(p_processor, name)) {
+        NRF_LOG_INFO("storing script succeeded");
+        return;
+    }
+    NRF_LOG_INFO("Storing script failed");
+}
+
+void logitacker_injection_load_script(char * name) {
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+
+    if (load_tasks_from_flash(p_processor, name)) {
+        NRF_LOG_INFO("loading script succeeded");
+        return;
+    }
+    NRF_LOG_INFO("loading script failed");
+}
+
 void logitacker_injection_list_tasks(nrf_cli_t const * p_cli) {
     if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");

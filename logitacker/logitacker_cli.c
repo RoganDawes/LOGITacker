@@ -326,6 +326,34 @@ static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 }
 
+static void cmd_inject_store(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    if (argc == 2)
+    {
+        logitacker_injection_store_script(argv[1]);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "store needs a scriptname as first argument\r\n");
+        return;
+
+    }
+
+}
+
+static void cmd_inject_load(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    if (argc == 2)
+    {
+        logitacker_injection_load_script(argv[1]);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "load needs a scriptname as first argument\r\n");
+        return;
+
+    }
+
+}
+
 /*
 static void cmd_inject_pause(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     logitacker_injection_start_execution(false);
@@ -896,6 +924,8 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
     NRF_CLI_CMD(string,   NULL, "add task to script - inject given string", cmd_inject_string),
     NRF_CLI_CMD(press,   NULL, "add task to script - inject given key combo", cmd_inject_press),
     NRF_CLI_CMD(delay,   NULL, "add task to script - delay injection", cmd_inject_delay),
+    NRF_CLI_CMD(store,   NULL, "store script to flash", cmd_inject_store),
+    NRF_CLI_CMD(load,   NULL, "load script from flash", cmd_inject_load),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);

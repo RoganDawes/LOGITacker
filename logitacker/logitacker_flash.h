@@ -15,6 +15,13 @@
 #define LOGITACKER_FLASH_RECORD_KEY_DONGLES 0x1002
 #define LOGITACKER_FLASH_RECORD_SIZE_UNIFYING_DONGLE (sizeof(logitacker_devices_unifying_dongle_t) + 3) / 4
 
+#define LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO 0x1003
+#define LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO 0x1003
+#define LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS 0x1004
+#define LOGITACKER_FLASH_MAXIMUM_FILE_ID_STORED_SCRIPT_TASKS 0x1100
+#define LOGITACKER_FLASH_RECORD_ID_STORED_SCRIPT_TASKS 0x1004
+
+
 
 // note: these functions only handle device data, not the dongle data referenced by pointers
 uint32_t logitacker_flash_store_device(logitacker_devices_unifying_device_t * p_device);
