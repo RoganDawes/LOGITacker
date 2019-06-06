@@ -26,6 +26,8 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
+#include "logitacker_script_engine.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 APP_TIMER_DEF(m_timer_next_tx_action);
@@ -221,53 +223,47 @@ void logitacker_enter_mode_discovery() {
 }
 
 
-void logitacker_injection_press(logitacker_keyboard_map_lang_t language_layout, char * str) {
+void logitacker_injection_press(char * str) {
+    /*
     if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");
         return;
     }
 
-    logitacker_processor_inject_press(p_processor, language_layout, str);
+    logitacker_processor_inject_press(p_processor, str);
+     */
+    logitacker_script_engine_append_task_press_combo(str);
 }
 
-void logitacker_injection_string(logitacker_keyboard_map_lang_t language_layout, char * str) {
-    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
-        NRF_LOG_ERROR("Can't inject while not in injection mode");
-        return;
-    }
-
-    logitacker_processor_inject_string(p_processor, language_layout, str);
+void logitacker_injection_string(char * str) {
+    //logitacker_processor_inject_string(p_processor, str);
+    logitacker_script_engine_append_task_type_string(str);
 }
 
 
 
 void logitacker_injection_clear() {
-    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
-        NRF_LOG_ERROR("Can't inject while not in injection mode");
-        return;
-    }
+    //logitacker_processor_inject_clear_tasks(p_processor);
+    logitacker_script_engine_flush_tasks();
 
-    logitacker_processor_inject_clear_tasks(p_processor);
     NRF_LOG_INFO("Injection tasks cleared");
 }
 
 void logitacker_injection_remove_last_task() {
-    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
-        NRF_LOG_ERROR("Can't inject while not in injection mode");
-        return;
-    }
+    //logitacker_processor_inject_remove_last_task(p_processor);
+    logitacker_script_engine_remove_last_task();
 
-    logitacker_processor_inject_remove_last_task(p_processor);
     NRF_LOG_INFO("Injection removed last task");
 }
 
 void logitacker_injection_store_script(char * name) {
+/*
     if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");
         return;
     }
-
-    if (store_current_tasks_to_flash(p_processor, name)) {
+*/
+    if (logitacker_script_engine_store_current_script_to_flash(name)) {
         NRF_LOG_INFO("storing script succeeded");
         return;
     }
@@ -275,26 +271,45 @@ void logitacker_injection_store_script(char * name) {
 }
 
 void logitacker_injection_load_script(char * name) {
+/*
     if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");
         return;
     }
-
-    if (load_tasks_from_flash(p_processor, name)) {
+*/
+    if (logitacker_script_engine_load_script_from_flash(name)) {
         NRF_LOG_INFO("loading script succeeded");
         return;
     }
     NRF_LOG_INFO("loading script failed");
 }
 
-void logitacker_injection_list_tasks(nrf_cli_t const * p_cli) {
+void logitacker_injection_delete_script(char * name) {
+/*
     if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");
         return;
     }
+*/
+    if (logitacker_script_engine_delete_script_from_flash(name)) {
+        NRF_LOG_INFO("deleting script succeeded");
+        return;
+    }
+    NRF_LOG_INFO("deleting script failed");
+}
 
-    logitacker_processor_inject_list_tasks(p_processor, p_cli);
+void logitacker_injection_list_scripts(nrf_cli_t const * p_cli) {
+/*
+    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+        NRF_LOG_ERROR("Can't inject while not in injection mode");
+        return;
+    }
+*/
+    logitacker_script_engine_list_scripts_from_flash(p_cli);
+}
 
+void logitacker_injection_list_tasks(nrf_cli_t const * p_cli) {
+    logitacker_script_engine_print_current_tasks(p_cli);
 }
 
 void logitacker_injection_start_execution(bool execute) {
@@ -312,12 +327,7 @@ void logitacker_injection_start_execution(bool execute) {
 }
 
 void logitacker_injection_delay(uint32_t delay_ms) {
-    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
-        NRF_LOG_ERROR("Can't inject while not in injection mode");
-        return;
-    }
-
-    logitacker_processor_inject_delay(p_processor, delay_ms);
+    logitacker_script_engine_append_task_delay(delay_ms);
 }
 
 void clocks_start( void )
@@ -327,7 +337,6 @@ void clocks_start( void )
 
     while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0);
 }
-
 
 uint32_t logitacker_init() {
     sprintf(g_logitacker_cli_name, "LOGITacker $ ");

@@ -97,7 +97,7 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
                                 break;
                             case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
                                 logitacker_enter_mode_injection(addr);
-                                logitacker_injection_string(LANGUAGE_LAYOUT_US, LOGITACKER_AUTO_INJECTION_PAYLOAD);
+                                logitacker_injection_string(LOGITACKER_AUTO_INJECTION_PAYLOAD);
                                 break;
                             default:
                                 // do nothing, stay in discovery

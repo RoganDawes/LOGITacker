@@ -92,6 +92,7 @@ SRC_FILES += \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
   $(PROJ_DIR)/ringbuf/ringbuf.c \
+  $(PROJ_DIR)/logitacker/logitacker_script_engine.c \
   $(PROJ_DIR)/logitacker/logitacker_flash.c \
   $(PROJ_DIR)/logitacker/logitacker_cli.c \
   $(PROJ_DIR)/logitacker/logitacker_options.c \

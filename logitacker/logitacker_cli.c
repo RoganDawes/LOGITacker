@@ -347,11 +347,29 @@ static void cmd_inject_load(nrf_cli_t const * p_cli, size_t argc, char **argv)
         logitacker_injection_load_script(argv[1]);
         return;
     } else {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "load needs a scriptname as first argument\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "load needs a script name as first argument\r\n");
         return;
 
     }
 
+}
+
+static void cmd_inject_delete(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    if (argc == 2)
+    {
+        logitacker_injection_delete_script(argv[1]);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "delete needs a script name as first argument\r\n");
+        return;
+
+    }
+}
+
+static void cmd_inject_list(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    logitacker_injection_list_scripts(p_cli);
 }
 
 /*
@@ -372,7 +390,7 @@ static void cmd_inject_undo(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     logitacker_injection_remove_last_task();
 }
 
-static void cmd_inject_list(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+static void cmd_inject_show(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     logitacker_injection_list_tasks(p_cli);
 }
 
@@ -389,7 +407,7 @@ static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
         str_buf_remaining -= len;
     }
 
-    logitacker_injection_string(LANGUAGE_LAYOUT_DE, press_str);
+    logitacker_injection_string(press_str);
 }
 
 static void cmd_inject_delay(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -433,7 +451,7 @@ static void cmd_inject_press(nrf_cli_t const * p_cli, size_t argc, char **argv) 
     logitacker_keyboard_map_combo_str_to_hid_report(press_str, &tmp_report, LANGUAGE_LAYOUT_DE);
     NRF_LOG_HEXDUMP_INFO(&tmp_report, sizeof(hid_keyboard_report_t));
 
-    logitacker_injection_press(LANGUAGE_LAYOUT_DE, press_str);
+    logitacker_injection_press(press_str);
 }
 
 /*
@@ -920,12 +938,14 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
     NRF_CLI_CMD(clear,   NULL, "clear current script (injection tasks)", cmd_inject_clear),
     NRF_CLI_CMD(undo,   NULL, "delete last command from script (last injection task)", cmd_inject_undo),
     NRF_CLI_CMD(execute,   NULL, "run current script against injection target", cmd_inject_execute),
-    NRF_CLI_CMD(list,   NULL, "list current injection script", cmd_inject_list),
+    NRF_CLI_CMD(show,   NULL, "show current injection script", cmd_inject_show),
     NRF_CLI_CMD(string,   NULL, "add task to script - inject given string", cmd_inject_string),
     NRF_CLI_CMD(press,   NULL, "add task to script - inject given key combo", cmd_inject_press),
     NRF_CLI_CMD(delay,   NULL, "add task to script - delay injection", cmd_inject_delay),
     NRF_CLI_CMD(store,   NULL, "store script to flash", cmd_inject_store),
     NRF_CLI_CMD(load,   NULL, "load script from flash", cmd_inject_load),
+    NRF_CLI_CMD(list,   NULL, "list scripts stored on flash", cmd_inject_list),
+    NRF_CLI_CMD(delete,   NULL, "delete script from flash", cmd_inject_delete),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);
