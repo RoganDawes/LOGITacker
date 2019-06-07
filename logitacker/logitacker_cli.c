@@ -14,6 +14,7 @@
 #include "unifying.h"
 #include "logitacker_flash.h"
 #include "logitacker_processor_inject.h"
+#include "logitacker_script_engine.h"
 
 #define CLI_EXAMPLE_MAX_CMD_CNT (20u)
 #define CLI_EXAMPLE_MAX_CMD_LEN (33u)
@@ -330,7 +331,11 @@ static void cmd_inject_store(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     if (argc == 2)
     {
-        logitacker_injection_store_script(argv[1]);
+        if (logitacker_script_engine_store_current_script_to_flash(argv[1])) {
+            NRF_LOG_INFO("storing script succeeded");
+            return;
+        }
+        NRF_LOG_INFO("Storing script failed");
         return;
     } else {
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "store needs a scriptname as first argument\r\n");
@@ -344,7 +349,11 @@ static void cmd_inject_load(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     if (argc == 2)
     {
-        logitacker_injection_load_script(argv[1]);
+        if (logitacker_script_engine_load_script_from_flash(argv[1])) {
+            NRF_LOG_INFO("loading script succeeded");
+            return;
+        }
+        NRF_LOG_INFO("loading script failed");
         return;
     } else {
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "load needs a script name as first argument\r\n");
@@ -358,7 +367,11 @@ static void cmd_inject_delete(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     if (argc == 2)
     {
-        logitacker_injection_delete_script(argv[1]);
+        if (logitacker_script_engine_delete_script_from_flash(argv[1])) {
+            NRF_LOG_INFO("deleting script succeeded");
+            return;
+        }
+        NRF_LOG_INFO("deleting script failed");
         return;
     } else {
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "delete needs a script name as first argument\r\n");
@@ -367,9 +380,8 @@ static void cmd_inject_delete(nrf_cli_t const * p_cli, size_t argc, char **argv)
     }
 }
 
-static void cmd_inject_list(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    logitacker_injection_list_scripts(p_cli);
+static void cmd_inject_list(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    logitacker_script_engine_list_scripts_from_flash(p_cli);
 }
 
 /*
@@ -383,15 +395,31 @@ static void cmd_inject_execute(nrf_cli_t const *p_cli, size_t argc, char **argv)
 }
 
 static void cmd_inject_clear(nrf_cli_t const *p_cli, size_t argc, char **argv) {
-    logitacker_injection_clear();
+    logitacker_script_engine_flush_tasks();
+    NRF_LOG_INFO("script tasks cleared");
 }
 
 static void cmd_inject_undo(nrf_cli_t const *p_cli, size_t argc, char **argv) {
-    logitacker_injection_remove_last_task();
+    logitacker_script_engine_remove_last_task();
+    NRF_LOG_INFO("removed last task from script");
+}
+
+static void cmd_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    if (argc == 2)
+    {
+        logitacker_script_engine_set_language_layout(logitacker_keyboard_map_lang_from_str(argv[1]));
+
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "need language layout name as first argument (f.e. us, de)\r\n");
+        return;
+
+    }
+
 }
 
 static void cmd_inject_show(nrf_cli_t const *p_cli, size_t argc, char **argv) {
-    logitacker_injection_list_tasks(p_cli);
+    logitacker_script_engine_print_current_tasks(p_cli);
 }
 
 static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -407,7 +435,7 @@ static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
         str_buf_remaining -= len;
     }
 
-    logitacker_injection_string(press_str);
+    logitacker_script_engine_append_task_type_string(press_str);
 }
 
 static void cmd_inject_delay(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -418,7 +446,7 @@ static void cmd_inject_delay(nrf_cli_t const * p_cli, size_t argc, char **argv)
             nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid delay, argument has to be unsigned int\r\n");
         };
 
-        logitacker_injection_delay(delay_ms);
+        logitacker_script_engine_append_task_delay(delay_ms);
         return;
     }
 
@@ -439,62 +467,14 @@ static void cmd_inject_press(nrf_cli_t const * p_cli, size_t argc, char **argv) 
 
     NRF_LOG_INFO("parsing '%s' to HID key combo report:", nrf_log_push(press_str));
 
-    /*
-    if (argc > 1) {
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "Keycode for %s: %02x\r\n", argv[1], str_to_keycode(argv[1]));
-    }
-    */
-
-
-
     hid_keyboard_report_t tmp_report;
     logitacker_keyboard_map_combo_str_to_hid_report(press_str, &tmp_report, LANGUAGE_LAYOUT_DE);
     NRF_LOG_HEXDUMP_INFO(&tmp_report, sizeof(hid_keyboard_report_t));
 
-    logitacker_injection_press(press_str);
+    logitacker_script_engine_append_task_press_combo(press_str);
 }
 
-/*
-static void cmd_discover_onhit(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    static const nrf_cli_getopt_option_t opt[] = {
-        NRF_CLI_OPT("continue","c", "stay in discovery mode when RF address found"),
-        NRF_CLI_OPT("passive_enum", "p","start passive enumeration when RF address found"),
-        NRF_CLI_OPT("active_enum", "a","start active enumeration when RF address found")
-        
-    };
 
-    if ((argc == 1) || nrf_cli_help_requested(p_cli))
-    {
-        nrf_cli_help_print(p_cli, opt, ARRAY_SIZE(opt));
-        return;
-    }
-
-    if (argc != 2)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
-        return;
-    }
-
-    if (!strcmp(argv[1], "continue") || !strcmp(argv[1], "c"))
-    {
-        g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: continue\r\n");
-        return;
-    } else if (!strcmp(argv[1], "passive_enum") || !strcmp(argv[1], "p")) {
-        g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start passive enumeration of new RF address\r\n");
-        return;
-    } else if (!strcmp(argv[1], "active_enum") || !strcmp(argv[1], "a")) {
-        g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION;
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start active enumeration of new RF address\r\n");
-        return;
-    } else {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "No mode change\r\n");
-    }
-
-}
-*/
 static void cmd_discover_onhit_activeenum(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION;
@@ -934,6 +914,7 @@ NRF_CLI_CMD_REGISTER(pairing, &m_sub_pairing, "discover", cmd_pairing);
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ram);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 {
+    NRF_CLI_CMD(language, NULL, "set injection keybboard language layout", cmd_inject_lang),
     NRF_CLI_CMD(target, &m_sub_inject_target_addr, "set injection target", cmd_inject_target),
     NRF_CLI_CMD(clear,   NULL, "clear current script (injection tasks)", cmd_inject_clear),
     NRF_CLI_CMD(undo,   NULL, "delete last command from script (last injection task)", cmd_inject_undo),

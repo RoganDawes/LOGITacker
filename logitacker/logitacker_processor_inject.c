@@ -329,8 +329,9 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
 
 void logitacker_processor_inject_process_task_string(logitacker_processor_inject_ctx_t *self) {
     NRF_LOG_INFO("process string injection: %s", self->current_task.p_data_c);
-    self->p_payload_provider = new_payload_provider_string(self->p_device, self->current_task.lang, self->current_task.p_data_c);
-    //while ((*p_pay_provider->p_get_next)(p_pay_provider, &tmp_pay)) {};
+    //self->p_payload_provider = new_payload_provider_string(self->p_device, self->current_task.lang, self->current_task.p_data_c);
+    self->p_payload_provider = new_payload_provider_string(self->p_device, logitacker_script_engine_get_language_layout(), self->current_task.p_data_c);
+
 
     //fetch first payload
     if (!(*self->p_payload_provider->p_get_next)(self->p_payload_provider, &self->tmp_tx_payload)) {
@@ -349,7 +350,7 @@ void logitacker_processor_inject_process_task_string(logitacker_processor_inject
 
 void logitacker_processor_inject_process_task_press(logitacker_processor_inject_ctx_t *self) {
     NRF_LOG_INFO("process key-combo injection: %s", self->current_task.p_data_c);
-    self->p_payload_provider = new_payload_provider_press(self->p_device, self->current_task.lang, self->current_task.p_data_c);
+    self->p_payload_provider = new_payload_provider_press(self->p_device, logitacker_script_engine_get_language_layout(), self->current_task.p_data_c);
     //while ((*p_pay_provider->p_get_next)(p_pay_provider, &tmp_pay)) {};
 
     //fetch first payload

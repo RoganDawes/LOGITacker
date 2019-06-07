@@ -631,6 +631,7 @@ uint32_t logitacker_keyboard_map_combo_str_to_hid_report(char const *in_str,
 //void logitacker_keyboard_map_test(void);
 logitacker_keyboard_map_hid_keys_t str_to_keycode(char * key_str);
 
+logitacker_keyboard_map_lang_t logitacker_keyboard_map_lang_from_str(char * lang_str);
 
 
 #endif //HELPER_MAP_H__

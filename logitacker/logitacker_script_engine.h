@@ -1,3 +1,4 @@
+#include "fds.h"
 #include "nrf_cli.h"
 #include "stdbool.h"
 #include "stdint.h"
@@ -19,7 +20,7 @@ typedef enum inject_task_type {
 typedef struct inject_task {
     inject_task_type_t type;
     size_t data_len;
-    logitacker_keyboard_map_lang_t lang;
+//    logitacker_keyboard_map_lang_t lang;
     uint32_t delay_ms;
 
     union {
@@ -42,9 +43,12 @@ uint32_t logitacker_script_engine_append_task(inject_task_t task);
 uint32_t logitacker_script_engine_append_task_press_combo(char * str_combo);
 uint32_t logitacker_script_engine_append_task_type_string(char * str);
 uint32_t logitacker_script_engine_append_task_delay(uint32_t delay_ms);
-
 void logitacker_script_engine_print_current_tasks(nrf_cli_t const * p_cli);
+void logitacker_script_engine_set_language_layout(logitacker_keyboard_map_lang_t lang);
+logitacker_keyboard_map_lang_t logitacker_script_engine_get_language_layout();
 
 void logitacker_script_engine_fds_event_handler(fds_evt_t const *p_evt);
+
+
 
 #endif //LOGITACKER_SCRIPT_ENGINE_H

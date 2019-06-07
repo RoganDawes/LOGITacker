@@ -58,7 +58,7 @@ static fds_op_write_script_sub_state_t m_current_fds_op_write_script_sub_state;
 /* end of FDS script storage relevant data */
 
 
-logitacker_keyboard_map_lang_t m_lang = LANGUAGE_LAYOUT_DE;
+logitacker_keyboard_map_lang_t m_lang = LANGUAGE_LAYOUT_US; //default layout (if nothing set) is US
 script_engine_state_t m_script_engine_state = SCRIPT_ENGINE_STATE_IDLE;
 
 void script_engine_transfer_state(script_engine_state_t new_state) {
@@ -283,7 +283,7 @@ uint32_t logitacker_script_engine_append_task_press_combo(char * str_combo) {
     tmp_task.data_len = strlen(str_combo) + 1; //include terminating 0x00
     tmp_task.p_data_c = str_combo;
     tmp_task.type = INJECT_TASK_TYPE_PRESS_KEYS;
-    tmp_task.lang = m_lang;
+//    tmp_task.lang = m_lang;
     //return push_task(tmp_task);
 
     return logitacker_script_engine_append_task(tmp_task);
@@ -295,7 +295,7 @@ uint32_t logitacker_script_engine_append_task_type_string(char * str) {
     tmp_task.data_len = strlen(str)+1; //include terminating 0x00
     tmp_task.p_data_c = str;
     tmp_task.type = INJECT_TASK_TYPE_TYPE_STRING;
-    tmp_task.lang = m_lang;
+//    tmp_task.lang = m_lang;
 
     //return push_task(tmp_task);
     return logitacker_script_engine_append_task(tmp_task);
@@ -794,4 +794,12 @@ bool logitacker_script_engine_delete_script_from_flash(const char *script_name) 
     // call garbage collector for FDS
     fds_gc();
     return true;
+}
+
+void logitacker_script_engine_set_language_layout(logitacker_keyboard_map_lang_t lang) {
+    m_lang = lang;
+}
+
+logitacker_keyboard_map_lang_t logitacker_script_engine_get_language_layout() {
+    return m_lang;
 }
