@@ -114,22 +114,22 @@ void pair_sniff_disable_pipe1(logitacker_processor_pair_sniff_ctx_t *self) {
 }
 
 void pair_sniff_on_success(logitacker_processor_pair_sniff_ctx_t *self) {
-    switch (g_logitacker_global_config.pairing_sniff_on_success_action) {
-        case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_CONTINUE:
+    switch (g_logitacker_global_config.pair_sniff_on_success) {
+        case OPTION_PAIR_SNIFF_ON_SUCCESS_CONTINUE:
             NRF_LOG_INFO("Continue to sniff pairing");
             return;
-        case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY:
+        case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY:
             NRF_LOG_INFO("Sniffed full pairing, changing back to discover mode");
             app_timer_stop(self->timer_next_action);
             logitacker_enter_mode_discovery();
             break;
-        case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION:
+        case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION:
             app_timer_stop(self->timer_next_action);
             helper_addr_to_hex_str(addr_str_buff, 5, self->device_pairing_info.device_rf_address);
             NRF_LOG_INFO("Sniffed full pairing, moving on with active enumeration for %s", nrf_log_push(addr_str_buff));
             logitacker_enter_mode_active_enum(self->device_pairing_info.device_rf_address);
             break;
-        case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION:
+        case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION:
             app_timer_stop(self->timer_next_action);
             helper_addr_to_hex_str(addr_str_buff, 5, self->device_pairing_info.device_rf_address);
             NRF_LOG_INFO("Sniffed full pairing, moving on with passive enumeration for %s", nrf_log_push(addr_str_buff));

@@ -11,6 +11,7 @@
 #include "logitacker_tx_payload_provider_press_to_keys.h"
 #include "logitacker_flash.h"
 #include "logitacker_script_engine.h"
+#include "logitacker_options.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_INJECT
 #include "nrf_log.h"
@@ -24,7 +25,8 @@ NRF_LOG_MODULE_REGISTER();
 typedef enum {
     INJECT_STATE_IDLE,
     INJECT_STATE_WORKING,
-    INJECT_STATE_SUCCEEDED,
+    INJECT_STATE_TASK_SUCCEEDED,
+    INJECT_STATE_SCRIPT_SUCCEEDED,
     INJECT_STATE_FAILED,
     INJECT_STATE_NOT_INITIALIZED,
 } inject_state_t;
@@ -186,7 +188,7 @@ void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *sel
             {
                 NRF_LOG_INFO("DELAY end reached");
                 //self->current_task.finished = true;
-                transfer_state(self, INJECT_STATE_SUCCEEDED);
+                transfer_state(self, INJECT_STATE_TASK_SUCCEEDED);
                 //free_task(self->current_task);
                 break;
             }
@@ -219,6 +221,7 @@ void transfer_state(logitacker_processor_inject_ctx_t *self, inject_state_t new_
 
     bool reset_payload_provider = false;
     bool run_next_task = false;
+
     switch (new_state) {
         case INJECT_STATE_IDLE:
             // stop all actions, send notification to callback
@@ -230,7 +233,7 @@ void transfer_state(logitacker_processor_inject_ctx_t *self, inject_state_t new_
             self->state = new_state; // turn back to idle state
             self->execute = false; //pause execution
             break;
-        case INJECT_STATE_SUCCEEDED:
+        case INJECT_STATE_TASK_SUCCEEDED:
             // ToDo: callback notify
             NRF_LOG_INFO("inject task succeeded"); // placeholder for callback
 
@@ -243,13 +246,53 @@ void transfer_state(logitacker_processor_inject_ctx_t *self, inject_state_t new_
             self->state = INJECT_STATE_IDLE; // turn back to idle state
             break;
         case INJECT_STATE_FAILED:
+            // no distinguishing between fail of single task and fail of script, this is the position to abort
+
             // ToDo: callback notify
             NRF_LOG_INFO("inject task failed"); // placeholder for callback
             app_timer_stop(self->timer_next_action);
             self->retransmit_counter = 0;
-            reset_payload_provider = true;
-            run_next_task = true;
+
+            // reset the payload provider
+            if (self->p_payload_provider != NULL) (*self->p_payload_provider->p_reset)(self->p_payload_provider);
+
+            //rewind tasks
+            logitacker_script_engine_rewind();
+
+            // block further execution
+            self->execute = false; //pause execution
+
             self->state = INJECT_STATE_IDLE; // turn back to idle state
+
+            // carry out fail action
+            switch (g_logitacker_global_config.inject_on_fail) {
+                case OPTION_AFTER_INJECT_CONTINUE:
+                    break;
+                case OPTION_AFTER_INJECT_SWITCH_DISCOVERY:
+                    logitacker_enter_mode_discovery();
+                    break;
+                case OPTION_AFTER_INJECT_SWITCH_ACTIVE_ENUMERATION:
+                    logitacker_enter_mode_active_enum(self->current_rf_address);
+                case OPTION_AFTER_INJECT_SWITCH_PASSIVE_ENUMERATION:
+                    logitacker_enter_mode_passive_enum(self->current_rf_address);
+            }
+
+
+            break;
+        case INJECT_STATE_SCRIPT_SUCCEEDED:
+            self->state = INJECT_STATE_IDLE;
+            NRF_LOG_INFO("script execution succeeded")
+            switch (g_logitacker_global_config.inject_on_success) {
+                case OPTION_AFTER_INJECT_CONTINUE:
+                    break;
+                case OPTION_AFTER_INJECT_SWITCH_DISCOVERY:
+                    logitacker_enter_mode_discovery();
+                    break;
+                case OPTION_AFTER_INJECT_SWITCH_ACTIVE_ENUMERATION:
+                    logitacker_enter_mode_active_enum(self->current_rf_address);
+                case OPTION_AFTER_INJECT_SWITCH_PASSIVE_ENUMERATION:
+                    logitacker_enter_mode_passive_enum(self->current_rf_address);
+            }
             break;
         default:
             self->state = new_state;
@@ -273,12 +316,14 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
         transfer_state(self, INJECT_STATE_FAILED);
     }
 
+    /*
     if (self->state == INJECT_STATE_FAILED) {
         NRF_LOG_WARNING("Injection failed, switching mode to discovery");
         transfer_state(self,INJECT_STATE_IDLE);
         //logitacker_enter_mode_discovery();
         return;
     }
+    */
 
     switch (p_esb_event->evt_id) {
         case NRF_ESB_EVENT_TX_FAILED:
@@ -310,7 +355,7 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
 
             } else {
                 // no more payloads, we succeeded
-                transfer_state(self, INJECT_STATE_SUCCEEDED);
+                transfer_state(self, INJECT_STATE_TASK_SUCCEEDED);
             }
 
             // schedule next payload
@@ -374,7 +419,7 @@ void logitacker_processor_inject_process_task_delay(logitacker_processor_inject_
     NRF_LOG_INFO("process delay injection: %d milliseconds", delay_ms);
     self->p_payload_provider = NULL;
     if (delay_ms == 0) {
-        transfer_state(self, INJECT_STATE_SUCCEEDED); // delay was 0
+        transfer_state(self, INJECT_STATE_TASK_SUCCEEDED); // delay was 0
         return;
     }
 
@@ -400,15 +445,14 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
     }
     if (!logitacker_script_engine_read_next_task(&self->current_task, self->current_task_data)) {
 
-        NRF_LOG_INFO("No more tasks scheduled or error fetching next task");
-        //self->state = INJECT_STATE_IDLE;
-        transfer_state(self, INJECT_STATE_IDLE);
+        NRF_LOG_INFO("No more tasks scheduled");
 
         // reset peek pointer to beginning of task buffer
         //ringbuf_peek_rewind(&m_ringbuf);
         logitacker_script_engine_rewind();
         self->execute = false;
 
+        transfer_state(self, INJECT_STATE_SCRIPT_SUCCEEDED);
 
         //logitacker_enter_mode_discovery();
         return;

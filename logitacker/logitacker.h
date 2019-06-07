@@ -27,21 +27,6 @@ extern "C" {
 #define LOGITACKER_SNIFF_PAIR_STAY_ON_CHANNEL_AFTER_RX_MS 1300
 #define LOGITACKER_SNIFF_PAIR_CHANNEL_HOP_INTERVAL_MS 10
 
-#define LOGITACKER_AUTO_INJECTION_PAYLOAD "\n\n\nHello from @MaMe82\n\n\n"
-
-typedef enum {
-    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING,   // continues in discovery mode, when new address has been found
-    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION,   // continues in passive enumeration mode when address found
-    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION,   // continues in active enumeration mode when address found
-    LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION   // continues in active enumeration mode when address found
-} logitacker_discovery_on_new_address_t;
-
-typedef enum {
-    LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_CONTINUE,   // continues in discovery mode, when new address has been found
-    LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION,   // continues in passive enumeration mode when address found
-    LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION,   // continues in active enumeration mode when address found
-    LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY
-} logitacker_pairing_sniff_on_success_t;
 
 typedef enum {
     LOGITACKER_MAINSTATE_DISCOVERY,   // radio in promiscuous mode, logs devices

@@ -82,10 +82,10 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
                 if (p_device->p_dongle != NULL) {
                     if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH) {
                         NRF_LOG_INFO("discovered device is Logitech")
-                        switch (g_logitacker_global_config.discovery_on_new_address_action) {
-                            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
+                        switch (g_logitacker_global_config.discovery_on_new_address) {
+                            case OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE:
                                 break;
-                            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
+                            case OPTION_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
                                 if (!p_device->p_dongle->active_enumeration_finished) {
                                     logitacker_enter_mode_active_enum(addr);
                                 } else {
@@ -93,12 +93,17 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
                                 }
 
                                 break;
-                            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
+                            case OPTION_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
                                 logitacker_enter_mode_passive_enum(addr);
                                 break;
-                            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
-                                logitacker_enter_mode_injection(addr);
-                                logitacker_injection_start_execution(true);
+                            case OPTION_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
+                                if (p_device->executed_auto_inject_count < g_logitacker_global_config.max_auto_injects_per_device) {
+                                    p_device->executed_auto_inject_count++;
+                                    logitacker_enter_mode_injection(addr);
+                                    logitacker_injection_start_execution(true);
+                                } else {
+                                    NRF_LOG_INFO("maximum number of autoinjects reached for this device, continue discovery mode")
+                                }
                                 //logitacker_script_engine_append_task_type_string(LOGITACKER_AUTO_INJECTION_PAYLOAD);
                                 break;
                             default:

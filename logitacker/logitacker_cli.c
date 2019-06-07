@@ -293,6 +293,17 @@ static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     fds_gc();
 }
 
+static void cmd_erase_flash(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    fds_find_token_t ft;
+    memset(&ft, 0x00, sizeof(fds_find_token_t));
+    fds_record_desc_t rd;
+    while (fds_record_iterate(&rd,&ft) == FDS_SUCCESS) {
+        NRF_LOG_INFO("Deleting record...")
+        fds_record_delete(&rd);
+    }
+    fds_gc();
+}
+
 static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     nrf_cli_help_print(p_cli, NULL, 0);
 }
@@ -404,6 +415,38 @@ static void cmd_script_undo(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     NRF_LOG_INFO("removed last task from script");
 }
 
+static void cmd_inject_onsuccess_continue(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.inject_on_success = OPTION_AFTER_INJECT_CONTINUE;
+}
+
+static void cmd_inject_onsuccess_activeenum(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.inject_on_success = OPTION_AFTER_INJECT_SWITCH_ACTIVE_ENUMERATION;
+}
+
+static void cmd_inject_onsuccess_passiveenum(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.inject_on_success = OPTION_AFTER_INJECT_SWITCH_PASSIVE_ENUMERATION;
+}
+
+static void cmd_inject_onsuccess_discover(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.inject_on_success = OPTION_AFTER_INJECT_SWITCH_DISCOVERY;
+}
+
+static void cmd_inject_onfail_continue(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.inject_on_fail = OPTION_AFTER_INJECT_CONTINUE;
+}
+
+static void cmd_inject_onfail_activeenum(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.inject_on_fail = OPTION_AFTER_INJECT_SWITCH_ACTIVE_ENUMERATION;
+}
+
+static void cmd_inject_onfail_passiveenum(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.inject_on_fail = OPTION_AFTER_INJECT_SWITCH_PASSIVE_ENUMERATION;
+}
+
+static void cmd_inject_onfail_discover(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.inject_on_fail = OPTION_AFTER_INJECT_SWITCH_DISCOVERY;
+}
+
 static void cmd_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc == 2)
     {
@@ -477,21 +520,28 @@ static void cmd_script_press(nrf_cli_t const *p_cli, size_t argc, char **argv) {
 
 static void cmd_discover_onhit_activeenum(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-    g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION;
+    g_logitacker_global_config.discovery_on_new_address = OPTION_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION;
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start active enumeration of new RF address\r\n");
     return;
 }
 
 static void cmd_discover_onhit_passiveenum(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-    g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
+    g_logitacker_global_config.discovery_on_new_address = OPTION_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: start passive enumeration of new RF address\r\n");
+    return;
+}
+
+static void cmd_discover_onhit_autoinject(nrf_cli_t const * p_cli, size_t argc, char **argv)
+{
+    g_logitacker_global_config.discovery_on_new_address = OPTION_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: enter injection mode and execute injection\r\n");
     return;
 }
 
 static void cmd_discover_onhit_continue(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-    g_logitacker_global_config.discovery_on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING;
+    g_logitacker_global_config.discovery_on_new_address = OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE;
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: continue\r\n");
 }
 
@@ -822,8 +872,9 @@ NRF_CLI_CMD_REGISTER(options, &m_sub_options, "options", cmd_options);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover_onhit)
 {
     NRF_CLI_CMD(continue,   NULL, "stay in discovery mode.", cmd_discover_onhit_continue),
-    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_discover_onhit_activeenum),
-    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_discover_onhit_passiveenum),
+    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration mode", cmd_discover_onhit_activeenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration mode", cmd_discover_onhit_passiveenum),
+    NRF_CLI_CMD(auto-inject, NULL, "enter injection mode and execute injection", cmd_discover_onhit_autoinject),
     NRF_CLI_SUBCMD_SET_END
 };NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)
 {
@@ -860,9 +911,31 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_script)
 NRF_CLI_CMD_REGISTER(script, &m_sub_script, "scripting for injection", cmd_inject);
 
 
+//level 2
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject_onsuccess)
+{
+    NRF_CLI_CMD(continue,   NULL, "stay in discovery mode.", cmd_inject_onsuccess_continue),
+    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_activeenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_passiveenum),
+    NRF_CLI_CMD(discover, NULL, "enter discovery mode", cmd_inject_onsuccess_discover),
+    NRF_CLI_SUBCMD_SET_END
+};
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject_onfail)
+{
+    NRF_CLI_CMD(continue,   NULL, "stay in discovery mode.", cmd_inject_onfail_continue),
+    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onfail_activeenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onfail_passiveenum),
+    NRF_CLI_CMD(discover, NULL, "enter discovery mode", cmd_inject_onfail_discover),
+    NRF_CLI_SUBCMD_SET_END
+};
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ram);
+
+// level 1
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 {
+    NRF_CLI_CMD(onsuccess, &m_sub_inject_onsuccess, "action after successful injection", NULL),
+    NRF_CLI_CMD(onfail, &m_sub_inject_onfail, "action after failed injection", NULL),
+
     NRF_CLI_CMD(language, NULL, "set injection keyboard language layout", cmd_inject_lang),
     NRF_CLI_CMD(target, &m_sub_inject_target_addr, "enter injection mode for given target RF address", cmd_inject_target),
     NRF_CLI_CMD(execute,   NULL, "run current script against injection target", cmd_inject_execute),
@@ -910,4 +983,6 @@ NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram)
 
 NRF_CLI_CMD_REGISTER(active_enum, &m_sub_enum_device_list, "start active enumeration of given device", cmd_enum_active);
 NRF_CLI_CMD_REGISTER(passive_enum, &m_sub_enum_device_list, "start passive enumeration of given device", cmd_enum_passive);
+
+NRF_CLI_CMD_REGISTER(erase_flash, NULL, "erase all data stored on flash", cmd_erase_flash);
 

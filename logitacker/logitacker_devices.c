@@ -176,6 +176,8 @@ uint32_t logitacker_devices_restore_device_from_flash(logitacker_devices_unifyin
                 // not able to restore dongle data from flash, we don't error out but log a warning
                 NRF_LOG_WARNING("couldn't restore dongle data from flash for restored device");
             }
+
+            p_device->executed_auto_inject_count = 0; // reset auto inject count
             return NRF_SUCCESS;
         }
 

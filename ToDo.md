@@ -1,10 +1,14 @@
-# development
+# Initial note
+
+The firmware evolves as needed by myself (on-stage demos, experiments). **No feature requests, PRs welcome**
+
+# development / features
 - adaptive timeout on passive enum (keep alive / set keep alive adoption)
-- more language layouts
+- more language layouts (currently DE and US)
 - [done] key `press` method for injection (handling shortcuts)
 - [done] flash storage of device data
 - auto delete devices from list (not spotted for a while / dongle not reachable in active enum)
-- automation: active enum --> passive enum --> discovery (default)
+- [partially, `options` command] automation: active enum --> passive enum --> discovery (default)
 - abort conditions for passive enum (too many non-Unifying frames, no frames after timeout, enough frames of interesting types received, interesting != keep-alive)
 - [done for keyboard] mirror input reports to HID keyboard/mouse interface
 - pass sniffed frames on HID raw
@@ -17,20 +21,27 @@
 - extensive testing of device flash storage, definition of upper limits (nobody needs 1000 devices on the dongle, as they could be barely handled interactively)
 - maybe: Introduce user provided meta data, like "site name" for discovery and custom device name, to make it easier to re-identify specific devices stored on flash
 (raw RF addresses require noting down additional info) - this is low prio, as it requires additional relationships for data stored on flash, which means runtime-reference-creation
-and thus brings all nice errors of pointer arithmetics (missing Golang here)
-- account for re-transmits (passive enum, pair sniffing) - **must have for on-stage demos**
+and thus brings all nice errors of pointer arithmetic (missing Golang here)
+- account for re-transmits from legit device (analyze PID of ESB PCF ... for passive enum, pair sniffing) - **must have for on-stage demos**
 - BSP: proper LED driving and button interaction for various modes
-- injection: allow entering inject mode without given RF address (block execution unless target RF address is set, instead)
+- [done, `script`command] injection: allow entering inject mode without given RF address (block execution unless target RF address is set, instead)
 - [done] storing scripts
 - [done] loading scripts
 - script FDS: deletion, list stored scripts
 - injection: abort command for long typing scripts
+- command for manual device creation (avoid the need of discovery)
+- [done] command for flash erase
+- remove test commands
+- emulation of dongle in pairing mode
+- utilizing scripts for "classical" USB injection instead of RF (bonus: trigger from RF, f.e. presentation clicker)
+- check options to ship stored FDS data with hex image for firmware (pre-built scripts, down&exec demo as default)
+- remove either key or raw key data from device struct, to save space (one could be derived from the other, as "key generation" is no one-way function)
 
-# Analysis
+# further analysis
 - capabilities to send in new HID++ messages (maybe re-write device capabilities)
 - [dead end, newer fw sets a bit if pairing address is enabled, only this allows response for pairing phase 2] forced pairing on "patched" dongles
-- check if there's a way to use a "sub-shell" in nrf_cli to emulate an interactive shell for the Unifying backdoor
-
+- [not doable] check if there's a way to use a "sub-shell" in nrf_cli to emulate an interactive shell for the Unifying backdoor
+- firmware attacks via keystroke injection (payload to transmit keys on RF after USB extraction)
 
 # excerpt features / general notes
 - done: UTF8 string parser

@@ -255,7 +255,7 @@ uint32_t logitacker_init() {
 
     app_timer_create(&m_timer_next_tx_action, APP_TIMER_MODE_SINGLE_SHOT, main_event_handler_timer_next_action);
 
-    //m_state_local.substate_discovery.on_new_address_action = LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
+    //m_state_local.substate_discovery.on_new_address_action = OPTION_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION;
     logitacker_bsp_init(main_event_handler_bsp);
     logitacker_usb_init();
     logitacker_radio_init(main_event_handler_esb, main_event_handler_radio);

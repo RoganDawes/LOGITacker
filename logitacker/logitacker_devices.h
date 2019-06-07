@@ -114,6 +114,8 @@ typedef struct logitacker_device_unifying_device {
 
     uint32_t last_used_aes_ctr;
     logitacker_device_frame_counter_t frame_counters;
+
+    int executed_auto_inject_count; // has to be resetted on device load / store
 } logitacker_devices_unifying_device_t;
 
 
