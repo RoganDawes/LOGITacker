@@ -1,4 +1,5 @@
 #include "ringbuf.h"
+#include "logitacker_options.h"
 #include "fds.h"
 #include "logitacker_script_engine.h"
 
@@ -12,13 +13,13 @@ NRF_LOG_MODULE_REGISTER();
 
 #define INJECT_MAX_TASK_DATA_SIZE 256
 
-RINGBUF_DEF(m_ringbuf, INJECT_RINGBUF_BYTES);
+RINGBUF_DEF(m_ringbuf, LOGITACKER_SCRIPT_ENGINE_RINGBUF_BYTES);
 
 
 
 /* start of FDS script storage relevant data */
 
-#define SCRIPT_NAME_CHAR_COUNT_MAX 32
+
 
 
 typedef enum script_engine_state {
@@ -36,7 +37,7 @@ typedef enum script_engine_state {
 } script_engine_state_t;
 
 typedef struct stored_script_fds_info {
-    char script_name[SCRIPT_NAME_CHAR_COUNT_MAX];
+    char script_name[LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN];
     uint16_t script_tasks_record_id;
     uint16_t script_tasks_file_id;
 } stored_script_fds_info_t;
@@ -50,7 +51,7 @@ typedef enum {
 
 static stored_script_fds_info_t m_current_fds_op_fds_script_info;
 static inject_task_t m_current_fds_op_task = {0};
-static uint8_t m_current_fds_op_task_data[INJECT_MAX_TASK_DATA_SIZE];
+static uint8_t m_current_fds_op_task_data[LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE];
 static fds_record_t m_current_fds_op_record;
 
 //static logitacker_processor_inject_ctx_t *m_current_fds_op_proc_inj_ctx;
@@ -58,7 +59,7 @@ static fds_op_write_script_sub_state_t m_current_fds_op_write_script_sub_state;
 /* end of FDS script storage relevant data */
 
 
-logitacker_keyboard_map_lang_t m_lang = LANGUAGE_LAYOUT_US; //default layout (if nothing set) is US
+//logitacker_keyboard_map_lang_t m_lang = LANGUAGE_LAYOUT_US; //default layout (if nothing set) is US
 script_engine_state_t m_script_engine_state = SCRIPT_ENGINE_STATE_IDLE;
 
 void script_engine_transfer_state(script_engine_state_t new_state) {
@@ -102,8 +103,8 @@ void script_engine_transfer_state(script_engine_state_t new_state) {
 bool logitacker_script_engine_read_next_task(inject_task_t *p_task, uint8_t *p_task_data_buf) {
     VERIFY_PARAM_NOT_NULL(p_task);
     VERIFY_PARAM_NOT_NULL(p_task_data_buf);
-    if (ringbuf_available_peek(&m_ringbuf) == INJECT_RINGBUF_BYTES) {
-        NRF_LOG_INFO("No more elements to peek in ring buffer");
+    if (ringbuf_available_peek(&m_ringbuf) == LOGITACKER_SCRIPT_ENGINE_RINGBUF_BYTES) {
+        NRF_LOG_DEBUG("No more elements to peek in ring buffer");
         goto label_reset_peek; // reinit buffer to set read/write pointers to beginning
     }
 
@@ -126,8 +127,8 @@ bool logitacker_script_engine_read_next_task(inject_task_t *p_task, uint8_t *p_t
 
     //read back copy of task data
     size_t read_len_task_data = p_task->data_len;
-    if (p_task->data_len > INJECT_MAX_TASK_DATA_SIZE) {
-        NRF_LOG_ERROR("pop_task: task data exceeds max size (%d of %d maximum allowed)", read_len_task, INJECT_MAX_TASK_DATA_SIZE);
+    if (p_task->data_len > LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE) {
+        NRF_LOG_ERROR("pop_task: task data exceeds max size (%d of %d maximum allowed)", read_len_task, LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE);
         goto label_reset_peek;
     }
     err_code = ringbuf_peek_data(&m_ringbuf, (uint8_t *) p_task_data_buf, &read_len_task_data);
@@ -145,8 +146,8 @@ bool logitacker_script_engine_read_next_task(inject_task_t *p_task, uint8_t *p_t
 
     label_reset_peek:
     p_task->data_len = 0;
-    p_task->delay_ms = 0;
-    p_task->type = INJECT_TASK_TYPE_DELAY;
+    //p_task->delay_ms = 0;
+    p_task->type = INJECT_TASK_TYPE_UNUSED;
     ringbuf_peek_rewind(&m_ringbuf);
     return false;
 
@@ -201,7 +202,7 @@ uint32_t logitacker_script_engine_remove_last_task() {
     }
 
     inject_task_t task = {0};
-    uint8_t task_data[INJECT_MAX_TASK_DATA_SIZE];
+    uint8_t task_data[LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE];
     ringbuf_peek_rewind(&m_ringbuf);
 
 
@@ -234,8 +235,8 @@ uint32_t logitacker_script_engine_append_task(inject_task_t task) {
     size_t len_data = task.data_len;
     size_t len = len_hdr + len_data;
 
-    if (len_data > INJECT_MAX_TASK_DATA_SIZE) {
-        NRF_LOG_ERROR("task data exceeds max size (%d of %d maximum allowed)", len_data, INJECT_MAX_TASK_DATA_SIZE);
+    if (len_data > LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE) {
+        NRF_LOG_ERROR("task data exceeds max size (%d of %d maximum allowed)", len_data, LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE);
         return NRF_ERROR_INVALID_LENGTH;
     }
 
@@ -303,9 +304,9 @@ uint32_t logitacker_script_engine_append_task_type_string(char * str) {
 
 uint32_t logitacker_script_engine_append_task_delay(uint32_t delay_ms) {
     inject_task_t tmp_task = {0};
-    tmp_task.delay_ms = delay_ms;
-    tmp_task.data_len = 0; //include terminating 0x00
-    tmp_task.p_data_c = NULL;
+    //tmp_task.delay_ms = delay_ms;
+    tmp_task.data_len = 4; //include terminating 0x00
+    tmp_task.p_data_u8 = (void*) &delay_ms;
     tmp_task.type = INJECT_TASK_TYPE_DELAY;
 
     //return push_task(tmp_task);
@@ -317,7 +318,7 @@ void logitacker_script_engine_print_current_tasks(nrf_cli_t const * p_cli) {
     // tasks are fetched while injection is performed)
 
     inject_task_t task = {0};
-    uint8_t task_data[INJECT_MAX_TASK_DATA_SIZE];
+    uint8_t task_data[LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE];
     ringbuf_peek_rewind(&m_ringbuf);
     uint32_t task_num = 1;
 
@@ -327,7 +328,7 @@ void logitacker_script_engine_print_current_tasks(nrf_cli_t const * p_cli) {
         switch (task.type) {
             case INJECT_TASK_TYPE_DELAY:
                 nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "delay ");
-                nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%d\r\n", task.delay_ms);
+                nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%d\r\n", *task.p_data_u32);
                 break;
             case INJECT_TASK_TYPE_TYPE_STRING:
                 nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "string ");
@@ -429,7 +430,7 @@ void logitacker_script_engine_fds_event_handler(fds_evt_t const *p_evt) {
                         m_current_fds_op_write_script_sub_state = FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_SCRIPT_INFO;
                         m_current_fds_op_record.file_id = LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO;
                         m_current_fds_op_record.key = LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO;
-                        m_current_fds_op_record.data.length_words = (sizeof(stored_script_fds_info_t) + 3) / 4; // this will write one word, even if task data length is zero (tasks of type delay)
+                        m_current_fds_op_record.data.length_words = (sizeof(stored_script_fds_info_t) + 3) / 4; // this will write one word, even if task data length is zero
                         m_current_fds_op_record.data.p_data = &m_current_fds_op_fds_script_info;
                         if (fds_record_write(NULL, &m_current_fds_op_record) != NRF_SUCCESS) {
                             NRF_LOG_ERROR("failed to write script info for script storage")
@@ -582,7 +583,7 @@ bool logitacker_script_engine_store_current_script_to_flash(const char *script_n
     m_current_fds_op_fds_script_info.script_tasks_file_id = next_usable_id;
     m_current_fds_op_fds_script_info.script_tasks_record_id = LOGITACKER_FLASH_RECORD_ID_STORED_SCRIPT_TASKS;
     size_t slen = strlen(script_name);
-    slen = slen > SCRIPT_NAME_CHAR_COUNT_MAX ? SCRIPT_NAME_CHAR_COUNT_MAX : slen;
+    slen = slen > LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN ? LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN : slen;
     memcpy(m_current_fds_op_fds_script_info.script_name, script_name, slen);
 
 
@@ -797,9 +798,9 @@ bool logitacker_script_engine_delete_script_from_flash(const char *script_name) 
 }
 
 void logitacker_script_engine_set_language_layout(logitacker_keyboard_map_lang_t lang) {
-    m_lang = lang;
+    g_logitacker_global_config.injection_language = lang;
 }
 
 logitacker_keyboard_map_lang_t logitacker_script_engine_get_language_layout() {
-    return m_lang;
+    return g_logitacker_global_config.injection_language;
 }

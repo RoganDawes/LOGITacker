@@ -259,6 +259,10 @@ uint32_t logitacker_init() {
     logitacker_bsp_init(main_event_handler_bsp);
     logitacker_usb_init();
     logitacker_radio_init(main_event_handler_esb, main_event_handler_radio);
+
+    // load default injection script
+    if (strlen(g_logitacker_global_config.default_script) > 0) logitacker_script_engine_load_script_from_flash(g_logitacker_global_config.default_script);
+
     logitacker_enter_mode_discovery();
 
 

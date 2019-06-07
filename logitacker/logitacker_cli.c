@@ -22,7 +22,7 @@
 
 
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
-static void cmd_inject_press(nrf_cli_t const * p_cli, size_t argc, char **argv);
+static void cmd_script_press(nrf_cli_t const *p_cli, size_t argc, char **argv);
 
 #define STORED_DEVICES_AUTOCOMPLETE_LIST_MAX_ENTRIES 60
 static char m_stored_device_addr_str_list[STORED_DEVICES_AUTOCOMPLETE_LIST_MAX_ENTRIES][LOGITACKER_DEVICE_ADDR_STR_LEN];
@@ -327,7 +327,7 @@ static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 }
 
-static void cmd_inject_store(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_script_store(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if (argc == 2)
     {
@@ -345,7 +345,7 @@ static void cmd_inject_store(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 }
 
-static void cmd_inject_load(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_script_load(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if (argc == 2)
     {
@@ -363,7 +363,7 @@ static void cmd_inject_load(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 }
 
-static void cmd_inject_delete(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_script_remove(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if (argc == 2)
     {
@@ -380,7 +380,7 @@ static void cmd_inject_delete(nrf_cli_t const * p_cli, size_t argc, char **argv)
     }
 }
 
-static void cmd_inject_list(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_script_list(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     logitacker_script_engine_list_scripts_from_flash(p_cli);
 }
 
@@ -394,12 +394,12 @@ static void cmd_inject_execute(nrf_cli_t const *p_cli, size_t argc, char **argv)
     logitacker_injection_start_execution(true);
 }
 
-static void cmd_inject_clear(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+static void cmd_script_clear(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     logitacker_script_engine_flush_tasks();
     NRF_LOG_INFO("script tasks cleared");
 }
 
-static void cmd_inject_undo(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+static void cmd_script_undo(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     logitacker_script_engine_remove_last_task();
     NRF_LOG_INFO("removed last task from script");
 }
@@ -418,11 +418,11 @@ static void cmd_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
 
 }
 
-static void cmd_inject_show(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+static void cmd_script_show(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     logitacker_script_engine_print_current_tasks(p_cli);
 }
 
-static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_script_string(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     char press_str[NRF_CLI_CMD_BUFF_SIZE] = {0};
     int str_buf_remaining = sizeof(press_str)-1; //keep one byte for terminating 0x00
@@ -438,7 +438,7 @@ static void cmd_inject_string(nrf_cli_t const * p_cli, size_t argc, char **argv)
     logitacker_script_engine_append_task_type_string(press_str);
 }
 
-static void cmd_inject_delay(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_script_delay(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if (argc > 1) {
         uint32_t delay_ms;
@@ -453,7 +453,7 @@ static void cmd_inject_delay(nrf_cli_t const * p_cli, size_t argc, char **argv)
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid delay, argument has to be unsigned int\r\n");
 }
 
-static void cmd_inject_press(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_script_press(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     char press_str[NRF_CLI_CMD_BUFF_SIZE] = {0};
     int str_buf_remaining = sizeof(press_str)-1; //keep one byte for terminating 0x00
     for (int i=1; i<argc && str_buf_remaining>0; i++) {
@@ -495,16 +495,8 @@ static void cmd_discover_onhit_continue(nrf_cli_t const * p_cli, size_t argc, ch
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: continue\r\n");
 }
 
-static void cmd_pairing_sniff(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
+static void cmd_pairing_sniff(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     logitacker_enter_mode_pairing_sniff();
-    /*
-    for (size_t i = 1; i < argc; i++)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "%s ", argv[i]);
-    }
-    nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "\r\n");
-    */
 }
 
 static void cmd_pairing_run(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -548,16 +540,8 @@ static void cmd_pairing(nrf_cli_t const * p_cli, size_t argc, char **argv)
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: unknown parameter: %s\r\n", argv[0], argv[1]);
 }
 
-static void cmd_discover_run(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
+static void cmd_discover_run(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     logitacker_enter_mode_discovery();
-    /*
-    for (size_t i = 1; i < argc; i++)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "%s ", argv[i]);
-    }
-    nrf_cli_fprintf(p_cli, NRF_CLI_NORMAL, "\r\n");
-    */
 }
 
 static void cmd_discover(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -577,8 +561,6 @@ static void cmd_discover(nrf_cli_t const * p_cli, size_t argc, char **argv)
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: unknown parameter: %s\r\n", argv[0], argv[1]);
 }
 
-//static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
-//static uint8_t tmp_addr[LOGITACKER_DEVICE_ADDR_LEN];
 static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     logitacker_devices_list_iterator_t iter = {0};
     logitacker_devices_unifying_dongle_t * p_dongle = NULL;
@@ -589,20 +571,6 @@ static void cmd_devices(nrf_cli_t const * p_cli, size_t argc, char **argv) {
             for (int device_index=0; device_index < p_dongle->num_connected_devices; device_index++) {
                 p_device = p_dongle->p_connected_devices[device_index];
 
-/*
-                logitacker_device_frame_counter_t * p_counters = &p_device->frame_counters;
-
-                helper_base_and_prefix_to_addr(tmp_addr, p_dongle->base_addr, p_device->addr_prefix, 5);
-                helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, tmp_addr);
-
-                bool dev_is_logitech = p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH;
-                nrf_cli_vt100_color_t outcol = NRF_CLI_VT100_COLOR_DEFAULT;
-                if (dev_is_logitech) outcol = NRF_CLI_VT100_COLOR_BLUE;
-                if (p_device->vuln_forced_pairing) outcol = NRF_CLI_VT100_COLOR_YELLOW;
-                if (p_device->vuln_plain_injection) outcol = NRF_CLI_VT100_COLOR_GREEN;
-                if (p_device->key_known) outcol = NRF_CLI_VT100_COLOR_RED;
-                nrf_cli_fprintf(p_cli, outcol, "%s (activity %d, Logitech: %d, plain keystroke injection %d, forced pairing %d, link key known %d)\r\n", addr_str_buff, p_counters->overal, dev_is_logitech, p_device->vuln_plain_injection, p_device->vuln_forced_pairing, p_device->key_known);
-*/
                 print_logitacker_device_info(p_cli, p_device);
             }
         }
@@ -628,7 +596,7 @@ static void cmd_devices_remove(nrf_cli_t const * p_cli, size_t argc, char **argv
     }
 }
 
-static void cmd_devices_store_save(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_devices_storage_save(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc > 1)
     {
 
@@ -648,7 +616,7 @@ static void cmd_devices_store_save(nrf_cli_t const * p_cli, size_t argc, char **
 }
 
 // dynamic creation of command addresses
-static void cmd_devices_store_delete(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_devices_storage_remove(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc > 1)
     {
         //parse arg 1 as address
@@ -667,7 +635,7 @@ static void cmd_devices_store_delete(nrf_cli_t const * p_cli, size_t argc, char 
 
 }
 
-static void cmd_devices_store_load(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_devices_storage_load(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc > 1)
     {
         //parse arg 1 as address
@@ -686,7 +654,7 @@ static void cmd_devices_store_load(nrf_cli_t const * p_cli, size_t argc, char **
     }
 }
 
-static void cmd_devices_store_list_entries(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+static void cmd_devices_storage_list(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     fds_find_token_t ftok;
     fds_record_desc_t record_desc;
     fds_flash_record_t flash_record;
@@ -718,10 +686,6 @@ static void cmd_devices_store_list_entries(nrf_cli_t const *p_cli, size_t argc, 
         if (logitacker_flash_get_dongle_for_device(&tmp_dongle, &tmp_device) == NRF_SUCCESS) tmp_device.p_dongle = &tmp_dongle;
         print_logitacker_device_info(p_cli, &tmp_device);
 
-        /*
-        helper_addr_to_hex_str(addr_str, LOGITACKER_DEVICE_ADDR_LEN, p_device->rf_address);
-        NRF_LOG_INFO("Stored device %s", nrf_log_push(addr_str));
-        */
     }
 }
 
@@ -730,66 +694,12 @@ static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **
     logitacker_devices_del_all();
 }
 
-static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv)
-{
-    if ((argc == 1) || nrf_cli_help_requested(p_cli))
-    {
+static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if ((argc == 1) || nrf_cli_help_requested(p_cli)) {
         nrf_cli_help_print(p_cli, NULL, 0);
 
-        char * discover_on_hit_str = "unknown";
-
-        switch (g_logitacker_global_config.discovery_on_new_address_action) {
-            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
-                discover_on_hit_str = "continue in discovery mode";
-                break;
-            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
-                discover_on_hit_str = "start active enumeration for newly discovered address";
-                break;
-            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
-                discover_on_hit_str = "start passive enumeration for newly discovered address";
-                break;
-            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
-                discover_on_hit_str = "(blindly) inject keystrokes for newly discovered address";
-                break;
-        }
-
-        char * pair_sniff_success_action_str = "unknown";
-
-        switch (g_logitacker_global_config.pairing_sniff_on_success_action) {
-            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_CONTINUE:
-                pair_sniff_success_action_str = "continue sniff pairing";
-                break;
-            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION:
-                pair_sniff_success_action_str = "start active enumeration after successfully sniffed pairing";
-                break;
-            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION:
-                pair_sniff_success_action_str = "start passive enumeration after successfully sniffed pairing";
-                break;
-            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY:
-                pair_sniff_success_action_str = "enter device discovery mode after successfully sniffed pairing";
-                break;
-        }
-
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\ncurrent options\r\n===============\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discovery          : %s\r\n", discover_on_hit_str);
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after sniffed pairing            : %s\r\n", pair_sniff_success_action_str);
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard pass-through                   : %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmouse pass-through                      : %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store plain injectable devices     : %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store devices from sniffed pairing : %s\r\n", g_logitacker_global_config.auto_store_sniffed_pairing_devices ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n======\r\n");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot count                     : %d\r\n", g_logitacker_global_config.stats.boot_count);
-
-        return;
+        logitacker_options_print(p_cli);
     }
-
-    if (argc != 2)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
-        return;
-    }
-
-
 }
 
 static void cmd_options_store(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -798,6 +708,22 @@ static void cmd_options_store(nrf_cli_t const * p_cli, size_t argc, char **argv)
 
 static void cmd_options_erase(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     fds_file_delete(LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS);
+}
+
+static void cmd_options_defaultscript(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1) {
+        size_t len = strlen(argv[1]);
+        if (len > LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN-1) len = LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN-1;
+        memcpy(g_logitacker_global_config.default_script, argv[1], len);
+        g_logitacker_global_config.default_script[len] = 0x00;
+        return;
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
+}
+
+static void cmd_options_defaultscript_clear(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.default_script[0] = 0x00;
 }
 
 static void cmd_options_pass_keyboard(nrf_cli_t const * p_cli, size_t argc, char **argv)
@@ -876,9 +802,15 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_test)
         };
 NRF_CLI_CMD_REGISTER(test, &m_sub_test, "Debug command to test code", NULL);
 
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_defaultscript)
+{
+    NRF_CLI_CMD(clear, NULL, "clear default script", cmd_options_defaultscript_clear),
+    NRF_CLI_SUBCMD_SET_END
+};
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
 {
+    NRF_CLI_CMD(defaultscript,   &m_sub_options_defaultscript, "set name of script which should be loaded at boot", cmd_options_defaultscript),
     NRF_CLI_CMD(erase,   NULL, "erase stored options from flash (return to defaults on reboot)", cmd_options_erase),
     NRF_CLI_CMD(store,   NULL, "store current options to flash (persist reboot)", cmd_options_store),
     NRF_CLI_CMD(pass-keyboard,   NULL, "pass-through keystrokes to USB keyboard", cmd_options_pass_keyboard),
@@ -911,38 +843,45 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pairing)
 };
 NRF_CLI_CMD_REGISTER(pairing, &m_sub_pairing, "discover", cmd_pairing);
 
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_script)
+{
+        NRF_CLI_CMD(clear,   NULL, "clear current script (injection tasks)", cmd_script_clear),
+        NRF_CLI_CMD(undo,   NULL, "delete last command from script (last injection task)", cmd_script_undo),
+        NRF_CLI_CMD(show,   NULL, "show listing of current script", cmd_script_show),
+        NRF_CLI_CMD(string,   NULL, "append 'string' command to script, which types out the text given as parameter", cmd_script_string),
+        NRF_CLI_CMD(press,   NULL, "append 'press' command to script, which creates a key combination from the given parameters", cmd_script_press),
+        NRF_CLI_CMD(delay,   NULL, "append 'delay' command to script, delays script execution by the amount of milliseconds given as parameter", cmd_script_delay),
+        NRF_CLI_CMD(store,   NULL, "store script to flash", cmd_script_store),
+        NRF_CLI_CMD(load,   NULL, "load script from flash", cmd_script_load),
+        NRF_CLI_CMD(list,   NULL, "list scripts stored on flash", cmd_script_list),
+        NRF_CLI_CMD(remove,   NULL, "delete script from flash", cmd_script_remove),
+        NRF_CLI_SUBCMD_SET_END
+};
+NRF_CLI_CMD_REGISTER(script, &m_sub_script, "scripting for injection", cmd_inject);
+
+
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ram);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 {
-    NRF_CLI_CMD(language, NULL, "set injection keybboard language layout", cmd_inject_lang),
-    NRF_CLI_CMD(target, &m_sub_inject_target_addr, "set injection target", cmd_inject_target),
-    NRF_CLI_CMD(clear,   NULL, "clear current script (injection tasks)", cmd_inject_clear),
-    NRF_CLI_CMD(undo,   NULL, "delete last command from script (last injection task)", cmd_inject_undo),
+    NRF_CLI_CMD(language, NULL, "set injection keyboard language layout", cmd_inject_lang),
+    NRF_CLI_CMD(target, &m_sub_inject_target_addr, "enter injection mode for given target RF address", cmd_inject_target),
     NRF_CLI_CMD(execute,   NULL, "run current script against injection target", cmd_inject_execute),
-    NRF_CLI_CMD(show,   NULL, "show current injection script", cmd_inject_show),
-    NRF_CLI_CMD(string,   NULL, "add task to script - inject given string", cmd_inject_string),
-    NRF_CLI_CMD(press,   NULL, "add task to script - inject given key combo", cmd_inject_press),
-    NRF_CLI_CMD(delay,   NULL, "add task to script - delay injection", cmd_inject_delay),
-    NRF_CLI_CMD(store,   NULL, "store script to flash", cmd_inject_store),
-    NRF_CLI_CMD(load,   NULL, "load script from flash", cmd_inject_load),
-    NRF_CLI_CMD(list,   NULL, "list scripts stored on flash", cmd_inject_list),
-    NRF_CLI_CMD(delete,   NULL, "delete script from flash", cmd_inject_delete),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(inject, &m_sub_inject, "injection", cmd_inject);
 
 //device level 3
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_load_list, dynamic_device_addr_list_stored);
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_storage_load_list, dynamic_device_addr_list_stored);
 //NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_delete_list, dynamic_device_addr_list_stored_with_all);
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_delete_list, dynamic_device_addr_list_stored); // don't offer delete all option for flash
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_device_store_save_list, dynamic_device_addr_list_ram);
 //device level 2
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices_store)
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices_storage)
 {
-    NRF_CLI_CMD(list, NULL, "list devices stored on flash", cmd_devices_store_list_entries),
-    NRF_CLI_CMD(load, &m_sub_device_store_load_list, "inject given string", cmd_devices_store_load),
-    NRF_CLI_CMD(save, &m_sub_device_store_save_list, "inject given string", cmd_devices_store_save),
-    NRF_CLI_CMD(delete, &m_sub_device_store_delete_list, "inject given string", cmd_devices_store_delete),
+    NRF_CLI_CMD(list, NULL, "list devices stored on flash", cmd_devices_storage_list),
+    NRF_CLI_CMD(load, &m_sub_device_storage_load_list, "load a stored device", cmd_devices_storage_load),
+    NRF_CLI_CMD(save, &m_sub_device_store_save_list, "store a device to flash", cmd_devices_storage_save),
+    NRF_CLI_CMD(remove, &m_sub_device_store_delete_list, "delete a stored device from flash", cmd_devices_storage_remove),
     NRF_CLI_SUBCMD_SET_END
 };
 
@@ -950,12 +889,13 @@ NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_devices_remove_addr_collection, dynamic_device_
 //devices level 1 (handles auto-complete from level 2 as parameter)
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices)
 {
-        NRF_CLI_CMD(store, &m_sub_devices_store, "handle devices on flash", NULL),
-        NRF_CLI_CMD(remove, &m_sub_devices_remove_addr_collection, "remove given device", cmd_devices_remove),
+        NRF_CLI_CMD(storage, &m_sub_devices_storage, "handle devices on flash", NULL),
+        NRF_CLI_CMD(remove, &m_sub_devices_remove_addr_collection, "delete a device from list (RAM)", cmd_devices_remove),
         NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(devices, &m_sub_devices, "List discovered devices", cmd_devices);
 
+/*
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_enum)
 {
@@ -964,4 +904,10 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_enum)
         NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(enum, &m_sub_enum, "start device passive or active enumeration", NULL);
+*/
+
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram);
+
+NRF_CLI_CMD_REGISTER(active_enum, &m_sub_enum_device_list, "start active enumeration of given device", cmd_enum_active);
+NRF_CLI_CMD_REGISTER(passive_enum, &m_sub_enum_device_list, "start passive enumeration of given device", cmd_enum_passive);
 

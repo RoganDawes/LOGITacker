@@ -45,7 +45,7 @@ typedef struct {
 
     bool execute; //indicates if new tasks are executed immediately (true) or enqueued (false)
     inject_task_t current_task; //current task from queue (header data)
-    uint8_t current_task_data[INJECT_MAX_TASK_DATA_SIZE]; //current task from queue (content)
+    uint8_t current_task_data[LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE]; //current task from queue (content)
 
     logitacker_devices_unifying_device_t * p_device;
     logitacker_tx_payload_provider_t * p_payload_provider; // depends on current task, provides TX payloads, till task has finished
@@ -369,9 +369,11 @@ void logitacker_processor_inject_process_task_press(logitacker_processor_inject_
 }
 
 void logitacker_processor_inject_process_task_delay(logitacker_processor_inject_ctx_t *self) {
-    NRF_LOG_INFO("process delay injection: %d milliseconds", self->current_task.delay_ms);
+    uint32_t delay_ms = *self->current_task.p_data_u32;
+
+    NRF_LOG_INFO("process delay injection: %d milliseconds", delay_ms);
     self->p_payload_provider = NULL;
-    if (self->current_task.delay_ms == 0) {
+    if (delay_ms == 0) {
         transfer_state(self, INJECT_STATE_SUCCEEDED); // delay was 0
         return;
     }
@@ -381,7 +383,7 @@ void logitacker_processor_inject_process_task_delay(logitacker_processor_inject_
     transfer_state(self, INJECT_STATE_WORKING);
 
     //start injection
-    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->current_task.delay_ms), NULL);
+    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(delay_ms), NULL);
 }
 
 

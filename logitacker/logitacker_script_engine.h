@@ -8,22 +8,26 @@
 #define LOGITACKER_SCRIPT_ENGINE_H
 
 
-#define INJECT_MAX_TASK_DATA_SIZE 256 // maximum size of a single script task
-#define INJECT_RINGBUF_BYTES (1<<15) // overall size of ringbuffer for storable script tasks (has to be power of 2)
+#define LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE 256 // maximum size of a single script task
+#define LOGITACKER_SCRIPT_ENGINE_RINGBUF_BYTES (1<<15) // overall size of ringbuffer for storable script tasks (has to be power of 2)
+
+#define LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN 32
 
 typedef enum inject_task_type {
     INJECT_TASK_TYPE_TYPE_STRING, //type out UTF-8 String
     INJECT_TASK_TYPE_PRESS_KEYS,  // parse UTF-8 string for valid key combos and generate reports pressing those keys
     INJECT_TASK_TYPE_DELAY,
+    INJECT_TASK_TYPE_SET_LANGUAGE,
+    INJECT_TASK_TYPE_UNUSED,
 } inject_task_type_t;
 
 typedef struct inject_task {
     inject_task_type_t type;
     size_t data_len;
-//    logitacker_keyboard_map_lang_t lang;
-    uint32_t delay_ms;
+//    uint32_t delay_ms;
 
     union {
+        uint32_t* p_data_u32;
         uint8_t* p_data_u8;
         char* p_data_c;
     };

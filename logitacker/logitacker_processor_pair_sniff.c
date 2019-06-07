@@ -102,7 +102,7 @@ void pair_sniff_assign_addr_to_pipe1(logitacker_processor_pair_sniff_ctx_t *self
     nrf_esb_update_prefix(1, prefix);
     nrf_esb_enable_pipes(0x03);
     nrf_esb_start_rx();
-    app_timer_start(self->timer_next_action, self->sniff_ticks, NULL); // restart timer
+    app_timer_start(self->timer_next_action, self->sniff_ticks_long, NULL); // restart timer
 }
 
 void pair_sniff_disable_pipe1(logitacker_processor_pair_sniff_ctx_t *self) {
@@ -188,7 +188,7 @@ void processor_pair_sniff_init_func_(logitacker_processor_pair_sniff_ctx_t *self
 
     self->data_rx = false;
     self->sniff_ticks = APP_TIMER_TICKS(8);
-    self->sniff_ticks_long = APP_TIMER_TICKS(20);
+    self->sniff_ticks_long = APP_TIMER_TICKS(30);
     self->dongle_in_range=false;
 
 

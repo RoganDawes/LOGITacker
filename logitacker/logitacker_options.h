@@ -3,6 +3,7 @@
 
 
 #include "logitacker.h"
+#include "logitacker_script_engine.h"
 
 typedef struct {
     uint32_t boot_count;
@@ -18,6 +19,9 @@ typedef struct {
     bool auto_store_sniffed_pairing_devices;
 
     logitacker_options_stats_t stats;
+
+    logitacker_keyboard_map_lang_t injection_language;
+    char default_script[LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN];
 } logitacker_global_config_t;
 
 const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
@@ -27,6 +31,8 @@ const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .pass_through_keyboard = false,
     .auto_store_sniffed_pairing_devices = true,
     .auto_store_plain_injectable = true,
+    .injection_language = LANGUAGE_LAYOUT_US, //default layout (if nothing set) is US
+    .default_script = "",
     .stats = {
         .boot_count = 0,
     },
@@ -37,8 +43,7 @@ extern logitacker_global_config_t g_logitacker_global_config;
 
 uint32_t logitacker_options_store_to_flash(void);
 uint32_t logitacker_options_restore_from_flash(void);
-void logitacker_options_print_stats();
-void logitacker_options_print();
+void logitacker_options_print(nrf_cli_t const * p_cli);
 
 
 

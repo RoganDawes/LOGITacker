@@ -106,6 +106,7 @@ uint32_t logitacker_options_restore_from_flash(void) {
     return NRF_SUCCESS;
 }
 
+/*
 void logitacker_options_print_stats() {
     NRF_LOG_INFO("stats:\n=====");
     NRF_LOG_INFO("\tboot count:            %d", g_logitacker_global_config.stats.boot_count);
@@ -116,4 +117,72 @@ void logitacker_options_print() {
     NRF_LOG_INFO("\tdiscovery on new address action              :            %d", g_logitacker_global_config.discovery_on_new_address_action);
     NRF_LOG_INFO("\tpass-trough sniffed keyboard data to USB HID :            %s", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
     NRF_LOG_INFO("\tpass-trough sniffed mouse data to USB HID    :            %s", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+}
+ */
+
+void logitacker_options_print(nrf_cli_t const * p_cli)
+{
+
+        char * discover_on_hit_str = "unknown";
+
+        switch (g_logitacker_global_config.discovery_on_new_address_action) {
+            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_DO_NOTHING:
+                discover_on_hit_str = "continue in discovery mode";
+                break;
+            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
+                discover_on_hit_str = "start active enumeration for newly discovered address";
+                break;
+            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_PASSIVE_ENUMERATION:
+                discover_on_hit_str = "start passive enumeration for newly discovered address";
+                break;
+            case LOGITACKER_DISCOVERY_ON_NEW_ADDRESS_SWITCH_AUTO_INJECTION:
+                discover_on_hit_str = "(blindly) inject keystrokes for newly discovered address";
+                break;
+        }
+
+        char * pair_sniff_success_action_str = "unknown";
+
+        switch (g_logitacker_global_config.pairing_sniff_on_success_action) {
+            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_CONTINUE:
+                pair_sniff_success_action_str = "continue sniff pairing";
+                break;
+            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION:
+                pair_sniff_success_action_str = "start active enumeration after successfully sniffed pairing";
+                break;
+            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION:
+                pair_sniff_success_action_str = "start passive enumeration after successfully sniffed pairing";
+                break;
+            case LOGITACKER_PAIRING_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY:
+                pair_sniff_success_action_str = "enter device discovery mode after successfully sniffed pairing";
+                break;
+        }
+
+        char * injection_lan_str = "unknown";
+
+        switch (g_logitacker_global_config.injection_language) {
+            case LANGUAGE_LAYOUT_DE:
+                injection_lan_str = "de";
+                break;
+            case LANGUAGE_LAYOUT_US:
+                injection_lan_str = "us";
+                break;
+        }
+
+
+
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\ncurrent options\r\n===============\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discovery          : %s\r\n", discover_on_hit_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after sniffed pairing            : %s\r\n", pair_sniff_success_action_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard pass-through                   : %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmouse pass-through                      : %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store plain injectable devices     : %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store devices from sniffed pairing : %s\r\n", g_logitacker_global_config.auto_store_sniffed_pairing_devices ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tinjection keyboard language             : %s\r\n", injection_lan_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tdefault script                          : '%s'\r\n", strlen(g_logitacker_global_config.default_script) > 0 ? g_logitacker_global_config.default_script : "<none>");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n======\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot count                     : %d\r\n", g_logitacker_global_config.stats.boot_count);
+
+        return;
+
+
 }
