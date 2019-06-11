@@ -16,10 +16,6 @@
 #include "logitacker_processor_inject.h"
 #include "logitacker_script_engine.h"
 
-#define CLI_EXAMPLE_MAX_CMD_CNT (20u)
-#define CLI_EXAMPLE_MAX_CMD_LEN (33u)
-#define CLI_EXAMPLE_VALUE_BIGGER_THAN_STACK     (20000u)
-
 
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
 static void cmd_script_press(nrf_cli_t const *p_cli, size_t argc, char **argv);
@@ -30,6 +26,10 @@ static int m_stored_device_addr_str_list_len = 0;
 static char m_device_addr_str_list[LOGITACKER_DEVICES_DEVICE_LIST_MAX_ENTRIES][LOGITACKER_DEVICE_ADDR_STR_LEN];
 static int m_device_addr_str_list_len = 0;
 static char m_device_addr_str_list_first_entry[] = "all\x00";
+
+#define STORED_SCRIPTS_AUTOCOMPLETE_LIST_MAX_ENTRIES 32
+static char m_stored_script_names_str_list[STORED_SCRIPTS_AUTOCOMPLETE_LIST_MAX_ENTRIES][LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN];
+static int m_stored_script_names_str_list_len = 0;
 
 static void stored_devices_str_list_update() {
     m_stored_device_addr_str_list_len = 1;
@@ -59,6 +59,33 @@ static void stored_devices_str_list_update() {
 
 }
 
+static void stored_script_names_str_list_update() {
+    fds_find_token_t ftoken;
+    memset(&ftoken, 0x00, sizeof(fds_find_token_t));
+    fds_flash_record_t flash_record;
+    fds_record_desc_t fds_record_desc;
+
+    m_stored_script_names_str_list_len = 0;
+    while(m_stored_script_names_str_list_len < STORED_SCRIPTS_AUTOCOMPLETE_LIST_MAX_ENTRIES && fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
+        if (fds_record_open(&fds_record_desc, &flash_record) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("failed to open record");
+            continue; // go on with next
+        }
+
+        stored_script_fds_info_t const * p_stored_tasks_fds_info_tmp = flash_record.p_data;
+
+        int slen = strlen(p_stored_tasks_fds_info_tmp->script_name);
+        slen = slen >= LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN ? LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN-1 : slen;
+        memcpy(m_stored_script_names_str_list[m_stored_script_names_str_list_len], p_stored_tasks_fds_info_tmp->script_name, slen);
+
+        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("failed to close record");
+        }
+
+        m_stored_script_names_str_list_len++;
+    }
+}
+
 static void device_address_str_list_update() {
     m_device_addr_str_list_len = 1;
     memcpy(&m_device_addr_str_list[0], m_device_addr_str_list_first_entry, sizeof(m_device_addr_str_list_first_entry));
@@ -73,7 +100,26 @@ static void device_address_str_list_update() {
 
 }
 
-// dynamic creation of command addresses
+// dynamic creation of stored script name list
+static void dynamic_script_name(size_t idx, nrf_cli_static_entry_t *p_static)
+{
+    // Must be sorted alphabetically to ensure correct CLI completion.
+    p_static->handler  = NULL;
+    p_static->p_subcmd = NULL;
+    p_static->p_help   = "Connect with address.";
+
+    if (idx == 0) stored_script_names_str_list_update();
+
+    NRF_LOG_INFO("script list len %d", m_stored_script_names_str_list_len);
+
+    if (idx >= m_stored_script_names_str_list_len) {
+        p_static->p_syntax = NULL;
+        return;
+    }
+
+    p_static->p_syntax = m_stored_script_names_str_list[idx];
+}
+
 static void dynamic_device_addr_list_ram_with_all(size_t idx, nrf_cli_static_entry_t *p_static)
 {
     // Must be sorted alphabetically to ensure correct CLI completion.
@@ -110,7 +156,6 @@ static void dynamic_device_addr_list_ram(size_t idx, nrf_cli_static_entry_t *p_s
         p_static->p_syntax = NULL;
     }
 }
-
 /*
 // dynamic creation of command addresses
 static void dynamic_device_addr_list_stored_with_all(size_t idx, nrf_cli_static_entry_t *p_static)
@@ -752,6 +797,19 @@ static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     }
 }
 
+static void cmd_options_autoinject_count(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1) {
+        int count;
+        if (sscanf(argv[1], "%d", &count) != 1) {
+            NRF_LOG_INFO("invalid argument, auto inject count has to be a integer number, but '%s' was given");
+        } else {
+            g_logitacker_global_config.max_auto_injects_per_device = count;
+        }
+    } else {
+        NRF_LOG_INFO("invalid argument, auto inject count has to be a integer number");
+    }
+}
+
 static void cmd_options_store(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     logitacker_options_store_to_flash();
 }
@@ -865,6 +923,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
     NRF_CLI_CMD(store,   NULL, "store current options to flash (persist reboot)", cmd_options_store),
     NRF_CLI_CMD(pass-keyboard,   NULL, "pass-through keystrokes to USB keyboard", cmd_options_pass_keyboard),
     NRF_CLI_CMD(pass-mouse,   NULL, "pass-through mouse moves to USB mouse", cmd_options_pass_mouse),
+    NRF_CLI_CMD(auto-inject-count,   NULL, "maximum number of auto-injects per device", cmd_options_autoinject_count),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(options, &m_sub_options, "options", cmd_options);
@@ -886,6 +945,7 @@ NRF_CLI_CMD_REGISTER(discover, &m_sub_discover, "discover", cmd_discover);
 
 //device level 2
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_pairing_run_addr, dynamic_device_addr_list_ram);
+
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pairing)
 {
     NRF_CLI_CMD(sniff, NULL, "Sniff pairing.", cmd_pairing_sniff),
@@ -893,6 +953,9 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pairing)
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(pairing, &m_sub_pairing, "discover", cmd_pairing);
+
+//LEVEL 3
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_dynamic_script_name, dynamic_script_name);
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_script)
 {
@@ -903,13 +966,12 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_script)
         NRF_CLI_CMD(press,   NULL, "append 'press' command to script, which creates a key combination from the given parameters", cmd_script_press),
         NRF_CLI_CMD(delay,   NULL, "append 'delay' command to script, delays script execution by the amount of milliseconds given as parameter", cmd_script_delay),
         NRF_CLI_CMD(store,   NULL, "store script to flash", cmd_script_store),
-        NRF_CLI_CMD(load,   NULL, "load script from flash", cmd_script_load),
+        NRF_CLI_CMD(load,   &m_sub_dynamic_script_name, "load script from flash", cmd_script_load),
         NRF_CLI_CMD(list,   NULL, "list scripts stored on flash", cmd_script_list),
-        NRF_CLI_CMD(remove,   NULL, "delete script from flash", cmd_script_remove),
+        NRF_CLI_CMD(remove,   &m_sub_dynamic_script_name, "delete script from flash", cmd_script_remove),
         NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(script, &m_sub_script, "scripting for injection", cmd_inject);
-
 
 //level 2
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject_onsuccess)

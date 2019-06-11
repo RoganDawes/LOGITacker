@@ -778,10 +778,15 @@ static bool schedule_frame_for_validation_before_pushing_to_rx_fifo(uint8_t pipe
     uint32_t err = app_sched_event_put(&m_tmp_payload, sizeof(nrf_esb_payload_t), nrf_esb_exec_promiscuous_payload_validation); //ignore error
     if (err != NRF_SUCCESS) 
     {
+        if (err == NRF_ERROR_NO_MEM) {
+            NRF_LOG_WARNING("can't schedule promiscuous mode data for validation ... processing queue full (data arriving too fast)");
+            return false;
+        }
+
         NRF_LOG_WARNING("error scheduling event %d", err);
-        return true;
-    } else {
         return false;
+    } else {
+        return true;
     }
 }
 
@@ -2404,7 +2409,7 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
     // The nrf_esb_validate_promiscuous_frame function has an early out, if determined ESB frame length
     // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
     crcmatch = false;
-    for (uint8_t shift=0; shift<40; shift++) {
+    for (uint8_t shift=0; shift<80; shift++) {
         if (nrf_esb_validate_promiscuous_frame(tmpData, assumed_addrlen)) {
             crcmatch = true;
             break;

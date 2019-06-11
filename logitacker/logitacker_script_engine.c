@@ -36,11 +36,6 @@ typedef enum script_engine_state {
 
 } script_engine_state_t;
 
-typedef struct stored_script_fds_info {
-    char script_name[LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN];
-    uint16_t script_tasks_record_id;
-    uint16_t script_tasks_file_id;
-} stored_script_fds_info_t;
 
 typedef enum {
     FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER,

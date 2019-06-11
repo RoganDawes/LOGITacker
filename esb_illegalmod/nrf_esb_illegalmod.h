@@ -146,7 +146,7 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .tx_mode                = NRF_ESB_TXMODE_AUTO,              \
                                 .radio_irq_priority     = 1,                                \
                                 .event_irq_priority     = 2,                                \
-                                .payload_length         = 60,                               \
+                                .payload_length         = 50,                               \
                                 .selective_auto_ack     = true,                             \
                                 .disallow_auto_ack      = true                              \
 }

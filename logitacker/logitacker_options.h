@@ -63,7 +63,7 @@ const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .auto_store_plain_injectable = true,
     .injection_language = LANGUAGE_LAYOUT_US, //default layout (if nothing set) is US
     .default_script = "",
-    .max_auto_injects_per_device = 2,
+    .max_auto_injects_per_device = 10,
     .stats = {
         .boot_count = 0,
     },
