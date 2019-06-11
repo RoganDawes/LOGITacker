@@ -5,7 +5,7 @@
 #include "nrf_esb_illegalmod.h"
 
 
-
+/*
 #define UNIFYING_SLEEP_MS_BETWEEN_TX                        4  //should be 8ms, but as keep-alives are inserted, could be halfed (see next param)
 #define UNIFYING_REPLAY_KEEP_ALIVES_TO_INSERT_BETWEEN_TX    3
 
@@ -15,6 +15,7 @@
 //#define XOR_BRUTEFORCE_LAST_HID_CODE        0x39 //exclude keypad keys, "key Non-US" and "key application"
 
 #define REPLAYS_BEFORE_BRUTEFORCE_ITERATION 1 //how often keys are replayed to check for LED reports, before next bruteforce iteration
+*/
 
 #define UNIFYING_RF_REPORT_TYPE_MSK             0x1f
 
@@ -33,6 +34,7 @@
 #define UNIFYING_RF_REPORT_BIT_KEEP_ALIVE       0x40
 #define UNIFYING_RF_REPORT_BIT_UNKNOWN          0x80
 
+/*
 // note: 26 frames are minimum to overwrite counter re-use protection, but more frames
 //       are used to overcome changing counters by real keypresses in between replayed RF frames
 #define UNIFYING_MAX_STORED_REPORTS_PER_PIPE 60                                 //space for record storage per pipe
@@ -40,8 +42,9 @@
 #define UNIFYING_MIN_STORED_REPORTS_WITH_SUCCESSIVE_LED_TOGGLE_KEY_DOWNS 13     //required number of key down reports which toggle LED during bruteforce (not less than 13, not more than UNIFYING_MIN_STORED_REPORTS_VALID_PER_PIPE/2)
 
 
-static const uint8_t UNIFYING_GLOBAL_PAIRING_ADDRESS[] = {0xbb, 0x0a, 0xdc, 0xa5, 0x75 };
+*/
 
+/*
 typedef struct
 {
     uint8_t     RfAddress[5];
@@ -91,9 +94,9 @@ typedef struct {
     uint8_t XOR_key_for_LED_brute_force;
     bool all_encrypted_reports_produce_LED_reports;
 } unifying_rf_record_set_t;
+*/
 
-
-
+/*
 typedef struct {
     rf_report_22_t  report[NUM_WHITENED_REPORTS];
 } whitened_replay_frames_t;
@@ -106,6 +109,7 @@ typedef enum {
 } unifying_evt_id_t;
 
 typedef struct {
+
     unifying_evt_id_t   evt_id;
     uint8_t             pipe;
 } unifying_evt_t;
@@ -117,15 +121,20 @@ typedef void (* unifying_event_handler_t)(unifying_evt_t const * p_event);
 typedef void (* unifying_replay_ack_payload_handler_t) (unifying_rf_record_set_t *p_rs, nrf_esb_payload_t const *p_ack_payload);
 
 void unifying_init(unifying_event_handler_t event_handler);
+void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert);
+void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num);
+bool unifying_replay_records_LED_bruteforce_done(uint8_t pipe_num);
+*/
+
+
+
+static const uint8_t UNIFYING_GLOBAL_PAIRING_ADDRESS[] = {0xbb, 0x0a, 0xdc, 0xa5, 0x75 };
+
 bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen);
 bool unifying_payload_validate_checksum(uint8_t * p_array, uint8_t paylen);
 void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType, bool *p_outHasKeepAliveSet);
 void unifying_frame_classify_log(nrf_esb_payload_t frame);
 uint32_t unifying_extract_counter_from_encrypted_keyboard_frame(nrf_esb_payload_t frame, uint32_t *p_counter);
-void unifying_replay_records(uint8_t pipe_num, bool replay_realtime, uint8_t keep_alives_to_insert);
-void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num);
-bool unifying_replay_records_LED_bruteforce_done(uint8_t pipe_num);
-
 
 
 #endif

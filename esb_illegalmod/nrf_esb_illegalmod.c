@@ -285,6 +285,28 @@ uint32_t nrf_esb_init_sniffer_mode() {
     return NRF_SUCCESS;
 }
 
+uint32_t nrf_esb_init_prx_mode() {
+    if (!m_esb_initialized) return NRF_ERROR_INVALID_STATE;
+
+    uint32_t err_code;
+
+    nrf_esb_config_t esb_config = NRF_ESB_DEFAULT_CONFIG;
+    esb_config.mode = NRF_ESB_MODE_PRX;
+    esb_config.event_handler = m_event_handler;
+
+    err_code = nrf_esb_init(&esb_config);
+    VERIFY_SUCCESS(err_code);
+
+
+    // if old mode was promiscuous mode, flush RX
+    if (m_config_local.mode == NRF_ESB_MODE_PROMISCOUS) {
+        while (nrf_esb_flush_rx() != NRF_SUCCESS) {}; //assure we have no frames pending, which have been captured in non-PROMISCOUS mode and could get mis-interpreted
+    }
+
+    m_config_local.mode = NRF_ESB_MODE_PRX;
+    return NRF_SUCCESS;
+}
+
 uint32_t nrf_esb_init_ptx_mode() {
     if (!m_esb_initialized) return NRF_ERROR_INVALID_STATE;
 
@@ -351,6 +373,10 @@ uint32_t nrf_esb_set_mode(nrf_esb_mode_t mode) {
     uint32_t err_code;
 
     switch (mode) {
+        case NRF_ESB_MODE_PRX:
+            err_code = nrf_esb_init_prx_mode();
+            VERIFY_SUCCESS(err_code);
+            break;
         case NRF_ESB_MODE_PTX:
             err_code = nrf_esb_init_ptx_mode();
             VERIFY_SUCCESS(err_code);
@@ -2409,8 +2435,9 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
     // The nrf_esb_validate_promiscuous_frame function has an early out, if determined ESB frame length
     // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
     crcmatch = false;
-    for (uint8_t shift=0; shift<80; shift++) {
+    for (uint8_t shift=0; shift<160; shift++) {
         if (nrf_esb_validate_promiscuous_frame(tmpData, assumed_addrlen)) {
+            NRF_LOG_DEBUG("Shift width in bits to CRC match: %d", shift);
             crcmatch = true;
             break;
         }
@@ -2494,6 +2521,12 @@ uint32_t nrf_esb_update_channel_frequency_table(uint8_t * values, uint8_t length
 
 uint32_t nrf_esb_update_channel_frequency_table_unifying() {
     uint8_t unifying_frequencies[25] = { 5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59,62,65,68,71,74,77 };
+    uint8_t unifying_frequencies_len = 25;
+    return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
+}
+
+uint32_t nrf_esb_update_channel_frequency_table_unifying_reduced() {
+    uint8_t unifying_frequencies[12] = { 5,8,14,17,32,35,41,44,62,65,71,74 };
     uint8_t unifying_frequencies_len = 25;
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }

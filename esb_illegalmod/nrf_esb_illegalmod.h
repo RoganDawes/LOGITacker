@@ -123,7 +123,7 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .event_handler          = 0,                                \
                                 .bitrate                = NRF_ESB_BITRATE_2MBPS,            \
                                 .crc                    = NRF_ESB_CRC_16BIT,                \
-                                .tx_output_power        = NRF_ESB_TX_POWER_0DBM,            \
+                                .tx_output_power        = NRF_ESB_TX_POWER_8DBM,            \
                                 .retransmit_delay       = 250,                              \
                                 .retransmit_count       = 3,                                \
                                 .tx_mode                = NRF_ESB_TXMODE_AUTO,              \
@@ -140,7 +140,7 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .event_handler          = 0,                                \
                                 .bitrate                = NRF_ESB_BITRATE_2MBPS,            \
                                 .crc                    = NRF_ESB_CRC_OFF,                  \
-                                .tx_output_power        = NRF_ESB_TX_POWER_0DBM,            \
+                                .tx_output_power        = NRF_ESB_TX_POWER_8DBM,            \
                                 .retransmit_delay       = 250,                              \
                                 .retransmit_count       = 3,                                \
                                 .tx_mode                = NRF_ESB_TXMODE_AUTO,              \
@@ -619,6 +619,7 @@ nrf_esb_mode_t nrf_esb_get_mode();
 // channel and frequency handling (works with translation tables)
 uint32_t nrf_esb_update_channel_frequency_table(uint8_t * values, uint8_t length);
 uint32_t nrf_esb_update_channel_frequency_table_unifying();
+uint32_t nrf_esb_update_channel_frequency_table_unifying_reduced();
 uint32_t nrf_esb_update_channel_frequency_table_unifying_pairing();
 uint32_t nrf_esb_update_channel_frequency_table_all();
 uint32_t nrf_esb_set_rf_channel_next();

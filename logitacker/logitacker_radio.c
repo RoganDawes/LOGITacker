@@ -150,7 +150,9 @@ uint32_t logitacker_radio_init(nrf_esb_event_handler_t event_handler, radio_even
 }
 
 uint32_t radio_start_channel_hopping(uint32_t interval, uint32_t start_delay_ms, bool disable_on_rx) {
+    m_radio_state.channel_hop_delay_ms = interval;
     if (m_radio_state.channel_hop_enabled) return NRF_SUCCESS;
+
     m_radio_state.channel_hop_enabled = true;
     m_radio_state.channel_hop_disable_on_rx = disable_on_rx;
     if (start_delay_ms == 0) {

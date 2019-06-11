@@ -11,6 +11,7 @@
 #include "timestamp.h"
 #include "app_scheduler.h"
 
+/*
 // replay actions
 APP_TIMER_DEF(m_timer_next_action);
 
@@ -60,15 +61,8 @@ typedef struct {
 static unifying_state_t m_state_local;
 
 unifying_evt_t event;
+*/
 
-uint8_t unifying_calculate_checksum(uint8_t * p_array, uint8_t paylen) {
-    uint8_t checksum = 0x00;
-    for (int i = 0; i < paylen; i++) {
-        checksum -= p_array[i];
-    }
-    //checksum++;
-    return checksum;
-}
 
 /*
 bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen) {
@@ -80,29 +74,8 @@ bool unifying_validate_payload(uint8_t * p_array, uint8_t paylen) {
 }
 */
 
-bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen) {
-    if (paylen < 1) return false;
-    uint8_t chksum = unifying_calculate_checksum(p_array, paylen-1);
-    p_array[paylen-1] = chksum;
 
-    return true;
-}
-
-bool unifying_payload_validate_checksum(uint8_t * p_array, uint8_t paylen) {
-    if (paylen < 1) return false;
-    uint8_t chksum = unifying_calculate_checksum(p_array, paylen-1);
-    return p_array[paylen-1] == chksum;
-}
-
-uint32_t unifying_extract_counter_from_encrypted_keyboard_frame(nrf_esb_payload_t frame, uint32_t *p_counter) {
-    // assure frame is encrypted keyboard
-    if (frame.length != 22) return NRF_ERROR_INVALID_LENGTH;
-    if ((frame.data[1] & 0x1f) != UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) return NRF_ERROR_INVALID_DATA;
-    *p_counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
-    return NRF_SUCCESS;
-}
-
-
+/*
 bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
     unifying_rf_record_set_t *p_rs = &m_state_local.record_sets[pipe];
     // walk buffer backwards starting at last recorded frame
@@ -157,8 +130,9 @@ bool validate_record_buf_successive_keydown_keyrelease(uint8_t pipe) {
 
     return false;
 }
+*/
 
-
+/*
 uint32_t timestamp_last = 0;
 uint32_t timestamp = 0;
 uint32_t timestamp_delta = 0;
@@ -252,85 +226,10 @@ bool unifying_record_rf_frame(nrf_esb_payload_t frame) {
     } 
     return result;
 }
+*/
 
-void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType, bool *p_outHasKeepAliveSet) { 
-    //filter out frames < 5 byte length (likely ACKs)
-    if (frame.length < 5) {
-        p_outRFReportType = UNIFYING_RF_REPORT_INVALID;
-        p_outHasKeepAliveSet = false;
-        return;
-    }
 
-    *p_outRFReportType = frame.data[1]; // byte 1 is rf report type, byte 0 is device prefix
-    *p_outHasKeepAliveSet = (frame.data[1] & 0x40) != 0;
-    *p_outRFReportType &= UNIFYING_RF_REPORT_TYPE_MSK; //mask report type
-
-    return;
-}
-
-#define UNIFYING_CLASSIFY_LOG_PREFIX "Unifying RF frame: "
-void unifying_frame_classify_log(nrf_esb_payload_t frame) {     
-    bool logKeepAliveEmpty = true;
-
-    //filter out frames < 5 byte length (likely ACKs)
-    if (frame.length < 5) {
-        NRF_LOG_INFO("Invalid Unifying RF frame (wrong length or empty ack)");
-        return;
-    }
-
-    uint8_t reportType = frame.data[1]; // byte 1 is rf report type, byte 0 is device prefix
-    bool keepAliveSet = (reportType & 0x40) != 0;
-    reportType &= UNIFYING_RF_REPORT_TYPE_MSK; //mask report type
-    uint32_t counter;
-
-    
-
-    //filter out Unifying keep alive
-    switch (reportType) {
-        case UNIFYING_RF_REPORT_PLAIN_KEYBOARD:
-            NRF_LOG_INFO("%sUnencrypted keyboard", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case UNIFYING_RF_REPORT_PLAIN_MOUSE:
-            NRF_LOG_INFO("%sUnencrypted mouse", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case UNIFYING_RF_REPORT_PLAIN_MULTIMEDIA:
-            NRF_LOG_INFO("%sUnencrypted multimedia key", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case UNIFYING_RF_REPORT_PLAIN_SYSTEM_CTL:
-            NRF_LOG_INFO("%sUnencrypted system control key", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case UNIFYING_RF_REPORT_LED:
-            NRF_LOG_INFO("%sLED (outbound)", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
-            NRF_LOG_INFO("%sSet keep-alive", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case UNIFYING_RF_REPORT_HIDPP_SHORT:
-            NRF_LOG_INFO("%sHID++ short", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case UNIFYING_RF_REPORT_HIDPP_LONG:
-            NRF_LOG_INFO("%sHID++ long", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
-            //counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
-            counter = 0;
-            if (unifying_extract_counter_from_encrypted_keyboard_frame(frame, &counter) == NRF_SUCCESS) {
-                NRF_LOG_INFO("%sEncrypted keyboard, counter %08x", UNIFYING_CLASSIFY_LOG_PREFIX, counter);
-
-            }
-
-            return;
-        case UNIFYING_RF_REPORT_PAIRING:
-            NRF_LOG_INFO("%sPairing", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        case 0x00:
-            if (keepAliveSet && logKeepAliveEmpty) NRF_LOG_INFO("%sEmpty keep alive", UNIFYING_CLASSIFY_LOG_PREFIX);
-            return;
-        default:
-            NRF_LOG_INFO("%sUnknown frame type %02x, keep alive %s", UNIFYING_CLASSIFY_LOG_PREFIX, frame.data[1], keepAliveSet ? "set" : "not set");
-            return;
-    }
-}
+/*
 
 uint8_t keep_alive_8ms[5] = {0x00, 0x40, 0x00, 0x08, 0xb8}; 
 void test_ack_handler(unifying_rf_record_set_t *p_rs, nrf_esb_payload_t const *p_ack_payload) {
@@ -349,11 +248,6 @@ void process_next_replay_step(replay_event_t replay_event) {
             nrf_esb_set_rf_channel_next();
             nrf_esb_start_tx();
             // if all channels failed, change state to replay failed
-/*
-            // TEST abort replay
-            m_replay_state.substate = REPLAY_SUBSTATE_REPLAY_FAILED;
-            NRF_LOG_INFO("Replay: transmission failed (timestamp %d)", timestamp_get());
-*/            
         }
         break;
         case REPLAY_EVENT_TIMER:
@@ -524,6 +418,7 @@ uint8_t xor_key(uint8_t iteration_num) {
     return result;
 }
 
+
 void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
     
     unifying_rf_record_set_t * p_rs = &m_state_local.record_sets[pipe_num];
@@ -618,6 +513,7 @@ void unifying_replay_records_LED_bruteforce_iteration(uint8_t pipe_num) {
     // advance XOR key
     p_rs->XOR_key_for_LED_brute_force++;
 }
+
 
 bool unifying_replay_records_LED_bruteforce_done(uint8_t pipe_num) {
     if (m_state_local.record_sets[pipe_num].all_encrypted_reports_produce_LED_reports) {
@@ -733,3 +629,125 @@ void unifying_init(unifying_event_handler_t event_handler){
 }
 
 
+*/
+
+
+
+
+
+
+
+
+
+
+
+uint8_t unifying_calculate_checksum(uint8_t * p_array, uint8_t paylen) {
+    uint8_t checksum = 0x00;
+    for (int i = 0; i < paylen; i++) {
+        checksum -= p_array[i];
+    }
+    //checksum++;
+    return checksum;
+}
+
+
+bool unifying_payload_update_checksum(uint8_t * p_array, uint8_t paylen) {
+    if (paylen < 1) return false;
+    uint8_t chksum = unifying_calculate_checksum(p_array, paylen-1);
+    p_array[paylen-1] = chksum;
+
+    return true;
+}
+
+bool unifying_payload_validate_checksum(uint8_t * p_array, uint8_t paylen) {
+    if (paylen < 1) return false;
+    uint8_t chksum = unifying_calculate_checksum(p_array, paylen-1);
+    return p_array[paylen-1] == chksum;
+}
+
+uint32_t unifying_extract_counter_from_encrypted_keyboard_frame(nrf_esb_payload_t frame, uint32_t *p_counter) {
+    // assure frame is encrypted keyboard
+    if (frame.length != 22) return NRF_ERROR_INVALID_LENGTH;
+    if ((frame.data[1] & 0x1f) != UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) return NRF_ERROR_INVALID_DATA;
+    *p_counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
+    return NRF_SUCCESS;
+}
+
+void unifying_frame_classify(nrf_esb_payload_t frame, uint8_t *p_outRFReportType, bool *p_outHasKeepAliveSet) {
+    //filter out frames < 5 byte length (likely ACKs)
+    if (frame.length < 5) {
+        p_outRFReportType = UNIFYING_RF_REPORT_INVALID;
+        p_outHasKeepAliveSet = false;
+        return;
+    }
+
+    *p_outRFReportType = frame.data[1]; // byte 1 is rf report type, byte 0 is device prefix
+    *p_outHasKeepAliveSet = (frame.data[1] & 0x40) != 0;
+    *p_outRFReportType &= UNIFYING_RF_REPORT_TYPE_MSK; //mask report type
+
+    return;
+}
+
+#define UNIFYING_CLASSIFY_LOG_PREFIX "Unifying RF frame: "
+void unifying_frame_classify_log(nrf_esb_payload_t frame) {
+    bool logKeepAliveEmpty = true;
+
+    //filter out frames < 5 byte length (likely ACKs)
+    if (frame.length < 5) {
+        NRF_LOG_INFO("Invalid Unifying RF frame (wrong length or empty ack)");
+        return;
+    }
+
+    uint8_t reportType = frame.data[1]; // byte 1 is rf report type, byte 0 is device prefix
+    bool keepAliveSet = (reportType & 0x40) != 0;
+    reportType &= UNIFYING_RF_REPORT_TYPE_MSK; //mask report type
+    uint32_t counter;
+
+
+
+    //filter out Unifying keep alive
+    switch (reportType) {
+        case UNIFYING_RF_REPORT_PLAIN_KEYBOARD:
+            NRF_LOG_INFO("%sUnencrypted keyboard", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case UNIFYING_RF_REPORT_PLAIN_MOUSE:
+            NRF_LOG_INFO("%sUnencrypted mouse", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case UNIFYING_RF_REPORT_PLAIN_MULTIMEDIA:
+            NRF_LOG_INFO("%sUnencrypted multimedia key", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case UNIFYING_RF_REPORT_PLAIN_SYSTEM_CTL:
+            NRF_LOG_INFO("%sUnencrypted system control key", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case UNIFYING_RF_REPORT_LED:
+            NRF_LOG_INFO("%sLED (outbound)", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case UNIFYING_RF_REPORT_SET_KEEP_ALIVE:
+            NRF_LOG_INFO("%sSet keep-alive", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case UNIFYING_RF_REPORT_HIDPP_SHORT:
+            NRF_LOG_INFO("%sHID++ short", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case UNIFYING_RF_REPORT_HIDPP_LONG:
+            NRF_LOG_INFO("%sHID++ long", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
+            //counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
+            counter = 0;
+            if (unifying_extract_counter_from_encrypted_keyboard_frame(frame, &counter) == NRF_SUCCESS) {
+                NRF_LOG_INFO("%sEncrypted keyboard, counter %08x", UNIFYING_CLASSIFY_LOG_PREFIX, counter);
+
+            }
+
+            return;
+        case UNIFYING_RF_REPORT_PAIRING:
+            NRF_LOG_INFO("%sPairing", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        case 0x00:
+            if (keepAliveSet && logKeepAliveEmpty) NRF_LOG_INFO("%sEmpty keep alive", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
+        default:
+            NRF_LOG_INFO("%sUnknown frame type %02x, keep alive %s", UNIFYING_CLASSIFY_LOG_PREFIX, frame.data[1], keepAliveSet ? "set" : "not set");
+            return;
+    }
+}

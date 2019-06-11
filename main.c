@@ -47,7 +47,8 @@
 #define CHANNEL_HOP_RESTART_DELAY 1300
 
 // Scheduler settings
-#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),MAX(sizeof(unifying_rf_record_set_t),sizeof(nrf_esb_evt_t))))))
+//#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),MAX(sizeof(unifying_rf_record_set_t),sizeof(nrf_esb_evt_t))))))
+#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),sizeof(nrf_esb_evt_t)))))
 
 
 #define SCHED_QUEUE_SIZE            32
@@ -61,26 +62,14 @@
 #endif
 
 
+/*
 #define AUTO_BRUTEFORCE true
 static bool continue_frame_recording = true;
 static bool enough_frames_recorded = false;
 static bool continuo_redording_even_if_enough_frames = false;
 
-uint32_t m_act_led = LED_B;
-uint32_t m_channel_scan_led = LED_G;
-
-
-
-// internal state
-struct
-{
-    int16_t counter;    /**< Accumulated x state */
-    int16_t lastCounter;
-}m_state;
-
 
 bool m_auto_bruteforce_started = false;
-
 uint8_t m_replay_count;
 void unifying_event_handler(unifying_evt_t const *p_event) {
     //helper_log_priority("UNIFYING_event_handler");
@@ -137,7 +126,7 @@ void unifying_event_handler(unifying_evt_t const *p_event) {
             break;
     }
 }
-
+*/
 
 NRF_CLI_CDC_ACM_DEF(m_cli_cdc_acm_transport);
 NRF_CLI_DEF(m_cli_cdc_acm, g_logitacker_cli_name, &m_cli_cdc_acm_transport.transport, '\r', 20);
@@ -147,7 +136,7 @@ NRF_CLI_DEF(m_cli_cdc_acm, g_logitacker_cli_name, &m_cli_cdc_acm_transport.trans
 
 int main(void)
 {
-    continue_frame_recording = true;
+//    continue_frame_recording = true;
 
     // Note: For Makerdiary MDK dongle the button isn't working in event driven fashion (only BSP SIMPLE seems to be 
     // supported). Thus this code won't support button interaction on MDK dongle.
@@ -191,7 +180,7 @@ int main(void)
     APP_ERROR_CHECK(ret);
 
 
-    unifying_init(unifying_event_handler);
+    //unifying_init(unifying_event_handler);
 
 
 //    timestamp_init();
