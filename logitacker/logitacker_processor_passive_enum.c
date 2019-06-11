@@ -305,6 +305,11 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                         NRF_LOG_HEXDUMP_INFO(m_keyboard_report_decryption_buffer, 8);
                         //ToDo: print modifier
 
+                        //print human readable modifier key
+                        char tmp_mod_str[128];
+                        modcode_to_str(tmp_mod_str, m_keyboard_report_decryption_buffer[0]);
+                        NRF_LOG_INFO("Mod: %s", nrf_log_push(tmp_mod_str));
+
                         // print human readable form of keys
                         for (int k=1; k<7; k++) {
                             if (m_keyboard_report_decryption_buffer[k] == 0x00 && k>0) break; //print no further keys

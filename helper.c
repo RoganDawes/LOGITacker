@@ -63,6 +63,7 @@ void helper_addr_to_hex_str(char * p_result, uint8_t len, uint8_t const * const 
 
     char buffer[4] = {0};
 
+    // ToDo: This line is bullshit, at leat the first byte should be 0x00 to make strcat work
     memset(p_result, 0, len);
 
     for (uint8_t i = 0; i < len; ++i)

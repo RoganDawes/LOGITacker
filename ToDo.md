@@ -12,7 +12,7 @@ The firmware evolves as needed by myself (on-stage demos, experiments). **No fea
 - abort conditions for passive enum (too many non-Unifying frames, no frames after timeout, enough frames of interesting types received, interesting != keep-alive)
 - [done for keyboard] mirror input reports to HID keyboard/mouse interface
 - pass sniffed frames on HID raw
-- passive enum keyboard reports to string: modifiers have to be added, change logging to use single line
+- [done] passive enum keyboard reports to string: modifiers have to be added
 - [done] cli: auto complete for `devices store load` and `devices store delete` (maybe option to store full dongle)
 - flash storage automation: optional auto store for
     1) [done] devices with sniffed pairing and encryption capability (chances are low to capture pairing in flight --> must have)
@@ -27,7 +27,7 @@ and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - [done, `script`command] injection: allow entering inject mode without given RF address (block execution unless target RF address is set, instead)
 - [done] storing scripts
 - [done] loading scripts
-- script FDS: deletion, list stored scripts
+- [done] script FDS: deletion, list stored scripts
 - injection: abort command for long typing scripts
 - command for manual device creation (avoid the need of discovery)
 - [done] command for flash erase

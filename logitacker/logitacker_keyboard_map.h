@@ -616,6 +616,7 @@ typedef struct {
 uint32_t logitacker_keyboard_map_wc_to_hid_reports(hid_keyboard_report_t **p_out_report_seq, uint32_t *out_rep_seq_len,
                                                    logitacker_keyboard_map_lang_t in_layout, wchar_t in_rune);
 char* keycode_to_str(enum keys keycode);
+void modcode_to_str(char * p_result, const HID_mod_code_t modcode);
 
 uint32_t logitacker_keyboard_map_u8_str_to_hid_reports(logitacker_keyboard_map_u8_str_parser_ctx_t *p_ctx, char const *in_str,
                                                        hid_keyboard_report_t **p_out_next_report_seq,

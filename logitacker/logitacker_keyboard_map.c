@@ -10,6 +10,91 @@ NRF_LOG_MODULE_REGISTER();
 
 
 /* maps the given HID keycode to a string representation */
+void modcode_to_str(char * p_result, const HID_mod_code_t modcode) {
+    ASSERT(p_result);
+
+    p_result[0] = 0;
+
+    if (modcode == 0x00) {
+        strcat(p_result, "NONE");
+        return;
+    }
+
+    uint8_t token_count = 0;
+
+    if ((modcode & HID_MOD_KEY_LEFT_CONTROL) > 0) {
+        if (token_count == 0) strcat(p_result, "(LEFT_CONTROL");
+        token_count++;
+    }
+
+    if ((modcode & HID_MOD_KEY_LEFT_SHIFT) > 0) {
+        if (token_count == 0) {
+            strcat(p_result, "(LEFT_SHIFT");
+        } else {
+            strcat(p_result, " | LEFT_SHIFT");
+        }
+        token_count++;
+    }
+
+    if ((modcode & HID_MOD_KEY_LEFT_ALT) > 0) {
+        if (token_count == 0) {
+            strcat(p_result, "(LEFT_ALT");
+        } else {
+            NRF_LOG_INFO("LEFT_ALT appended");
+            strcat(p_result, " | LEFT_ALT");
+        }
+        token_count++;
+    }
+
+    if ((modcode & HID_MOD_KEY_LEFT_GUI) > 0) {
+        if (token_count == 0) {
+            strcat(p_result, "(LEFT_GUI");
+        } else {
+            strcat(p_result, " | LEFT_GUI");
+        }
+        token_count++;
+    }
+
+    if ((modcode & HID_MOD_KEY_RIGHT_CONTROL) > 0) {
+        if (token_count == 0) {
+            strcat(p_result, "(RIGHT_CONTROL");
+        } else {
+            strcat(p_result, " | RIGHT_CONTROL");
+        }
+        token_count++;
+    }
+
+    if ((modcode & HID_MOD_KEY_RIGHT_SHIFT) > 0) {
+        if (token_count == 0) {
+            strcat(p_result, "(RIGHT_SHIFT");
+        } else {
+            strcat(p_result, " | RIGHT_SHIFT");
+        }
+        token_count++;
+    }
+
+    if ((modcode & HID_MOD_KEY_RIGHT_ALT) > 0) {
+        if (token_count == 0) {
+            strcat(p_result, "(RIGHT_ALT");
+        } else {
+            strcat(p_result, " | RIGHT_ALT");
+        }
+        token_count++;
+    }
+
+    if ((modcode & HID_MOD_KEY_RIGHT_GUI) > 0) {
+        if (token_count == 0) {
+            strcat(p_result, "(RIGHT_GUI");
+        } else {
+            strcat(p_result, " | RIGHT_GUI");
+        }
+    }
+
+    strcat(p_result, ")");
+}
+
+
+/* maps the given HID keycode to a string representation */
 char* keycode_to_str(logitacker_keyboard_map_hid_keys_t keycode) {
     switch (keycode) {
         ALL_KEYCODES(KEYCODE_SWITCH_CASE)
