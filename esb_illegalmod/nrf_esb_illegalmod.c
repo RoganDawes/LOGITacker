@@ -619,9 +619,6 @@ static bool update_radio_bitrate()
 
 static bool update_radio_protocol()
 {
-    // assure address update if proto changed
-    NRF_LOG_INFO("New proto %d, updating rf_addresses", m_config_local.protocol);
-
     switch (m_config_local.protocol)
     {
         case NRF_ESB_PROTOCOL_ESB_DPL:
@@ -638,7 +635,7 @@ static bool update_radio_protocol()
     }
 
     // assure address update if proto changed
-    NRF_LOG_INFO("New proto %d, updating rf_addresses", m_config_local.protocol);
+    NRF_LOG_DEBUG("New proto %d, updating rf_addresses", m_config_local.protocol);
     update_radio_addresses(NRF_ESB_ADDR_UPDATE_MASK_BASE0 | NRF_ESB_ADDR_UPDATE_MASK_BASE1 | NRF_ESB_ADDR_UPDATE_MASK_PREFIX);
 
 
@@ -1593,7 +1590,7 @@ void RADIO_IRQHandler()
 
 uint32_t nrf_esb_init(nrf_esb_config_t const * p_config)
 {
-    NRF_LOG_INFO("called nrf_esb_init with mode %d", p_config->mode);
+    NRF_LOG_DEBUG("called nrf_esb_init with mode %d", p_config->mode);
     uint32_t err_code;
 
     VERIFY_PARAM_NOT_NULL(p_config);
@@ -2435,7 +2432,7 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
     // The nrf_esb_validate_promiscuous_frame function has an early out, if determined ESB frame length
     // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
     crcmatch = false;
-    for (uint8_t shift=0; shift<160; shift++) {
+    for (uint8_t shift=0; shift<88; shift++) {
         if (nrf_esb_validate_promiscuous_frame(tmpData, assumed_addrlen)) {
             NRF_LOG_DEBUG("Shift width in bits to CRC match: %d", shift);
             crcmatch = true;

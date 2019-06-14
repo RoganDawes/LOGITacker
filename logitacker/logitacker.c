@@ -146,7 +146,7 @@ void logitacker_enter_mode_passive_enum(uint8_t *rf_address) {
 }
 
 
-void logitacker_enter_mode_pairing_sniff() {
+void logitacker_enter_mode_pair_sniff() {
     if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
 
     p_processor = new_processor_pair_sniff(m_timer_next_tx_action);

@@ -51,7 +51,7 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address);
 
 void logitacker_enter_mode_pair_device(uint8_t const *rf_address);
 
-void logitacker_enter_mode_pairing_sniff();
+void logitacker_enter_mode_pair_sniff();
 
 void logitacker_enter_mode_injection(uint8_t const *rf_address);
 

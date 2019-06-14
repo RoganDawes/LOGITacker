@@ -590,11 +590,36 @@ static void cmd_discover_onhit_continue(nrf_cli_t const * p_cli, size_t argc, ch
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-hit action: continue\r\n");
 }
 
-static void cmd_pairing_sniff(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    logitacker_enter_mode_pairing_sniff();
+static void cmd_pair_sniff_onsuccess_continue(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.pair_sniff_on_success = OPTION_PAIR_SNIFF_ON_SUCCESS_CONTINUE;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-success action: continue\r\n");
 }
 
-static void cmd_pairing_run(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_pair_sniff_onsuccess_discover(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.pair_sniff_on_success = OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-success action: enter discovery mode\r\n");
+}
+
+static void cmd_pair_sniff_onsuccess_passiveenum(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.pair_sniff_on_success = OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-success action: enter passive enumeration mode\r\n");
+}
+
+static void cmd_pair_sniff_onsuccess_activeenum(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.pair_sniff_on_success = OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-success action: enter active enumeration mode\r\n");
+}
+
+static void cmd_pair_sniff_onsuccess_autoinject(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.pair_sniff_on_success = OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_AUTO_INJECTION;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-success action: enter injection mode and execute injection\r\n");
+}
+
+static void cmd_pair_sniff_run(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    logitacker_enter_mode_pair_sniff();
+}
+
+static void cmd_pair_device_run(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if (argc > 1)
     {
@@ -618,7 +643,12 @@ static void cmd_pairing_run(nrf_cli_t const * p_cli, size_t argc, char **argv)
     logitacker_enter_mode_pair_device(UNIFYING_GLOBAL_PAIRING_ADDRESS);
 }
 
-static void cmd_pairing(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_help(nrf_cli_t const *p_cli, size_t argc, char **argv)
+{
+    nrf_cli_help_print(p_cli, NULL, 0);
+}
+
+static void cmd_pair(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if ((argc == 1) || nrf_cli_help_requested(p_cli))
     {
@@ -943,16 +973,42 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover_onhit)
 };
 NRF_CLI_CMD_REGISTER(discover, &m_sub_discover, "discover", cmd_discover);
 
-//device level 2
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_pairing_run_addr, dynamic_device_addr_list_ram);
-
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pairing)
+//pair_sniff_run level 3
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_pair_device_addresses, dynamic_device_addr_list_ram);
+//pair_sniff_onsuccess level 3
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pair_sniff_onsuccess)
 {
-    NRF_CLI_CMD(sniff, NULL, "Sniff pairing.", cmd_pairing_sniff),
-    NRF_CLI_CMD(run, &m_sub_pairing_run_addr, "Pair device on given address (if no address given, pairing address is used).", cmd_pairing_run),
+        NRF_CLI_CMD(continue, NULL, "continue to sniff pairing attempts", cmd_pair_sniff_onsuccess_continue),
+        NRF_CLI_CMD(passive-enum, NULL, "start passive enumeration of newly paired device", cmd_pair_sniff_onsuccess_passiveenum),
+        NRF_CLI_CMD(active-enum, NULL, "start passive enumeration of newly paired device", cmd_pair_sniff_onsuccess_activeenum),
+        NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_pair_sniff_onsuccess_discover),
+        NRF_CLI_CMD(auto-inject, NULL, "enter injection mode and execute injection", cmd_pair_sniff_onsuccess_autoinject),
+
+        NRF_CLI_SUBCMD_SET_END
+};
+
+//pair_sniff level 2
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pair_sniff)
+{
+        NRF_CLI_CMD(run, NULL, "Sniff pairing.", cmd_pair_sniff_run),
+        NRF_CLI_CMD(onsuccess, &m_sub_pair_sniff_onsuccess, "how to continue after a pairing has been captured", cmd_help),
+        NRF_CLI_SUBCMD_SET_END
+};
+
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pair_device)
+{
+        NRF_CLI_CMD(run, &m_sub_pair_device_addresses, "Pair device on given address (if no address given, pairing address is used).", cmd_pair_device_run),
+        NRF_CLI_SUBCMD_SET_END
+};
+
+
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pair)
+{
+    NRF_CLI_CMD(sniff, &m_sub_pair_sniff, "Sniff pairing.", cmd_help),
+    NRF_CLI_CMD(device, &m_sub_pair_device, "pair or forced pair a device to a dongle", NULL),
     NRF_CLI_SUBCMD_SET_END
 };
-NRF_CLI_CMD_REGISTER(pairing, &m_sub_pairing, "discover", cmd_pairing);
+NRF_CLI_CMD_REGISTER(pair, &m_sub_pair, "discover", cmd_pair);
 
 //LEVEL 3
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_dynamic_script_name, dynamic_script_name);

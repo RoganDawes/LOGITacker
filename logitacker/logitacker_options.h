@@ -16,7 +16,8 @@ typedef enum {
     OPTION_PAIR_SNIFF_ON_SUCCESS_CONTINUE,   // continues in pair sniff mode
     OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION,   // continues in passive enumeration mode when address found
     OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_ACTIVE_ENUMERATION,   // continues in active enumeration mode when address found
-    OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY
+    OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY,
+    OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_AUTO_INJECTION
 } option_pair_sniff_on_success_t;
 
 typedef enum {
@@ -63,7 +64,7 @@ const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .auto_store_plain_injectable = true,
     .injection_language = LANGUAGE_LAYOUT_US, //default layout (if nothing set) is US
     .default_script = "",
-    .max_auto_injects_per_device = 10,
+    .max_auto_injects_per_device = 5,
     .stats = {
         .boot_count = 0,
     },

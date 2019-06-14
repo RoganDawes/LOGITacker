@@ -132,8 +132,27 @@ void pair_sniff_on_success(logitacker_processor_pair_sniff_ctx_t *self) {
         case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION:
             app_timer_stop(self->timer_next_action);
             helper_addr_to_hex_str(addr_str_buff, 5, self->device_pairing_info.device_rf_address);
-            NRF_LOG_INFO("Sniffed full pairing, moving on with passive enumeration for %s", nrf_log_push(addr_str_buff));
+            NRF_LOG_INFO("Sniffed full pairing, moving on with passive enumeration for %s",
+                         nrf_log_push(addr_str_buff));
             logitacker_enter_mode_passive_enum(self->device_pairing_info.device_rf_address);
+            break;
+        case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_AUTO_INJECTION:
+            {
+                // try to fetch created device
+                logitacker_devices_unifying_device_t * p_device;
+                if (logitacker_devices_get_device(&p_device, self->device_pairing_info.device_rf_address) == NRF_SUCCESS) {
+                    // if device found, start injection
+                    app_timer_stop(self->timer_next_action);
+                    if (p_device->executed_auto_inject_count < g_logitacker_global_config.max_auto_injects_per_device) {
+                        p_device->executed_auto_inject_count++;
+                        logitacker_enter_mode_injection(self->device_pairing_info.device_rf_address);
+                        logitacker_injection_start_execution(true);
+                    } else {
+                        NRF_LOG_INFO("maximum number of autoinjects reached for this device, continue discovery mode")
+                    }
+                }
+                // else continue "pair sniff"
+            }
             break;
         default:
             break;
@@ -187,8 +206,8 @@ void processor_pair_sniff_init_func_(logitacker_processor_pair_sniff_ctx_t *self
 
 
     self->data_rx = false;
-    self->sniff_ticks = APP_TIMER_TICKS(8);
-    self->sniff_ticks_long = APP_TIMER_TICKS(30);
+    self->sniff_ticks = APP_TIMER_TICKS(4);
+    self->sniff_ticks_long = APP_TIMER_TICKS(20);
     self->dongle_in_range=false;
 
 

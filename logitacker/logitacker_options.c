@@ -155,6 +155,9 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
             case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY:
                 pair_sniff_success_action_str = "enter device discovery mode after successfully sniffed pairing";
                 break;
+            case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_AUTO_INJECTION:
+                pair_sniff_success_action_str = "inject keystrokes after successfully sniffed pairing";
+                break;
         }
 
         char * injection_success_action_str = "unknown";

@@ -51,7 +51,7 @@
 #define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),sizeof(nrf_esb_evt_t)))))
 
 
-#define SCHED_QUEUE_SIZE            32
+#define SCHED_QUEUE_SIZE            64
 
 
 
