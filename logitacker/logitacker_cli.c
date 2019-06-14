@@ -526,6 +526,22 @@ static void cmd_script_string(nrf_cli_t const *p_cli, size_t argc, char **argv)
     logitacker_script_engine_append_task_type_string(press_str);
 }
 
+static void cmd_script_altstring(nrf_cli_t const *p_cli, size_t argc, char **argv)
+{
+    char press_str[NRF_CLI_CMD_BUFF_SIZE] = {0};
+    int str_buf_remaining = sizeof(press_str)-1; //keep one byte for terminating 0x00
+    for (int i=1; i<argc && str_buf_remaining>0; i++) {
+        if (i>1) strcat(press_str, " ");
+        str_buf_remaining--;
+        int len = strlen(argv[i]);
+        if (len > str_buf_remaining) len = str_buf_remaining;
+        strncat(press_str, argv[i], len);
+        str_buf_remaining -= len;
+    }
+
+    logitacker_script_engine_append_task_type_altstring(press_str);
+}
+
 static void cmd_script_delay(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if (argc > 1) {
@@ -1019,6 +1035,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_script)
         NRF_CLI_CMD(undo,   NULL, "delete last command from script (last injection task)", cmd_script_undo),
         NRF_CLI_CMD(show,   NULL, "show listing of current script", cmd_script_show),
         NRF_CLI_CMD(string,   NULL, "append 'string' command to script, which types out the text given as parameter", cmd_script_string),
+        NRF_CLI_CMD(altstring,   NULL, "append 'altstring' command to script, which types out the text using NUMPAD", cmd_script_altstring),
         NRF_CLI_CMD(press,   NULL, "append 'press' command to script, which creates a key combination from the given parameters", cmd_script_press),
         NRF_CLI_CMD(delay,   NULL, "append 'delay' command to script, delays script execution by the amount of milliseconds given as parameter", cmd_script_delay),
         NRF_CLI_CMD(store,   NULL, "store script to flash", cmd_script_store),

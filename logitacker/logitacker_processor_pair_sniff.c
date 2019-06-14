@@ -206,8 +206,8 @@ void processor_pair_sniff_init_func_(logitacker_processor_pair_sniff_ctx_t *self
 
 
     self->data_rx = false;
-    self->sniff_ticks = APP_TIMER_TICKS(4);
-    self->sniff_ticks_long = APP_TIMER_TICKS(20);
+    self->sniff_ticks = APP_TIMER_TICKS(3);
+    self->sniff_ticks_long = APP_TIMER_TICKS(50);
     self->dongle_in_range=false;
 
 

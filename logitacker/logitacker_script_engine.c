@@ -297,6 +297,17 @@ uint32_t logitacker_script_engine_append_task_type_string(char * str) {
     return logitacker_script_engine_append_task(tmp_task);
 }
 
+uint32_t logitacker_script_engine_append_task_type_altstring(char * str) {
+    inject_task_t tmp_task = {0};
+    tmp_task.data_len = strlen(str)+1; //include terminating 0x00
+    tmp_task.p_data_c = str;
+    tmp_task.type = INJECT_TASK_TYPE_TYPE_ALTSTRING;
+//    tmp_task.lang = m_lang;
+
+    //return push_task(tmp_task);
+    return logitacker_script_engine_append_task(tmp_task);
+}
+
 uint32_t logitacker_script_engine_append_task_delay(uint32_t delay_ms) {
     inject_task_t tmp_task = {0};
     //tmp_task.delay_ms = delay_ms;

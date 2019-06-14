@@ -15,6 +15,7 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_INJECT
 #include "nrf_log.h"
+#include "logitacker_tx_payload_provider_string_to_altkeys.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -194,6 +195,7 @@ void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *sel
             }
             case INJECT_TASK_TYPE_PRESS_KEYS:
             case INJECT_TASK_TYPE_TYPE_STRING:
+            case INJECT_TASK_TYPE_TYPE_ALTSTRING:
             {
                 // if timer is called, write (and auto transmit) current ESB payload
                 unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
@@ -393,6 +395,26 @@ void logitacker_processor_inject_process_task_string(logitacker_processor_inject
     app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL);
 }
 
+void logitacker_processor_inject_process_task_altstring(logitacker_processor_inject_ctx_t *self) {
+    NRF_LOG_INFO("process string injection: %s", self->current_task.p_data_c);
+    //self->p_payload_provider = new_payload_provider_string(self->p_device, self->current_task.lang, self->current_task.p_data_c);
+    self->p_payload_provider = new_payload_provider_altstring(self->p_device, self->current_task.p_data_c);
+
+    //fetch first payload
+    if (!(*self->p_payload_provider->p_get_next)(self->p_payload_provider, &self->tmp_tx_payload)) {
+        //failed to fetch first payload
+        NRF_LOG_WARNING("failed to fetch initial RF report from payload provider");
+        transfer_state(self, INJECT_STATE_FAILED);
+        return;
+    }
+
+    transfer_state(self, INJECT_STATE_WORKING);
+
+
+    //start injection
+    app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL);
+}
+
 void logitacker_processor_inject_process_task_press(logitacker_processor_inject_ctx_t *self) {
     NRF_LOG_INFO("process key-combo injection: %s", self->current_task.p_data_c);
     self->p_payload_provider = new_payload_provider_press(self->p_device, logitacker_script_engine_get_language_layout(), self->current_task.p_data_c);
@@ -464,6 +486,9 @@ void logitacker_processor_inject_run_next_task(logitacker_processor_inject_ctx_t
             break;
         case INJECT_TASK_TYPE_TYPE_STRING:
             logitacker_processor_inject_process_task_string(self);
+            break;
+        case INJECT_TASK_TYPE_TYPE_ALTSTRING:
+            logitacker_processor_inject_process_task_altstring(self);
             break;
         case INJECT_TASK_TYPE_DELAY:
             logitacker_processor_inject_process_task_delay(self);

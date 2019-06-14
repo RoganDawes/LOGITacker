@@ -1,10 +1,10 @@
-#include <utf.h>
+#include "utf.h"
 #include "logitacker_tx_pay_provider_string_to_keys.h"
 #include "logitacker_keyboard_map.h"
+#include "logitacker_devices.h"
 
 #define NRF_LOG_MODULE_NAME TX_PAY_PROVIDER_STRING_TO_KEYS
 #include "nrf_log.h"
-#include "logitacker_devices.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -53,8 +53,7 @@ bool provider_string_get_next_hid_report_seq(logitacker_tx_payload_provider_stri
 }
 
 bool provider_string_get_next(logitacker_tx_payload_provider_t *self, nrf_esb_payload_t *p_next_payload) {
-    return provider_string_inject_get_next((logitacker_tx_payload_provider_string_ctx_t *) (self->p_ctx),
-                                           p_next_payload);
+    return provider_string_inject_get_next((logitacker_tx_payload_provider_string_ctx_t *) (self->p_ctx), p_next_payload);
 }
 
 void provider_string_reset(logitacker_tx_payload_provider_t *self) {
@@ -64,7 +63,7 @@ void provider_string_reset(logitacker_tx_payload_provider_t *self) {
 
 static int rc = 0;
 static void convert_hid_report_to_rf_payload(logitacker_tx_payload_provider_string_ctx_t * self, nrf_esb_payload_t *p_next_payload, hid_keyboard_report_t * p_hid_report) {
-    // ToDo: report format needs to be derived from davice capabilities (enctrypted / plain)
+
     NRF_LOG_DEBUG("HID report to translate to RF frame (%d):", rc++);
     NRF_LOG_HEXDUMP_DEBUG(p_hid_report, sizeof(hid_keyboard_report_t));
 
@@ -75,8 +74,7 @@ static void convert_hid_report_to_rf_payload(logitacker_tx_payload_provider_stri
 
 }
 
-bool provider_string_inject_get_next(logitacker_tx_payload_provider_string_ctx_t *self,
-                                     nrf_esb_payload_t *p_next_payload) {
+bool provider_string_inject_get_next(logitacker_tx_payload_provider_string_ctx_t *self, nrf_esb_payload_t *p_next_payload) {
     if (self->remaining_reports_in_sequence <= 0) {
         // there are no reports left in current sequence, fetch next sequence
         if(!provider_string_get_next_hid_report_seq(self)) {
