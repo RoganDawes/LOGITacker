@@ -10,6 +10,7 @@
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_DISCOVER
 #include "nrf_log.h"
 #include "logitacker_script_engine.h"
+#include "logitacker_usb.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -47,6 +48,10 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
             uint8_t ch = p_rx_payload->rx_channel;
             uint8_t addr[5];
             memcpy(addr, &p_rx_payload->data[2], 5);
+
+            if (g_logitacker_global_config.discover_pass_through_hidraw) {
+                logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_DISCOVERY, addr, p_rx_payload);
+            }
 
             uint8_t prefix;
             uint8_t base[4];
@@ -170,7 +175,7 @@ void processor_discover_deinit_func_(logitacker_processor_discover_ctx_t *self) 
     radio_stop_channel_hopping();
     nrf_esb_stop_rx();
 
-    //*self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
+    //*self->p_logitacker_mainstate = LOGITACKER_MODE_IDLE;
 
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
 }

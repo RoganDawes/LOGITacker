@@ -18,7 +18,7 @@ NRF_LOG_MODULE_REGISTER();
 
 
 typedef struct {
-    //logitacker_mainstate_t * p_logitacker_mainstate;
+    //logitacker_mode_t * p_logitacker_mainstate;
     uint8_t current_rf_address[5];
 
     uint8_t base_addr[4];
@@ -79,7 +79,7 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
 
-//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_PASSIVE_ENUMERATION;
+//    *self->p_logitacker_mainstate = LOGITACKER_MODE_PASSIVE_ENUMERATION;
 
     //reset device state
     memset(self->devices, 0, sizeof(self->devices));
@@ -161,7 +161,7 @@ void processor_passive_enum_deinit_func_(logitacker_processor_passive_enum_ctx_t
     radio_stop_channel_hopping(); // disable channel hopping
     nrf_esb_stop_rx(); //stop rx in case running
 
-//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
+//    *self->p_logitacker_mainstate = LOGITACKER_MODE_IDLE;
 
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
 }
@@ -241,6 +241,11 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
         uint8_t addr[5];
         nrf_esb_convert_pipe_to_address(self->tmp_rx_payload.pipe, addr);
 
+        if (g_logitacker_global_config.passive_enum_pass_through_hidraw) {
+            logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_PASSIVE_ENUMERATION, addr, &self->tmp_rx_payload);
+        }
+
+
         uint8_t prefix;
         uint8_t base[4];
         helper_addr_to_base_and_prefix(base, &prefix, addr, 5); //convert device addr to base+prefix and update device
@@ -264,7 +269,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
             // handle plain keyboard reports
             if (unifying_report_type == UNIFYING_RF_REPORT_PLAIN_KEYBOARD && len == 10) {
                 // if pass-through for keyboard is enabled, send keystrokes to USB HID keyboard
-                if (g_logitacker_global_config.pass_through_keyboard) {
+                if (g_logitacker_global_config.passive_enum_pass_through_keyboard) {
                     //convert to hid out report
 
                     m_pass_through_keyboard_hid_input_report[0] = self->tmp_rx_payload.data[2]; // copy modifier
@@ -282,7 +287,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
             // handle plain mouse reports
             if (unifying_report_type == UNIFYING_RF_REPORT_PLAIN_MOUSE && len == 10) {
                 // if pass-through for mouse is enabled, send input to USB HID mouse
-                if (g_logitacker_global_config.pass_through_mouse) {
+                if (g_logitacker_global_config.passive_enum_pass_through_mouse) {
                     //convert to hid out report
 
                     memcpy(m_pass_through_mouse_hid_input_report, &self->tmp_rx_payload.data[2], 7); // copy report data, don't copy report ID (we use 0x00 to align with the descriptor)
@@ -317,7 +322,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                         }
 
                         // if pass-through for keyboard is enabled, send keystrokes to USB HID keyboard
-                        if (g_logitacker_global_config.pass_through_keyboard) {
+                        if (g_logitacker_global_config.passive_enum_pass_through_keyboard) {
                             //convert to hid out report
 
                             m_pass_through_keyboard_hid_input_report[0] = m_keyboard_report_decryption_buffer[0]; // copy modifier
@@ -329,6 +334,26 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                                 NRF_LOG_INFO("passed through decrypted keyboard frame to USB");
                             }
                         }
+
+                        if (g_logitacker_global_config.passive_enum_pass_through_hidraw) {
+                            // generate decrypted pseudo frame for hidraw pass trough
+                            // 07 C1 00 4E 00 00 00 00 00 EA
+                            nrf_esb_payload_t pseudo_frame;
+                            pseudo_frame.rssi = self->tmp_rx_payload.rssi;
+                            pseudo_frame.pid = self->tmp_rx_payload.pid;
+                            pseudo_frame.rx_channel = self->tmp_rx_payload.rx_channel;
+                            pseudo_frame.data[0] = self->tmp_rx_payload.data[0];
+                            pseudo_frame.data[1] = 0xC1;
+                            memcpy(&pseudo_frame.data[2], m_keyboard_report_decryption_buffer, 7);
+                            unifying_payload_update_checksum(pseudo_frame.data, 10);
+                            pseudo_frame.length = 10;
+                            pseudo_frame.validated_promiscuous_frame = false;
+
+                            if (logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_PASSIVE_ENUMERATION, addr, &pseudo_frame) != NRF_SUCCESS) {
+                                NRF_LOG_ERROR("Failed wirting decrypted frame to hidraw");
+                            }
+                        }
+
                     }
                 }
             }

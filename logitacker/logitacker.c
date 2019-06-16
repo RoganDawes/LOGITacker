@@ -37,7 +37,7 @@ static logitacker_processor_t * p_processor = NULL;
 
 typedef struct {
     bool initialized;
-    logitacker_mainstate_t   mainstate;
+    logitacker_mode_t   mainstate;
 } logitacker_state_t;
 
 
@@ -141,7 +141,7 @@ void logitacker_enter_mode_passive_enum(uint8_t *rf_address) {
     p_processor = new_processor_passive_enum(rf_address);
     p_processor->p_init_func(p_processor);
 
-    m_state_local.mainstate = LOGITACKER_MAINSTATE_PASSIVE_ENUMERATION;
+    m_state_local.mainstate = LOGITACKER_MODE_PASSIVE_ENUMERATION;
     sprintf(g_logitacker_cli_name, "LOGITacker (passive enum) $ ");
 }
 
@@ -152,7 +152,7 @@ void logitacker_enter_mode_pair_sniff() {
     p_processor = new_processor_pair_sniff(m_timer_next_tx_action);
     p_processor->p_init_func(p_processor);
 
-    m_state_local.mainstate = LOGITACKER_MAINSTATE_SNIFF_PAIRING;
+    m_state_local.mainstate = LOGITACKER_MODE_SNIFF_PAIRING;
     sprintf(g_logitacker_cli_name, "LOGITacker (sniff pairing) $ ");
 }
 
@@ -163,7 +163,7 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
     p_processor = new_processor_active_enum(rf_address, m_timer_next_tx_action);
     p_processor->p_init_func(p_processor);
 
-    m_state_local.mainstate = LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION;
+    m_state_local.mainstate = LOGITACKER_MODE_ACTIVE_ENUMERATION;
     sprintf(g_logitacker_cli_name, "LOGITacker (active enum) $ ");
 }
 
@@ -194,7 +194,7 @@ void logitacker_enter_mode_pair_device(uint8_t const *rf_address) {
     p_processor = new_processor_pair_device(rf_address, &pi, m_timer_next_tx_action);
     p_processor->p_init_func(p_processor);
 
-    m_state_local.mainstate = LOGITACKER_MAINSTATE_PAIR_DEVICE;
+    m_state_local.mainstate = LOGITACKER_MODE_PAIR_DEVICE;
     sprintf(g_logitacker_cli_name, "LOGITacker (pair device) $ ");
 
 }
@@ -205,7 +205,7 @@ void logitacker_enter_mode_injection(uint8_t const *rf_address) {
     p_processor = new_processor_inject(rf_address, m_timer_next_tx_action);
     p_processor->p_init_func(p_processor);
 
-    m_state_local.mainstate = LOGITACKER_MAINSTATE_INJECT;
+    m_state_local.mainstate = LOGITACKER_MODE_INJECT;
     sprintf(g_logitacker_cli_name, "LOGITacker (injection) $ ");
 }
 
@@ -217,13 +217,13 @@ void logitacker_enter_mode_discovery() {
     p_processor = new_processor_discover();
     p_processor->p_init_func(p_processor); //call init function
 
-    m_state_local.mainstate = LOGITACKER_MAINSTATE_DISCOVERY;
+    m_state_local.mainstate = LOGITACKER_MODE_DISCOVERY;
     sprintf(g_logitacker_cli_name, "LOGITacker (discovery) $ ");
 
 }
 
 void logitacker_injection_start_execution(bool execute) {
-    if (m_state_local.mainstate != LOGITACKER_MAINSTATE_INJECT) {
+    if (m_state_local.mainstate != LOGITACKER_MODE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");
         return;
     }

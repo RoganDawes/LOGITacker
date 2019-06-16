@@ -330,7 +330,7 @@ void logitacker_script_engine_print_current_tasks(nrf_cli_t const * p_cli) {
 
     nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "script start\r\n", task_num);
     while (logitacker_script_engine_read_next_task(&task, task_data)) {
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%04d: inject ", task_num);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%04d: ", task_num);
         switch (task.type) {
             case INJECT_TASK_TYPE_DELAY:
                 nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "delay ");
@@ -338,6 +338,10 @@ void logitacker_script_engine_print_current_tasks(nrf_cli_t const * p_cli) {
                 break;
             case INJECT_TASK_TYPE_TYPE_STRING:
                 nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "string ");
+                nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%s\r\n", task_data);
+                break;
+            case INJECT_TASK_TYPE_TYPE_ALTSTRING:
+                nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "altstring ");
                 nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%s\r\n", task_data);
                 break;
             case INJECT_TASK_TYPE_PRESS_KEYS:

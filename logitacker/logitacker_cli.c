@@ -884,23 +884,23 @@ static void cmd_options_pass_keyboard(nrf_cli_t const * p_cli, size_t argc, char
 {
     if (argc > 1)
     {
-        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.pass_through_keyboard = false;
-        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.pass_through_keyboard = true;
+        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.passive_enum_pass_through_keyboard = false;
+        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.passive_enum_pass_through_keyboard = true;
     }
 
-    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "keyboard pass-through: %s\r\n", g_logitacker_global_config.pass_through_keyboard ? "on" : "off");
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "keyboard pass-through: %s\r\n", g_logitacker_global_config.passive_enum_pass_through_keyboard ? "on" : "off");
 }
 
 static void cmd_options_pass_mouse(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     if (argc > 1)
     {
-        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.pass_through_mouse = false;
-        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.pass_through_mouse = true;
+        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.passive_enum_pass_through_mouse = false;
+        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.passive_enum_pass_through_mouse = true;
 
     }
 
-    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "mouse pass-through: %s\r\n", g_logitacker_global_config.pass_through_mouse ? "on" : "off");
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "mouse pass-through: %s\r\n", g_logitacker_global_config.passive_enum_pass_through_mouse ? "on" : "off");
 }
 
 static void cmd_enum_passive(nrf_cli_t const * p_cli, size_t argc, char **argv) {

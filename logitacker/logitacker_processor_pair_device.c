@@ -56,7 +56,7 @@ typedef enum {
 
 
 typedef struct {
-    logitacker_mainstate_t * p_logitacker_mainstate;
+    logitacker_mode_t * p_logitacker_mainstate;
 
     uint8_t current_rf_address[5];
 
@@ -137,7 +137,7 @@ void processor_pair_device_init_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_pair_device_init_func_(logitacker_processor_pair_device_ctx_t *self) {
-    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_PAIR_DEVICE;
+    *self->p_logitacker_mainstate = LOGITACKER_MODE_PAIR_DEVICE;
     self->tx_delay_ms = PAIR_DEVICE_TX_DELAY_MS;
 
     helper_addr_to_base_and_prefix(self->base_addr, &self->prefix, self->current_rf_address, LOGITACKER_DEVICE_ADDR_LEN);
@@ -184,7 +184,7 @@ void processor_pair_device_deinit_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_pair_device_deinit_func_(logitacker_processor_pair_device_ctx_t *self) {
-    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
+    *self->p_logitacker_mainstate = LOGITACKER_MODE_IDLE;
 
     NRF_LOG_INFO("DEINIT active enumeration for address %s", addr_str_buff);
 

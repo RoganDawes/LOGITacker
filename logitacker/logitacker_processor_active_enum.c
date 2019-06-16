@@ -52,7 +52,7 @@ typedef enum {
 
 
 typedef struct {
-//    logitacker_mainstate_t * p_logitacker_mainstate;
+//    logitacker_mode_t * p_logitacker_mainstate;
 
     uint8_t inner_loop_count; // how many successfull transmissions to RF address of current prefix
     uint8_t led_count;
@@ -131,7 +131,7 @@ void processor_active_enum_init_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_active_enum_init_func_(logitacker_processor_active_enum_ctx_t *self) {
-//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION;
+//    *self->p_logitacker_mainstate = LOGITACKER_MODE_ACTIVE_ENUMERATION;
     self->tx_delay_ms = ACTIVE_ENUM_TX_DELAY_MS;
 
     //helper_addr_to_base_and_prefix(m_state_local.substate_active_enumeration.base_addr, &m_state_local.substate_active_enumeration.known_prefix, rf_address, LOGITACKER_DEVICE_ADDR_LEN);
@@ -181,7 +181,7 @@ void processor_active_enum_deinit_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_active_enum_deinit_func_(logitacker_processor_active_enum_ctx_t *self) {
-//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_IDLE;
+//    *self->p_logitacker_mainstate = LOGITACKER_MODE_IDLE;
 
     NRF_LOG_INFO("DEINIT active enumeration for address %s", addr_str_buff);
 

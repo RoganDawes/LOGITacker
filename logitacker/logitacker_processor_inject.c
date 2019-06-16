@@ -119,7 +119,7 @@ void processor_inject_bsp_handler_func_(logitacker_processor_inject_ctx_t *self,
 
 
 void processor_inject_init_func_(logitacker_processor_inject_ctx_t *self) {
-//    *self->p_logitacker_mainstate = LOGITACKER_MAINSTATE_INJECT;
+//    *self->p_logitacker_mainstate = LOGITACKER_MODE_INJECT;
     self->tx_delay_ms = INJECT_TX_DELAY_MS;
 
     helper_addr_to_base_and_prefix(self->base_addr, &self->prefix, self->current_rf_address, LOGITACKER_DEVICE_ADDR_LEN);

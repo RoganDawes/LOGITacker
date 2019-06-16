@@ -29,14 +29,14 @@ extern "C" {
 
 
 typedef enum {
-    LOGITACKER_MAINSTATE_DISCOVERY,   // radio in promiscuous mode, logs devices
-    LOGITACKER_MAINSTATE_ACTIVE_ENUMERATION,   // radio in PTX mode, actively collecting dongle info
-    LOGITACKER_MAINSTATE_PASSIVE_ENUMERATION,   // radio in SNIFF mode, collecting device frames to determin caps
-    LOGITACKER_MAINSTATE_SNIFF_PAIRING,
-    LOGITACKER_MAINSTATE_PAIR_DEVICE,
-    LOGITACKER_MAINSTATE_INJECT,
-    LOGITACKER_MAINSTATE_IDLE
-} logitacker_mainstate_t;
+    LOGITACKER_MODE_DISCOVERY,   // radio in promiscuous mode, logs devices
+    LOGITACKER_MODE_ACTIVE_ENUMERATION,   // radio in PTX mode, actively collecting dongle info
+    LOGITACKER_MODE_PASSIVE_ENUMERATION,   // radio in SNIFF mode, collecting device frames to determin caps
+    LOGITACKER_MODE_SNIFF_PAIRING,
+    LOGITACKER_MODE_PAIR_DEVICE,
+    LOGITACKER_MODE_INJECT,
+    LOGITACKER_MODE_IDLE
+} logitacker_mode_t;
 
 char g_logitacker_cli_name[32];
 

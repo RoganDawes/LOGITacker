@@ -8,6 +8,8 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_USB
 #include "nrf_log.h"
+#include "logitacker_radio.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 
@@ -348,4 +350,50 @@ uint32_t logitacker_usb_write_mouse_input_report(const void * p_buf) {
     // write report
     NRF_LOG_HEXDUMP_INFO(m_mouse_hid_input_report, 8);
     return app_usbd_hid_generic_in_report_set(&m_app_hid_mouse, m_mouse_hid_input_report, LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE);
+}
+
+#define HIDRAW_IN_REPORT_BUF_COUNT 8 // has to be power of two
+static uint8_t m_hidraw_in_report_buffers[HIDRAW_IN_REPORT_BUF_COUNT][LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE];
+static uint8_t m_current_hidraw_in_report_buf;
+
+uint32_t logitacker_usb_write_hidraw_input_report(logitacker_mode_t logitacker_mode, logitacker_usb_hidraw_report_type_t type, size_t length, const void * data) {
+
+    if (length + 2 > LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE) return NRF_ERROR_DATA_SIZE;
+    uint8_t * m_tmp_buf = m_hidraw_in_report_buffers[m_current_hidraw_in_report_buf++];
+    m_current_hidraw_in_report_buf &= (HIDRAW_IN_REPORT_BUF_COUNT-1);
+
+    m_tmp_buf[0] = type;
+    m_tmp_buf[1] = (uint8_t) logitacker_mode;
+    memset(m_tmp_buf, 0, LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE);
+    memcpy(&m_tmp_buf[2], data, length);
+
+//    return app_usbd_hid_generic_in_report_set(&m_app_hid_generic, m_tmp_buf, length+2);
+    return app_usbd_hid_generic_in_report_set(&m_app_hid_generic, m_tmp_buf, LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE);
+}
+
+uint32_t logitacker_usb_write_hidraw_input_report_rf_frame(logitacker_mode_t logitacker_mode, logitacker_devices_unifying_device_rf_address_t rf_address, const nrf_esb_payload_t * p_frame) {
+    VERIFY_PARAM_NOT_NULL(rf_address);
+    VERIFY_PARAM_NOT_NULL(p_frame);
+
+    nrf_esb_payload_t frame = {0};
+
+    // ToDo: remove unneeded overhead, from redundant memcpy's
+    if (p_frame->validated_promiscuous_frame) {
+        // convert data
+        logitacker_radio_convert_promiscuous_frame_to_default_frame(&frame, *p_frame);
+    } else {
+        memcpy(&frame, p_frame, sizeof(nrf_esb_payload_t));
+    }
+
+    uint8_t framelen = frame.length > 32 ? 32 : frame.length;
+    logitacker_usb_hidraw_rf_frame_representation_t frame_hid_pay = {};
+    memcpy(frame_hid_pay.rf_address, rf_address, 5);
+    frame_hid_pay.payload_length = framelen;
+    frame_hid_pay.rf_channel = frame.rx_channel;
+    memcpy(frame_hid_pay.payload_data, frame.data, framelen);
+    //NRF_LOG_HEXDUMP_INFO(frame_hid_pay.payload_data, frame_hid_pay.payload_length);
+    frame_hid_pay.pid = frame.pid;
+    frame_hid_pay.rssi = frame.rssi;
+
+    return logitacker_usb_write_hidraw_input_report(logitacker_mode, LOGITACKER_USB_HIDRAW_REPORT_TYPE_RF_FRAME, sizeof(logitacker_usb_hidraw_rf_frame_representation_t), &frame_hid_pay);
 }

@@ -4,6 +4,8 @@
 #include "app_usbd_hid_generic.h"
 #include "app_usbd.h"
 #include "app_usbd_hid.h"
+#include "logitacker_devices.h"
+#include "logitacker.h"
 
 
 /**
@@ -22,6 +24,20 @@
 #endif
 
 #endif //POWER_DETECTION
+
+typedef enum {
+    LOGITACKER_USB_HIDRAW_REPORT_TYPE_RF_FRAME = 0x01,
+} logitacker_usb_hidraw_report_type_t;
+
+typedef struct {
+    logitacker_devices_unifying_device_rf_address_t rf_address;
+    uint8_t pid;
+    uint8_t rf_channel;
+    int8_t rssi;
+    uint8_t payload_length;
+    uint8_t payload_data[32]; //maximum of 32 bytes (we ignore capabilities of newer nRF5 series, as it doesn't apply to Logitech devices)
+
+} logitacker_usb_hidraw_rf_frame_representation_t;
 
 /*
 
@@ -153,5 +169,7 @@ uint32_t logitacker_usb_write_generic_input_report(const void * p_buf, size_t si
 uint32_t logitacker_usb_write_keyboard_input_report(const void * p_buf);
 uint32_t logitacker_usb_write_mouse_input_report(const void * p_buf);
 
+uint32_t logitacker_usb_write_hidraw_input_report(logitacker_mode_t logitacker_mode, logitacker_usb_hidraw_report_type_t type, size_t length, const void * data);
+uint32_t logitacker_usb_write_hidraw_input_report_rf_frame(logitacker_mode_t logitacker_mode, logitacker_devices_unifying_device_rf_address_t rf_address, const nrf_esb_payload_t * p_frame);
 
 #endif //LOGITACKER_USB_H
