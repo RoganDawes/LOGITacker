@@ -2397,7 +2397,7 @@ void NRF_ESB_BUGFIX_TIMER_IRQHandler(void)
 
 
 bool nrf_esb_validate_promiscuous_frame(uint8_t * p_array, uint8_t addrlen) {
-    uint8_t framelen = p_array[addrlen] >> 2;
+    uint8_t framelen = p_array[addrlen] >> 2; //PCF after address, PCF is 9 bits in size, first 6 bits are length field ... thus we shift to right to get length
 #ifndef LOGITECH_FILTER    
     if (framelen > 32) {
 #else        
@@ -2416,46 +2416,53 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
     uint8_t assumed_addrlen = 5; //Validation has to take RF address length of raw frames into account, thus we assume the given length in byte
     uint8_t tmpData[VALIDATION_SHIFT_BUF_SIZE];
     uint8_t tmpDataLen = p_payload->length;
-    static bool crcmatch = false;
 
-    for (uint8_t i=0; i< tmpDataLen; i++) {
-        tmpData[i] = p_payload -> data[i];
-    }
+    memcpy(tmpData, p_payload->data, tmpDataLen);
 
-    //Skip 7 bit if first 8 are alternating
-    if (p_payload -> data[0] == 0xaa) helper_array_shl(tmpData, tmpDataLen, 7);
-  
     // if processing takes too long RF frames are discarded
     // the shift value in the following for loop controls how often a received
     // frame is shifted for CRC check. If this value is too large, frames are dropped,
     // if it is too low, chance for detecting valid frames decreases.
     // The nrf_esb_validate_promiscuous_frame function has an early out, if determined ESB frame length
     // exceeds 32 byte, which avoids unnecessary CRC16 calculations.
-    crcmatch = false;
-    for (uint8_t shift=0; shift<88; shift++) {
-        if (nrf_esb_validate_promiscuous_frame(tmpData, assumed_addrlen)) {
-            NRF_LOG_DEBUG("Shift width in bits to CRC match: %d", shift);
-            crcmatch = true;
-            break;
+
+
+    uint8_t * p_crc_match_array = NULL;
+
+    for (uint8_t bitshift=0; bitshift<8; bitshift++) {
+        for (uint8_t byteshift=0; byteshift<NRF_ESB_PROMISCUOUS_PAYLOAD_ADDITIONAL_LENGTH; byteshift++) {
+            if (nrf_esb_validate_promiscuous_frame(&tmpData[byteshift], assumed_addrlen)) {
+                NRF_LOG_INFO("Promiscuous ESB CRC match: (bitshift %d, byteshift %d)", bitshift, byteshift);
+                p_crc_match_array = &tmpData[byteshift];
+
+                break;
+            }
         }
-        helper_array_shl(tmpData, tmpDataLen, 1);
+
+        if (p_crc_match_array != NULL) break;
+        helper_array_shl(tmpData, tmpDataLen, 1); // shift whole array left by one bit
     }
 
-    if (crcmatch) {
+
+
+    if (p_crc_match_array != NULL) {
         //wipe out old rx data
         memset(p_payload->data, 0, p_payload->length);
 
-        uint8_t esb_len = tmpData[assumed_addrlen] >> 2; //extract length bits from the assumed Packet Control Field, which starts right behind the RF address
+        uint8_t esb_len = p_crc_match_array[assumed_addrlen] >> 2; //extract length bits from the assumed Packet Control Field, which starts right behind the RF address
 
         //correct RF frame length if CRC match
         p_payload->length = assumed_addrlen + 1 + esb_len + 2; //final payload (5 byte address, ESB payload with dynamic length, higher 8 PCF bits, 2 byte CRC)
 
         //byte allign payload (throw away no_ack bit of PCF, keep the other 8 bits)
-        helper_array_shl(&tmpData[assumed_addrlen+1], esb_len, 1); //shift left all bytes behind the PCF field by one bit (we loose the lowest PCF bit, which is "no ack", and thus not of interest)
+        helper_array_shl(&p_crc_match_array[assumed_addrlen+1], esb_len, 1); //shift left all bytes behind the PCF field by one bit (we loose the lowest PCF bit, which is "no ack", and thus not of interest)
 
-#ifndef LOGITECH_FILTER    
+#ifdef LOGITECH_FILTER
         // additional check of 8 bit unifying payload CRC (not CRC16 of ESB frame)
-        if (!unifying_validate_payload(&tmpData[assumed_addrlen+1], esb_len)) return NRF_ERROR_INVALID_DATA;
+        if ((esb_len > 0) && !unifying_payload_validate_checksum(&p_crc_match_array[assumed_addrlen+1], esb_len)) {
+            NRF_LOG_INFO("dropped promiscuous frame with wrong logitech checksum")
+            return NRF_ERROR_INVALID_DATA;
+        }
 #endif    
 
 
@@ -2463,7 +2470,7 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
         //zero out rest of report
         memset(&tmpData[p_payload->length], 0, VALIDATION_SHIFT_BUF_SIZE - p_payload->length);
         */
-        memcpy(&p_payload->data[2], tmpData, p_payload->length);
+        memcpy(&p_payload->data[2], p_crc_match_array, p_payload->length);
         p_payload->length += 2;
         p_payload->data[0] = p_payload->pipe; //encode rx pipe
         p_payload->data[1] = esb_len; //encode real ESB payload length

@@ -5,6 +5,7 @@
 
 
 void helper_array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
+    if (bits == 0) return;
     if (len == 1) {
         p_array[0] = p_array[0] << bits;
         return;
@@ -14,6 +15,31 @@ void helper_array_shl(uint8_t *p_array, uint8_t len, uint8_t bits) {
         p_array[i] = p_array[i] << bits | p_array[i+1] >> (8-bits);
     }
     p_array[len-1] = p_array[len-1] << bits;
+    return;
+}
+
+void helper_array_shl_cpy(uint8_t * out_array, uint8_t * in_array, uint8_t len, uint8_t bits) {
+    if (bits == 0) {
+        memcpy(out_array, in_array, len);
+        return;
+    }
+
+    if ((bits & 0x08) == 0) {
+        uint8_t byteoff = bits / 8;
+        memcpy(out_array, &in_array[byteoff], len-byteoff);
+        return;
+    }
+
+    if (len == 1) {
+        out_array[0] = in_array[0] << bits;
+        return;
+    }
+
+    uint8_t remainder_shift = (8-bits);
+    for (uint8_t i=0; i<(len-1); i++) {
+        out_array[i] = in_array[i] << bits | in_array[i+1] >> remainder_shift;
+    }
+    out_array[len-1] = in_array[len-1] << bits;
     return;
 }
 

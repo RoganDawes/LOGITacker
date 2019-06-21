@@ -165,7 +165,7 @@ const app_usbd_hid_generic_t m_app_hid_generic;
 
 
 uint32_t logitacker_usb_init();
-uint32_t logitacker_usb_write_generic_input_report(const void * p_buf, size_t size);
+//uint32_t logitacker_usb_write_generic_input_report(const void * p_buf, size_t size);
 uint32_t logitacker_usb_write_keyboard_input_report(const void * p_buf);
 uint32_t logitacker_usb_write_mouse_input_report(const void * p_buf);
 

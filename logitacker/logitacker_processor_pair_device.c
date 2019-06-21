@@ -244,7 +244,7 @@ void processor_pair_device_esb_handler_func_(logitacker_processor_pair_device_ct
     }
 
     if (self->phase == PAIR_DEVICE_PHASE_FAILED) {
-        NRF_LOG_WARNING("Device pairing failed, switching mode to discovery");
+        NRF_LOG_WARNING("Device pairing failed, switching mode to discover");
         logitacker_enter_mode_discovery();
         return;
     }
@@ -280,7 +280,7 @@ void processor_pair_device_esb_handler_func_(logitacker_processor_pair_device_ct
 
 
     if (self->phase == PAIR_DEVICE_PHASE_SUCCEEDED) {
-        NRF_LOG_WARNING("Device pairing succeeded, switching mode to discovery");
+        NRF_LOG_WARNING("Device pairing succeeded, switching mode to discover");
         logitacker_enter_mode_discovery();
         return;
     }

@@ -16,7 +16,6 @@
 #include "logitacker_processor_inject.h"
 #include "logitacker_script_engine.h"
 
-
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
 static void cmd_script_press(nrf_cli_t const *p_cli, size_t argc, char **argv);
 
@@ -231,7 +230,7 @@ static void print_logitacker_device_info(nrf_cli_t const * p_cli, const logitack
 }
 
 
-
+#ifdef CLI_TEST_COMMANDS
 static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
 /*
@@ -336,6 +335,13 @@ static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
         fds_record_delete(&rd);
     }
     fds_gc();
+}
+#endif
+
+static void cmd_version(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "LOGITacker by MaMe82\r\n");
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "Version: %s\r\n", VERSION_STRING);
+
 }
 
 static void cmd_erase_flash(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -492,7 +498,7 @@ static void cmd_inject_onfail_discover(nrf_cli_t const *p_cli, size_t argc, char
     g_logitacker_global_config.inject_on_fail = OPTION_AFTER_INJECT_SWITCH_DISCOVERY;
 }
 
-static void cmd_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+static void cmd_options_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc == 2)
     {
         logitacker_script_engine_set_language_layout(logitacker_keyboard_map_lang_from_str(argv[1]));
@@ -500,6 +506,7 @@ static void cmd_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
         return;
     } else {
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "need language layout name as first argument (f.e. us, de)\r\n");
+
         return;
 
     }
@@ -613,7 +620,7 @@ static void cmd_pair_sniff_onsuccess_continue(nrf_cli_t const * p_cli, size_t ar
 
 static void cmd_pair_sniff_onsuccess_discover(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     g_logitacker_global_config.pair_sniff_on_success = OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY;
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-success action: enter discovery mode\r\n");
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "on-success action: enter discover mode\r\n");
 }
 
 static void cmd_pair_sniff_onsuccess_passiveenum(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -835,24 +842,21 @@ static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **
     logitacker_devices_del_all();
 }
 
-static void cmd_options(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    if ((argc == 1) || nrf_cli_help_requested(p_cli)) {
-        nrf_cli_help_print(p_cli, NULL, 0);
-
-        logitacker_options_print(p_cli);
-    }
+static void cmd_options_show(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    logitacker_options_print(p_cli);
 }
 
-static void cmd_options_autoinject_count(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_options_inject_maxautoinjectsperdevice(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc > 1) {
         int count;
         if (sscanf(argv[1], "%d", &count) != 1) {
-            NRF_LOG_INFO("invalid argument, auto inject count has to be a integer number, but '%s' was given");
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid argument, auto inject count has to be a integer number, but '%s' was given\r\n", argv[1]);
         } else {
             g_logitacker_global_config.max_auto_injects_per_device = count;
         }
     } else {
-        NRF_LOG_INFO("invalid argument, auto inject count has to be a integer number");
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid argument, auto inject count has to be a integer number\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "current setting of maximum per device auto-injects: %d\r\n", g_logitacker_global_config.max_auto_injects_per_device);
     }
 }
 
@@ -864,7 +868,7 @@ static void cmd_options_erase(nrf_cli_t const * p_cli, size_t argc, char **argv)
     fds_file_delete(LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS);
 }
 
-static void cmd_options_defaultscript(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_options_inject_defaultscript(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc > 1) {
         size_t len = strlen(argv[1]);
         if (len > LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN-1) len = LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN-1;
@@ -873,14 +877,36 @@ static void cmd_options_defaultscript(nrf_cli_t const * p_cli, size_t argc, char
         return;
     }
 
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "%s: bad parameter count\r\n", argv[0]);
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "default injection script: '%s'\r\n", g_logitacker_global_config.default_script);
 }
 
-static void cmd_options_defaultscript_clear(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_options_inject_defaultscript_clear(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     g_logitacker_global_config.default_script[0] = 0x00;
 }
 
-static void cmd_options_pass_keyboard(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_options_pairsniff_autostoredevice(nrf_cli_t const *p_cli, size_t argc, char **argv)
+{
+    if (argc > 1)
+    {
+        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.auto_store_sniffed_pairing_devices = false;
+        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.auto_store_sniffed_pairing_devices = true;
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "auto-store devices after pairing has been sniffed successfully: %s\r\n", g_logitacker_global_config.auto_store_sniffed_pairing_devices ? "on" : "off");
+}
+
+static void cmd_options_discover_autostoreplain(nrf_cli_t const *p_cli, size_t argc, char **argv)
+{
+    if (argc > 1)
+    {
+        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.auto_store_plain_injectable = false;
+        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.auto_store_plain_injectable = true;
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "auto-store discovered devices, if they allow plain injection: %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
+}
+
+static void cmd_options_passiveenum_pass_keyboard(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if (argc > 1)
     {
@@ -888,10 +914,10 @@ static void cmd_options_pass_keyboard(nrf_cli_t const * p_cli, size_t argc, char
         else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.passive_enum_pass_through_keyboard = true;
     }
 
-    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "keyboard pass-through: %s\r\n", g_logitacker_global_config.passive_enum_pass_through_keyboard ? "on" : "off");
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "passive-enum USB keyboard pass-through: %s\r\n", g_logitacker_global_config.passive_enum_pass_through_keyboard ? "on" : "off");
 }
 
-static void cmd_options_pass_mouse(nrf_cli_t const * p_cli, size_t argc, char **argv)
+static void cmd_options_passiveenum_pass_mouse(nrf_cli_t const *p_cli, size_t argc, char **argv)
 {
     if (argc > 1)
     {
@@ -900,7 +926,31 @@ static void cmd_options_pass_mouse(nrf_cli_t const * p_cli, size_t argc, char **
 
     }
 
-    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "mouse pass-through: %s\r\n", g_logitacker_global_config.passive_enum_pass_through_mouse ? "on" : "off");
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "passive-enum USB mouse pass-through: %s\r\n", g_logitacker_global_config.passive_enum_pass_through_mouse ? "on" : "off");
+}
+
+static void cmd_options_discover_pass_raw(nrf_cli_t const *p_cli, size_t argc, char **argv)
+{
+    if (argc > 1)
+    {
+        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.discover_pass_through_hidraw = false;
+        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.discover_pass_through_hidraw = true;
+
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "discover raw USB pass-through: %s\r\n", g_logitacker_global_config.discover_pass_through_hidraw ? "on" : "off");
+}
+
+static void cmd_options_passiveenum_pass_raw(nrf_cli_t const *p_cli, size_t argc, char **argv)
+{
+    if (argc > 1)
+    {
+        if (strcmp(argv[1], "off") == 0 || strcmp(argv[1], "OFF") == 0) g_logitacker_global_config.passive_enum_pass_through_hidraw = false;
+        else if (strcmp(argv[1], "on") == 0 || strcmp(argv[1], "ON") == 0) g_logitacker_global_config.passive_enum_pass_through_hidraw = true;
+
+    }
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "passive-enum raw USB pass-through: %s\r\n", g_logitacker_global_config.passive_enum_pass_through_hidraw ? "on" : "off");
 }
 
 static void cmd_enum_passive(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -946,7 +996,7 @@ static void cmd_enum_active(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 
-
+#ifdef CLI_TEST_COMMANDS
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_test)
         {
                 NRF_CLI_CMD(a, NULL, "test a", cmd_test_a),
@@ -955,59 +1005,24 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_test)
                 NRF_CLI_SUBCMD_SET_END
         };
 NRF_CLI_CMD_REGISTER(test, &m_sub_test, "Debug command to test code", NULL);
+#endif
 
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_defaultscript)
-{
-    NRF_CLI_CMD(clear, NULL, "clear default script", cmd_options_defaultscript_clear),
-    NRF_CLI_SUBCMD_SET_END
-};
 
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
-{
-    NRF_CLI_CMD(defaultscript,   &m_sub_options_defaultscript, "set name of script which should be loaded at boot", cmd_options_defaultscript),
-    NRF_CLI_CMD(erase,   NULL, "erase stored options from flash (return to defaults on reboot)", cmd_options_erase),
-    NRF_CLI_CMD(store,   NULL, "store current options to flash (persist reboot)", cmd_options_store),
-    NRF_CLI_CMD(pass-keyboard,   NULL, "pass-through keystrokes to USB keyboard", cmd_options_pass_keyboard),
-    NRF_CLI_CMD(pass-mouse,   NULL, "pass-through mouse moves to USB mouse", cmd_options_pass_mouse),
-    NRF_CLI_CMD(auto-inject-count,   NULL, "maximum number of auto-injects per device", cmd_options_autoinject_count),
-    NRF_CLI_SUBCMD_SET_END
-};
-NRF_CLI_CMD_REGISTER(options, &m_sub_options, "options", cmd_options);
 
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover_onhit)
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)
 {
-    NRF_CLI_CMD(continue,   NULL, "stay in discovery mode.", cmd_discover_onhit_continue),
-    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration mode", cmd_discover_onhit_activeenum),
-    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration mode", cmd_discover_onhit_passiveenum),
-    NRF_CLI_CMD(auto-inject, NULL, "enter injection mode and execute injection", cmd_discover_onhit_autoinject),
-    NRF_CLI_SUBCMD_SET_END
-};NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)
-{
-    NRF_CLI_CMD(run,   NULL, "Enter discovery mode.", cmd_discover_run),
-    NRF_CLI_CMD(onhit, &m_sub_discover_onhit, "action on discovered address.", NULL),
+    NRF_CLI_CMD(run,   NULL, "Enter discover mode.", cmd_discover_run),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(discover, &m_sub_discover, "discover", cmd_discover);
 
 //pair_sniff_run level 3
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_pair_device_addresses, dynamic_device_addr_list_ram);
-//pair_sniff_onsuccess level 3
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pair_sniff_onsuccess)
-{
-        NRF_CLI_CMD(continue, NULL, "continue to sniff pairing attempts", cmd_pair_sniff_onsuccess_continue),
-        NRF_CLI_CMD(passive-enum, NULL, "start passive enumeration of newly paired device", cmd_pair_sniff_onsuccess_passiveenum),
-        NRF_CLI_CMD(active-enum, NULL, "start passive enumeration of newly paired device", cmd_pair_sniff_onsuccess_activeenum),
-        NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_pair_sniff_onsuccess_discover),
-        NRF_CLI_CMD(auto-inject, NULL, "enter injection mode and execute injection", cmd_pair_sniff_onsuccess_autoinject),
-
-        NRF_CLI_SUBCMD_SET_END
-};
 
 //pair_sniff level 2
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_pair_sniff)
 {
         NRF_CLI_CMD(run, NULL, "Sniff pairing.", cmd_pair_sniff_run),
-        NRF_CLI_CMD(onsuccess, &m_sub_pair_sniff_onsuccess, "how to continue after a pairing has been captured", cmd_help),
         NRF_CLI_SUBCMD_SET_END
 };
 
@@ -1047,31 +1062,11 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_script)
 NRF_CLI_CMD_REGISTER(script, &m_sub_script, "scripting for injection", cmd_inject);
 
 //level 2
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject_onsuccess)
-{
-    NRF_CLI_CMD(continue,   NULL, "stay in discovery mode.", cmd_inject_onsuccess_continue),
-    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_activeenum),
-    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_passiveenum),
-    NRF_CLI_CMD(discover, NULL, "enter discovery mode", cmd_inject_onsuccess_discover),
-    NRF_CLI_SUBCMD_SET_END
-};
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject_onfail)
-{
-    NRF_CLI_CMD(continue,   NULL, "stay in discovery mode.", cmd_inject_onfail_continue),
-    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onfail_activeenum),
-    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onfail_passiveenum),
-    NRF_CLI_CMD(discover, NULL, "enter discovery mode", cmd_inject_onfail_discover),
-    NRF_CLI_SUBCMD_SET_END
-};
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ram);
 
 // level 1
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
 {
-    NRF_CLI_CMD(onsuccess, &m_sub_inject_onsuccess, "action after successful injection", NULL),
-    NRF_CLI_CMD(onfail, &m_sub_inject_onfail, "action after failed injection", NULL),
-
-    NRF_CLI_CMD(language, NULL, "set injection keyboard language layout", cmd_inject_lang),
     NRF_CLI_CMD(target, &m_sub_inject_target_addr, "enter injection mode for given target RF address", cmd_inject_target),
     NRF_CLI_CMD(execute,   NULL, "run current script against injection target", cmd_inject_execute),
     NRF_CLI_SUBCMD_SET_END
@@ -1103,17 +1098,6 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices)
 };
 NRF_CLI_CMD_REGISTER(devices, &m_sub_devices, "List discovered devices", cmd_devices);
 
-/*
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram);
-NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_enum)
-{
-        NRF_CLI_CMD(active, &m_sub_enum_device_list, "active enumeration of given device", cmd_enum_active),
-        NRF_CLI_CMD(passive, &m_sub_enum_device_list, "passive enumeration of given device", cmd_enum_passive),
-        NRF_CLI_SUBCMD_SET_END
-};
-NRF_CLI_CMD_REGISTER(enum, &m_sub_enum, "start device passive or active enumeration", NULL);
-*/
-
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram);
 
 NRF_CLI_CMD_REGISTER(active_enum, &m_sub_enum_device_list, "start active enumeration of given device", cmd_enum_active);
@@ -1121,3 +1105,129 @@ NRF_CLI_CMD_REGISTER(passive_enum, &m_sub_enum_device_list, "start passive enume
 
 NRF_CLI_CMD_REGISTER(erase_flash, NULL, "erase all data stored on flash", cmd_erase_flash);
 
+NRF_CLI_CMD_REGISTER(version, NULL, "print version string", cmd_version);
+
+//options
+
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_on_off)
+{
+    NRF_CLI_CMD(on, NULL, "enable", NULL),
+    NRF_CLI_CMD(off, NULL, "disable", NULL),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject_defaultscript)
+{
+    NRF_CLI_CMD(clear, NULL, "clear default script", cmd_options_inject_defaultscript_clear),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+// options passive-enum
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_passiveenum)
+{
+    NRF_CLI_CMD(pass-through-keyboard, &m_sub_options_on_off, "pass received keyboard reports to LOGITacker's USB keyboard interface", cmd_options_passiveenum_pass_keyboard),
+    NRF_CLI_CMD(pass-through-mouse, &m_sub_options_on_off, "pass received mouse reports to LOGITacker's USB mouse interface", cmd_options_passiveenum_pass_mouse),
+    NRF_CLI_CMD(pass-through-raw, &m_sub_options_on_off, "pass all received RF reports to LOGITacker's USB hidraw interface", cmd_options_passiveenum_pass_raw),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+// options discover onhit
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_discover_onhit)
+{
+    NRF_CLI_CMD(continue,   NULL, "stay in discover mode.", cmd_discover_onhit_continue),
+    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration mode", cmd_discover_onhit_activeenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration mode", cmd_discover_onhit_passiveenum),
+    NRF_CLI_CMD(auto-inject, NULL, "enter injection mode and execute injection", cmd_discover_onhit_autoinject),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+// options discover
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_discover)
+{
+    NRF_CLI_CMD(pass-through-raw, &m_sub_options_on_off, "pass all received promiscuous RF reports to LOGITacker's USB hidraw interface", cmd_options_discover_pass_raw),
+    NRF_CLI_CMD(onhit, &m_sub_options_discover_onhit, "select action to take when device a RF address is discovered", cmd_help),
+    NRF_CLI_CMD(auto-store-plain-injectable, &m_sub_options_on_off, "automatically store discovered devices to flash if they allow plain injection", cmd_options_discover_autostoreplain),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+//options pair-sniff onsuccess
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_pairsniff_onsuccess)
+{
+        NRF_CLI_CMD(continue, NULL, "continue to sniff pairing attempts", cmd_pair_sniff_onsuccess_continue),
+        NRF_CLI_CMD(passive-enum, NULL, "start passive enumeration of newly paired device", cmd_pair_sniff_onsuccess_passiveenum),
+        NRF_CLI_CMD(active-enum, NULL, "start passive enumeration of newly paired device", cmd_pair_sniff_onsuccess_activeenum),
+        NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_pair_sniff_onsuccess_discover),
+        NRF_CLI_CMD(auto-inject, NULL, "enter injection mode and execute injection", cmd_pair_sniff_onsuccess_autoinject),
+
+        NRF_CLI_SUBCMD_SET_END
+};
+
+
+// options pair-sniff
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_pairsniff)
+{
+    // ToDo: raw pass-through for pair sniff
+    //NRF_CLI_CMD(pass-through-raw, &m_sub_options_on_off, "pass all pairing RF reports to LOGITacker's USB hidraw interface (not implemented)", NULL),
+    NRF_CLI_CMD(pass-through-raw, NULL, "pass all pairing RF reports to LOGITacker's USB hidraw interface (not implemented)", NULL),
+    NRF_CLI_CMD(onsuccess, &m_sub_options_pairsniff_onsuccess, "select action after a successful pairing has been captured", cmd_help),
+    NRF_CLI_CMD(auto-store-pair-sniffed-devices, &m_sub_options_on_off, "automatically store devices after pairing has been sniffed successfully", cmd_options_pairsniff_autostoredevice),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+// options inject onsuccess
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject_onsuccess)
+{
+    NRF_CLI_CMD(continue,   NULL, "stay in discover mode.", cmd_inject_onsuccess_continue),
+    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_activeenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_passiveenum),
+    NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_inject_onsuccess_discover),
+    NRF_CLI_SUBCMD_SET_END
+};
+// options inject onfail
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject_onfail)
+{
+    NRF_CLI_CMD(continue,   NULL, "stay in discover mode.", cmd_inject_onfail_continue),
+    NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onfail_activeenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onfail_passiveenum),
+    NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_inject_onfail_discover),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+// options inject
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject)
+{
+    NRF_CLI_CMD(language, NULL, "set injection keyboard language layout", cmd_options_inject_lang),
+
+    NRF_CLI_CMD(default-script, &m_sub_options_inject_defaultscript, "name of inject script which is loaded at boot", cmd_options_inject_defaultscript),
+    NRF_CLI_CMD(clear-default-script, NULL, "clear script which should be loaded at boot", cmd_options_inject_defaultscript_clear),
+    NRF_CLI_CMD(auto-inject-count,   NULL, "maximum number of auto-injects per device", cmd_options_inject_maxautoinjectsperdevice),
+
+    NRF_CLI_CMD(onsuccess, &m_sub_options_inject_onsuccess, "action after successful injection", cmd_help),
+    NRF_CLI_CMD(onfail, &m_sub_options_inject_onfail, "action after failed injection", cmd_help),
+
+
+    NRF_CLI_SUBCMD_SET_END
+};
+
+// options
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
+{
+    NRF_CLI_CMD(show, NULL, "print current options", cmd_options_show),
+    NRF_CLI_CMD(store,   NULL, "store current options to flash (persist reboot)", cmd_options_store),
+    NRF_CLI_CMD(erase,   NULL, "erase options from flash (defaults after reboot)", cmd_options_erase),
+
+    NRF_CLI_CMD(passive-enum, &m_sub_options_passiveenum, "options for passive-enum mode", cmd_help),
+
+    NRF_CLI_CMD(discover, &m_sub_options_discover, "options for discover mode", cmd_help),
+
+    NRF_CLI_CMD(pair-sniff, &m_sub_options_pairsniff, "options for pair sniff mode", cmd_help),
+
+    NRF_CLI_CMD(inject, &m_sub_options_inject, "options for inject mode", cmd_help),
+
+
+    //NRF_CLI_CMD(pass-keyboard,   NULL, "pass-through keystrokes to USB keyboard", cmd_options_passiveenum_pass_keyboard),
+    //NRF_CLI_CMD(pass-mouse,   NULL, "pass-through mouse moves to USB mouse", cmd_options_passiveenum_pass_mouse),
+
+    NRF_CLI_SUBCMD_SET_END
+};
+NRF_CLI_CMD_REGISTER(options, &m_sub_options, "options", cmd_help);

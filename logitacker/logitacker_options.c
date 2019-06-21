@@ -128,7 +128,7 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
 
         switch (g_logitacker_global_config.discovery_on_new_address) {
             case OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE:
-                discover_on_hit_str = "continue in discovery mode after a device address has been discovered";
+                discover_on_hit_str = "continue in discover mode after a device address has been discovered";
                 break;
             case OPTION_DISCOVERY_ON_NEW_ADDRESS_SWITCH_ACTIVE_ENUMERATION:
                 discover_on_hit_str = "enter active enumeration mode after a device address has been discovered";
@@ -153,7 +153,7 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
                 pair_sniff_success_action_str = "start passive enumeration mode after successfully sniffed pairing";
                 break;
             case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_DISCOVERY:
-                pair_sniff_success_action_str = "enter device discovery mode after successfully sniffed pairing";
+                pair_sniff_success_action_str = "enter device discover mode after successfully sniffed pairing";
                 break;
             case OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_AUTO_INJECTION:
                 pair_sniff_success_action_str = "inject keystrokes after successfully sniffed pairing";
@@ -166,7 +166,7 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
                 injection_success_action_str = "stay in injection mode after successful injection";
                 break;
             case OPTION_AFTER_INJECT_SWITCH_DISCOVERY:
-                injection_success_action_str = "enter discovery mode after successful injection";
+                injection_success_action_str = "enter discover mode after successful injection";
                 break;
             case OPTION_AFTER_INJECT_SWITCH_ACTIVE_ENUMERATION:
                 injection_success_action_str = "enter active enumeration mode after successful injection";
@@ -177,12 +177,12 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
         }
 
         char * injection_fail_action_str = "unknown";
-        switch (g_logitacker_global_config.inject_on_success) {
+        switch (g_logitacker_global_config.inject_on_fail) {
             case OPTION_AFTER_INJECT_CONTINUE:
                 injection_fail_action_str = "stay in injection mode after failed injection";
                 break;
             case OPTION_AFTER_INJECT_SWITCH_DISCOVERY:
-                injection_fail_action_str = "enter discovery mode after failed injection";
+                injection_fail_action_str = "enter discover mode after failed injection";
                 break;
             case OPTION_AFTER_INJECT_SWITCH_ACTIVE_ENUMERATION:
                 injection_fail_action_str = "enter active enumeration mode after failed injection";
@@ -205,7 +205,7 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
 
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\ncurrent options\r\n===============\r\n", g_logitacker_global_config.passive_enum_pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discovery          : %s\r\n", discover_on_hit_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discover           : %s\r\n", discover_on_hit_str);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmaximum auto-injects per device         : %d\r\n", g_logitacker_global_config.max_auto_injects_per_device);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after sniffed pairing            : %s\r\n", pair_sniff_success_action_str);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after successful injection       : %s\r\n", injection_success_action_str);
@@ -219,7 +219,7 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpassive-enum: pass-trough USB keyboard  : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_keyboard ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpassive-enum: pass-trough USB mouse     : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_mouse ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpassive-enum: pass frames to HID-raw    : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_hidraw ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tdiscovery: pass frames to HID-raw       : %s\r\n", g_logitacker_global_config.discover_pass_through_hidraw ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tdiscover: pass frames to HID-raw        : %s\r\n", g_logitacker_global_config.discover_pass_through_hidraw ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpair sniff: pass frames to HID-raw      : %s\r\n", g_logitacker_global_config.pair_sniff_pass_through_hidraw ? "on" : "off");
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n======\r\n");

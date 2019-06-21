@@ -5,13 +5,21 @@
 #include "app_usbd_hid_generic.h"
 #include "logitacker_bsp.h"
 #include "nrf_cli_cdc_acm.h"
+#include "logitacker_radio.h"
+#include "ringbuf.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_USB
 #include "nrf_log.h"
-#include "logitacker_radio.h"
+
 
 NRF_LOG_MODULE_REGISTER();
 
+#define HIDRAW_IN_REPORT_BUF_COUNT 8 // has to be power of two
+static uint8_t m_hidraw_in_report_buffers[HIDRAW_IN_REPORT_BUF_COUNT][LOGITACKER_USB_HID_GENERIC_IN_REPORT_MAXSIZE];
+static uint8_t m_current_hidraw_in_report_buf_write;
+static uint8_t m_current_hidraw_in_report_buf_read;
+static uint8_t m_current_hidraw_in_report_buf_enqueued;
+uint32_t logitacker_usb_send_next_hidraw_input_report();
 
 //static ret_code_t idle_handle(app_usbd_class_inst_t const * p_inst, uint8_t report_id);
 static void usbd_device_event_handler(app_usbd_event_type_t event);
@@ -19,7 +27,6 @@ static void usbd_hid_generic_event_handler(app_usbd_class_inst_t const *p_inst, 
 static void usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const * p_inst, app_usbd_hid_user_event_t event);
 static void usbd_hid_mouse_event_handler(app_usbd_class_inst_t const * p_inst, app_usbd_hid_user_event_t event);
 
-static bool m_report_pending;
 
 // created HID report descriptor with vendor define output / input report of max size in raw_desc
 APP_USBD_HID_GENERIC_SUBCLASS_REPORT_DESC(raw_desc,APP_USBD_HID_RAW_REPORT_DSC_SIZE(LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE));
@@ -88,7 +95,6 @@ APP_USBD_HID_MOUSE_GLOBAL_DEF(m_app_hid_mouse,
 
 
 
-static uint8_t m_generic_hid_input_report[LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE];
 static uint8_t m_keyboard_hid_input_report[LOGITACKER_USB_HID_KEYBOARD_IN_REPORT_MAXSIZE];
 static uint8_t m_mouse_hid_input_report[LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE];
 
@@ -106,19 +112,15 @@ static void usbd_device_event_handler(app_usbd_event_type_t event)
         case APP_USBD_EVT_DRV_SOF:
             break;
         case APP_USBD_EVT_DRV_RESET:
-            m_report_pending = false;
             break;
         case APP_USBD_EVT_DRV_SUSPEND:
-            m_report_pending = false;
             app_usbd_suspend_req(); // Allow the library to put the peripheral into sleep mode
             bsp_board_led_off(LED_R);
             break;
         case APP_USBD_EVT_DRV_RESUME:
-            m_report_pending = false;
             bsp_board_led_on(LED_R);
             break;
         case APP_USBD_EVT_STARTED:
-            m_report_pending = false;
             bsp_board_led_on(LED_R);
             break;
         case APP_USBD_EVT_STOPPED:
@@ -157,7 +159,7 @@ static void usbd_hid_generic_event_handler(app_usbd_class_inst_t const *p_inst, 
             size_t out_rep_size = LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE;
             const uint8_t* out_rep = app_usbd_hid_generic_out_report_get(&m_app_hid_generic, &out_rep_size);
             NRF_LOG_HEXDUMP_INFO(out_rep, out_rep_size);
-            logitacker_usb_write_generic_input_report(out_rep, out_rep_size);
+//            logitacker_usb_write_generic_input_report(out_rep, out_rep_size);
 
 //            memcpy(&hid_out_report, out_rep, LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE);
 //            processing_hid_out_report = true;
@@ -165,7 +167,12 @@ static void usbd_hid_generic_event_handler(app_usbd_class_inst_t const *p_inst, 
         }
         case APP_USBD_HID_USER_EVT_IN_REPORT_DONE:
         {
-            m_report_pending = false;
+            NRF_LOG_DEBUG("report sent successfully")
+            m_current_hidraw_in_report_buf_read++;
+            m_current_hidraw_in_report_buf_read &= (HIDRAW_IN_REPORT_BUF_COUNT-1);
+            m_current_hidraw_in_report_buf_enqueued--;
+            logitacker_usb_send_next_hidraw_input_report(); // send remaining reports, iuf there are any
+
             break;
         }
         case APP_USBD_HID_USER_EVT_SET_BOOT_PROTO:
@@ -324,6 +331,7 @@ uint32_t logitacker_usb_init() {
     return NRF_SUCCESS;
 }
 
+/*
 uint32_t logitacker_usb_write_generic_input_report(const void * p_buf, size_t size) {
     size = size > LOGITACKER_USB_HID_GENERIC_IN_REPORT_MAXSIZE ? LOGITACKER_USB_HID_GENERIC_IN_REPORT_MAXSIZE : size;
     memcpy(m_generic_hid_input_report, p_buf, size);
@@ -332,6 +340,7 @@ uint32_t logitacker_usb_write_generic_input_report(const void * p_buf, size_t si
     // write report
     return app_usbd_hid_generic_in_report_set(&m_app_hid_generic, m_generic_hid_input_report, sizeof(m_generic_hid_input_report));
 }
+*/
 
 uint32_t logitacker_usb_write_keyboard_input_report(const void * p_buf) {
     VERIFY_FALSE(currently_sending_keyboard_input, NRF_ERROR_BUSY);
@@ -352,23 +361,30 @@ uint32_t logitacker_usb_write_mouse_input_report(const void * p_buf) {
     return app_usbd_hid_generic_in_report_set(&m_app_hid_mouse, m_mouse_hid_input_report, LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE);
 }
 
-#define HIDRAW_IN_REPORT_BUF_COUNT 8 // has to be power of two
-static uint8_t m_hidraw_in_report_buffers[HIDRAW_IN_REPORT_BUF_COUNT][LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE];
-static uint8_t m_current_hidraw_in_report_buf;
+
+
+uint32_t logitacker_usb_send_next_hidraw_input_report() {
+    if (m_current_hidraw_in_report_buf_enqueued <= 0) return NRF_SUCCESS;
+    uint8_t * m_tmp_buf = m_hidraw_in_report_buffers[m_current_hidraw_in_report_buf_read];
+NRF_LOG_DEBUG("writing raw in report");
+    return app_usbd_hid_generic_in_report_set(&m_app_hid_generic, m_tmp_buf, LOGITACKER_USB_HID_GENERIC_IN_REPORT_MAXSIZE);
+}
 
 uint32_t logitacker_usb_write_hidraw_input_report(logitacker_mode_t logitacker_mode, logitacker_usb_hidraw_report_type_t type, size_t length, const void * data) {
 
-    if (length + 2 > LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE) return NRF_ERROR_DATA_SIZE;
-    uint8_t * m_tmp_buf = m_hidraw_in_report_buffers[m_current_hidraw_in_report_buf++];
-    m_current_hidraw_in_report_buf &= (HIDRAW_IN_REPORT_BUF_COUNT-1);
+    if (length + 2 > LOGITACKER_USB_HID_GENERIC_IN_REPORT_MAXSIZE) return NRF_ERROR_DATA_SIZE;
+    uint8_t * m_tmp_buf = m_hidraw_in_report_buffers[m_current_hidraw_in_report_buf_write++];
+    m_current_hidraw_in_report_buf_write &= (HIDRAW_IN_REPORT_BUF_COUNT-1);
+
 
     m_tmp_buf[0] = type;
     m_tmp_buf[1] = (uint8_t) logitacker_mode;
-    memset(m_tmp_buf, 0, LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE);
+    memset(m_tmp_buf, 0, LOGITACKER_USB_HID_GENERIC_IN_REPORT_MAXSIZE);
     memcpy(&m_tmp_buf[2], data, length);
+    m_current_hidraw_in_report_buf_enqueued++;
 
 //    return app_usbd_hid_generic_in_report_set(&m_app_hid_generic, m_tmp_buf, length+2);
-    return app_usbd_hid_generic_in_report_set(&m_app_hid_generic, m_tmp_buf, LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE);
+    return logitacker_usb_send_next_hidraw_input_report();
 }
 
 uint32_t logitacker_usb_write_hidraw_input_report_rf_frame(logitacker_mode_t logitacker_mode, logitacker_devices_unifying_device_rf_address_t rf_address, const nrf_esb_payload_t * p_frame) {

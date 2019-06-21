@@ -8,7 +8,7 @@ The firmware evolves as needed by myself (on-stage demos, experiments). **No fea
 - [done] key `press` method for injection (handling shortcuts)
 - [done] flash storage of device data
 - auto delete devices from list (not spotted for a while / dongle not reachable in active enum)
-- [partially, `options` command] automation: active enum --> passive enum --> discovery (default)
+- [partially, `options` command] automation: active enum --> passive enum --> discover (default)
 - abort conditions for passive enum (too many non-Unifying frames, no frames after timeout, enough frames of interesting types received, interesting != keep-alive)
 - [done for keyboard] mirror input reports to HID keyboard/mouse interface
 - pass sniffed frames on HID raw
@@ -19,7 +19,7 @@ The firmware evolves as needed by myself (on-stage demos, experiments). **No fea
     2) [done] devices which respond to plain keystroke injection during active enum
     3) [done] devices for which plain key reports have been captured during passive enum (f.e. R400 doesn't reveal injection vuln during active enum, but send plain keyboard reports)
 - extensive testing of device flash storage, definition of upper limits (nobody needs 1000 devices on the dongle, as they could be barely handled interactively)
-- maybe: Introduce user provided meta data, like "site name" for discovery and custom device name, to make it easier to re-identify specific devices stored on flash
+- maybe: Introduce user provided meta data, like "site name" for discover and custom device name, to make it easier to re-identify specific devices stored on flash
 (raw RF addresses require noting down additional info) - this is low prio, as it requires additional relationships for data stored on flash, which means runtime-reference-creation
 and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - account for re-transmits from legit device (analyze PID of ESB PCF ... for passive enum, pair sniffing) - **must have for on-stage demos**
@@ -28,14 +28,16 @@ and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - [done] storing scripts
 - [done] loading scripts
 - [done] script FDS: deletion, list stored scripts
-- injection: abort command for long typing scripts
-- command for manual device creation (avoid the need of discovery)
+- injection: abort command for long typing scripts (work around for now `discover run`)
+- command for manual device creation (avoid the need of discover)
 - [done] command for flash erase
 - remove test commands
 - emulation of dongle in pairing mode
 - utilizing scripts for "classical" USB injection instead of RF (bonus: trigger from RF, f.e. presentation clicker)
 - check options to ship stored FDS data with hex image for firmware (pre-built scripts, down&exec demo as default)
 - remove either key or raw key data from device struct, to save space (one could be derived from the other, as "key generation" is no one-way function)
+- rework `options show`
+- implement `options pair-sniff pass-through-raw`
 
 # further analysis
 - capabilities to send in new HID++ messages (maybe re-write device capabilities)

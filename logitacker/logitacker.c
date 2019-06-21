@@ -23,10 +23,10 @@
 #include "logitacker_flash.h"
 #include "logitacker_processor_discover.h"
 #include "logitacker_processor_pair_sniff.h"
+#include "logitacker_script_engine.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER
 #include "nrf_log.h"
-#include "logitacker_script_engine.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -212,13 +212,13 @@ void logitacker_enter_mode_injection(uint8_t const *rf_address) {
 void logitacker_enter_mode_discovery() {
     if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
 
-    NRF_LOG_INFO("Entering discovery mode");
+    NRF_LOG_INFO("Entering discover mode");
 
     p_processor = new_processor_discover();
     p_processor->p_init_func(p_processor); //call init function
 
     m_state_local.mainstate = LOGITACKER_MODE_DISCOVERY;
-    sprintf(g_logitacker_cli_name, "LOGITacker (discovery) $ ");
+    sprintf(g_logitacker_cli_name, "LOGITacker (discover) $ ");
 
 }
 

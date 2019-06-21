@@ -58,15 +58,15 @@ typedef struct {
 
 const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .discovery_on_new_address = OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE,
-    .discover_pass_through_hidraw = true,
-    .passive_enum_pass_through_hidraw = true,
+    .discover_pass_through_hidraw = false,
+
     .pair_sniff_on_success = OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION,
     .inject_on_success = OPTION_AFTER_INJECT_SWITCH_DISCOVERY,
     .inject_on_fail = OPTION_AFTER_INJECT_SWITCH_DISCOVERY,
 
     .passive_enum_pass_through_mouse = false,
     .passive_enum_pass_through_keyboard = false,
-    .passive_enum_pass_through_hidraw = true,
+    .passive_enum_pass_through_hidraw = false,
     .auto_store_sniffed_pairing_devices = true,
     .auto_store_plain_injectable = true,
     .injection_language = LANGUAGE_LAYOUT_US, //default layout (if nothing set) is US

@@ -12,6 +12,8 @@
 extern "C" {
 #endif
 
+#define NRF_ESB_PROMISCUOUS_PAYLOAD_ADDITIONAL_LENGTH 18
+
 /*
  * In promiscuous mode, all captured frames produce a NRF_ESB_EVENT_RX_RECEIVED event
  *
@@ -146,7 +148,7 @@ STATIC_ASSERT(NRF_ESB_PIPE_COUNT <= 8);
                                 .tx_mode                = NRF_ESB_TXMODE_AUTO,              \
                                 .radio_irq_priority     = 1,                                \
                                 .event_irq_priority     = 2,                                \
-                                .payload_length         = 50,                               \
+                                .payload_length         = 32 + NRF_ESB_PROMISCUOUS_PAYLOAD_ADDITIONAL_LENGTH,                               \
                                 .selective_auto_ack     = true,                             \
                                 .disallow_auto_ack      = true                              \
 }

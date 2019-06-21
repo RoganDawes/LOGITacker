@@ -58,7 +58,7 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
             helper_addr_to_base_and_prefix(base, &prefix, addr, 5); //convert device addr to base+prefix and update device
 
             helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, addr);
-            NRF_LOG_INFO("DISCOVERY: received valid ESB frame (addr %s, len: %d, ch idx %d, raw ch %d)", addr_str_buff, len, ch_idx, ch);
+            NRF_LOG_INFO("DISCOVERY: received valid ESB frame (addr %s, len: %d, ch idx %d, raw ch %d, rssi %d)", addr_str_buff, len, ch_idx, ch, p_rx_payload->rssi);
 
             NRF_LOG_HEXDUMP_DEBUG(p_rx_payload->data, p_rx_payload->length);
 
@@ -107,7 +107,7 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
                                     logitacker_enter_mode_injection(addr);
                                     logitacker_injection_start_execution(true);
                                 } else {
-                                    NRF_LOG_INFO("maximum number of autoinjects reached for this device, continue discovery mode")
+                                    NRF_LOG_INFO("maximum number of autoinjects reached for this device, continue discover mode")
                                 }
                                 //logitacker_script_engine_append_task_type_string(LOGITACKER_AUTO_INJECTION_PAYLOAD);
                                 break;
@@ -127,7 +127,7 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
             }
 
         } else {
-            NRF_LOG_WARNING("invalid promiscuous frame in discovery mode, shouldn't happen because of filtering");
+            NRF_LOG_WARNING("invalid promiscuous frame in discover mode, shouldn't happen because of filtering");
         }
 
     }
@@ -183,7 +183,7 @@ void processor_discover_deinit_func_(logitacker_processor_discover_ctx_t *self) 
 void processor_discover_esb_handler_func_(logitacker_processor_discover_ctx_t *self, nrf_esb_evt_t *p_esb_event) {
     switch (p_esb_event->evt_id) {
         case NRF_ESB_EVENT_RX_RECEIVED:
-            NRF_LOG_DEBUG("ESB EVENT HANDLER DISCOVERY RX_RECEIVED");
+            NRF_LOG_DEBUG("ESB EVENT HANDLER discover RX_RECEIVED");
             discovery_process_rx(self);
             break;
         default:
@@ -198,13 +198,13 @@ void processor_discover_radio_handler_func_(logitacker_processor_discover_ctx_t 
     {
         case RADIO_EVENT_NO_RX_TIMEOUT:
         {
-            NRF_LOG_INFO("Discovery: no RX on current channel for %d ms ... restart channel hopping ...", LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS);
+            NRF_LOG_INFO("discover: no RX on current channel for %d ms ... restart channel hopping ...", LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS);
             radio_start_channel_hopping(LOGITACKER_DISCOVERY_CHANNEL_HOP_INTERVAL_MS, 0, true); //start channel hopping directly (0ms delay) with 30ms hop interval, automatically stop hopping on RX
             break;
         }
         case RADIO_EVENT_CHANNEL_CHANGED_FIRST_INDEX:
         {
-            NRF_LOG_DEBUG("DISCOVERY MODE channel hop reached first channel");
+            NRF_LOG_DEBUG("discover MODE channel hop reached first channel");
             bsp_board_led_invert(LED_B); // toggle scan LED everytime we jumped through all channels
             break;
         }
