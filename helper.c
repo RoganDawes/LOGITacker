@@ -116,6 +116,22 @@ uint32_t helper_hex_str_to_addr(uint8_t * p_result_addr, uint8_t len, char const
     return NRF_SUCCESS;
 }
 
+uint32_t helper_hex_str_to_bytes(uint8_t * p_result, uint8_t len, char const * const hex_str) {
+    ASSERT(p_result);
+    ASSERT(hex_str);
+
+    int tmp;
+    for (int i=0; i<len; i++) {
+        if (sscanf(&hex_str[i*2], "%02x", &tmp) != 1) return NRF_ERROR_INVALID_PARAM;
+        p_result[i] = (uint8_t) tmp;
+        //NRF_LOG_INFO("tmp: %02x", tmp);
+    }
+
+    NRF_LOG_INFO("parsed len %d:", len);
+    NRF_LOG_HEXDUMP_INFO(p_result, len);
+    return NRF_SUCCESS;
+}
+
 // Return the next DELIM-delimited token from *STRINGP terminating it with a '\0', and update *STRINGP to point past it.
 
 char *helper_strsep (char **stringp, const char *delim) {

@@ -61,8 +61,8 @@ const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .discover_pass_through_hidraw = false,
 
     .pair_sniff_on_success = OPTION_PAIR_SNIFF_ON_SUCCESS_SWITCH_PASSIVE_ENUMERATION,
-    .inject_on_success = OPTION_AFTER_INJECT_SWITCH_DISCOVERY,
-    .inject_on_fail = OPTION_AFTER_INJECT_SWITCH_DISCOVERY,
+    .inject_on_success = OPTION_AFTER_INJECT_CONTINUE,
+    .inject_on_fail = OPTION_AFTER_INJECT_CONTINUE,
 
     .passive_enum_pass_through_mouse = false,
     .passive_enum_pass_through_keyboard = false,

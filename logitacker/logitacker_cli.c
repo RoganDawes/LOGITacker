@@ -744,6 +744,54 @@ static void cmd_devices_remove(nrf_cli_t const * p_cli, size_t argc, char **argv
     }
 }
 
+static void cmd_devices_add(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    logitacker_devices_unifying_device_t * p_device;
+    if (argc > 1)
+    {
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "adding device %s as plain injectable keyboard\r\n");
+
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Adding device %s\r\n", tmp_addr_str);
+
+
+        if (logitacker_devices_create_device(&p_device, addr) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "Error adding device %s\r\n", tmp_addr_str);
+            return;
+        }
+
+        // add keyboard capabilities
+        p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD | LOGITACKER_DEVICE_REPORT_TYPES_MEDIA_CENTER | LOGITACKER_DEVICE_REPORT_TYPES_MULTIMEDIA | LOGITACKER_DEVICE_REPORT_TYPES_POWER_KEYS;
+
+        if (argc > 2) {
+            uint8_t key[16] = {0};
+            if (helper_hex_str_to_bytes(key, 16, argv[2]) != NRF_SUCCESS) {
+                nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid key parameter, format has to be xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n");
+                return;
+            }
+
+            // add key and mark device as link-encryption enabled
+            memcpy(p_device->key, key, 16);
+            p_device->key_known = true;
+            p_device->caps |= LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION;
+
+            nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "added key to device\r\n");
+        }
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "syntax to add a device manually:\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "    devices add <RF-address> [AES key]\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "example device no encryption   : devices add de:ad:be:ef:01\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "example device with encryption : devices add de:ad:be:ef:02 023601e63268c8d37988847af1ae40a1\r\n");
+    };
+}
+
 static void cmd_devices_storage_save(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc > 1)
     {
@@ -1094,6 +1142,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_devices)
 {
         NRF_CLI_CMD(storage, &m_sub_devices_storage, "handle devices on flash", NULL),
         NRF_CLI_CMD(remove, &m_sub_devices_remove_addr_collection, "delete a device from list (RAM)", cmd_devices_remove),
+        NRF_CLI_CMD(add, NULL, "manually add a device (RAM)", cmd_devices_add),
         NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(devices, &m_sub_devices, "List discovered devices", cmd_devices);

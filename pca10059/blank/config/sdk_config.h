@@ -2586,7 +2586,7 @@
 
 // <o> NRF_CLI_PRINTF_BUFF_SIZE - Maximum print buffer size. 
 #ifndef NRF_CLI_PRINTF_BUFF_SIZE
-#define NRF_CLI_PRINTF_BUFF_SIZE 1024
+#define NRF_CLI_PRINTF_BUFF_SIZE 2048
 #endif
 
 // <e> NRF_CLI_HISTORY_ENABLED - Enable CLI history mode.

@@ -204,28 +204,34 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
 
 
 
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\ncurrent options\r\n===============\r\n", g_logitacker_global_config.passive_enum_pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction on RF address discover           : %s\r\n", discover_on_hit_str);
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmaximum auto-injects per device         : %d\r\n", g_logitacker_global_config.max_auto_injects_per_device);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot count                              : %d\r\n", g_logitacker_global_config.stats.boot_count);
+
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "discover mode options\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after RF address dicovery        : %s\r\n", discover_on_hit_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpass RF frames to USB raw HID           : %s\r\n", g_logitacker_global_config.discover_pass_through_hidraw ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store plain injectable devices     : %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
+
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "passive-enumeration mode options\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpass key reports to USB keyboard        : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_keyboard ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpass mouse reports to USB mouse         : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_mouse ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpass all RF frames to USB raw HID       : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_hidraw ? "on" : "off");
+
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "pair-sniff mode options\r\n");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after sniffed pairing            : %s\r\n", pair_sniff_success_action_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store devices from sniffed pairing : %s\r\n", g_logitacker_global_config.auto_store_sniffed_pairing_devices ? "on" : "off");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpass RF frames to USB raw HID           : %s\r\n", g_logitacker_global_config.pair_sniff_pass_through_hidraw ? "on" : "off");
+
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "inject mode options\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tkeyboard language layout                : %s\r\n", injection_lan_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tdefault script                          : '%s'\r\n", strlen(g_logitacker_global_config.default_script) > 0 ? g_logitacker_global_config.default_script : "<none>");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tmaximum auto-injects per device         : %d\r\n", g_logitacker_global_config.max_auto_injects_per_device);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after successful injection       : %s\r\n", injection_success_action_str);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after failed injection           : %s\r\n", injection_fail_action_str);
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store plain injectable devices     : %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store devices from sniffed pairing : %s\r\n", g_logitacker_global_config.auto_store_sniffed_pairing_devices ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tinjection keyboard language             : %s\r\n", injection_lan_str);
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tdefault script                          : '%s'\r\n", strlen(g_logitacker_global_config.default_script) > 0 ? g_logitacker_global_config.default_script : "<none>");
-
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "USB pass-through\r\n======\r\n");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpassive-enum: pass-trough USB keyboard  : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_keyboard ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpassive-enum: pass-trough USB mouse     : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_mouse ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpassive-enum: pass frames to HID-raw    : %s\r\n", g_logitacker_global_config.passive_enum_pass_through_hidraw ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tdiscover: pass frames to HID-raw        : %s\r\n", g_logitacker_global_config.discover_pass_through_hidraw ? "on" : "off");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpair sniff: pass frames to HID-raw      : %s\r\n", g_logitacker_global_config.pair_sniff_pass_through_hidraw ? "on" : "off");
-
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n======\r\n");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot count                     : %d\r\n", g_logitacker_global_config.stats.boot_count);
 
         return;
-
-
 }

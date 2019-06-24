@@ -11,7 +11,7 @@ The firmware evolves as needed by myself (on-stage demos, experiments). **No fea
 - [partially, `options` command] automation: active enum --> passive enum --> discover (default)
 - abort conditions for passive enum (too many non-Unifying frames, no frames after timeout, enough frames of interesting types received, interesting != keep-alive)
 - [done for keyboard] mirror input reports to HID keyboard/mouse interface
-- pass sniffed frames on HID raw
+- [done] pass sniffed frames on HID raw
 - [done] passive enum keyboard reports to string: modifiers have to be added
 - [done] cli: auto complete for `devices store load` and `devices store delete` (maybe option to store full dongle)
 - flash storage automation: optional auto store for
@@ -29,14 +29,14 @@ and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - [done] loading scripts
 - [done] script FDS: deletion, list stored scripts
 - injection: abort command for long typing scripts (work around for now `discover run`)
-- command for manual device creation (avoid the need of discover)
+- [done] command for manual device creation (avoid the need of discover, allow adding keys e.g. R500 presentation clicker)
 - [done] command for flash erase
-- remove test commands
+- [done] remove test commands
 - emulation of dongle in pairing mode
 - utilizing scripts for "classical" USB injection instead of RF (bonus: trigger from RF, f.e. presentation clicker)
 - check options to ship stored FDS data with hex image for firmware (pre-built scripts, down&exec demo as default)
 - remove either key or raw key data from device struct, to save space (one could be derived from the other, as "key generation" is no one-way function)
-- rework `options show`
+- [done] rework `options show`
 - implement `options pair-sniff pass-through-raw`
 
 # further analysis
