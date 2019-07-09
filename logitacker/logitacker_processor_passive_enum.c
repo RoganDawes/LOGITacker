@@ -230,6 +230,7 @@ static uint8_t m_pass_through_keyboard_hid_input_report[8] = {0};
 static uint8_t m_pass_through_mouse_hid_input_report[7] = {0};
 
 void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
+    bsp_board_led_invert(LED_G);
     while (nrf_esb_read_rx_payload(&(self->tmp_rx_payload)) == NRF_SUCCESS) {
         uint8_t len = self->tmp_rx_payload.length;
         uint8_t unifying_report_type;

@@ -10,6 +10,7 @@
 #include "logitacker_options.h"
 #include "logitacker_pairing_parser.h"
 #include "logitacker_flash.h"
+#include "logitacker_bsp.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -114,6 +115,9 @@ void pair_sniff_disable_pipe1(logitacker_processor_pair_sniff_ctx_t *self) {
 }
 
 void pair_sniff_on_success(logitacker_processor_pair_sniff_ctx_t *self) {
+    bsp_board_leds_off();
+    bsp_board_led_on(LED_G);
+
     switch (g_logitacker_global_config.pair_sniff_on_success) {
         case OPTION_PAIR_SNIFF_ON_SUCCESS_CONTINUE:
             NRF_LOG_INFO("Continue to sniff pairing");
@@ -259,6 +263,11 @@ void processor_pair_sniff_esb_handler_func_(logitacker_processor_pair_sniff_ctx_
 
                     helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, new_address);
                     NRF_LOG_INFO("PAIR SNIFF assigned %s as new sniffing address", addr_str_buff);
+
+                    //enable red and green LED
+                    bsp_board_leds_off();
+                    bsp_board_led_on(LED_R);
+                    bsp_board_led_on(LED_G);
                 }
 
                 // clear pairing info when new pairing request 1 is spotted
@@ -335,10 +344,17 @@ void processor_pair_sniff_esb_handler_func_(logitacker_processor_pair_sniff_ctx_
             }
             NRF_LOG_INFO("dongle on channel %d ", freq);
             pair_sniff_reset_timer(self);
+
+            bsp_board_led_off(LED_R);
+            bsp_board_led_off(LED_G);
+            bsp_board_led_invert(LED_B);
             break;
         }
         case NRF_ESB_EVENT_TX_FAILED:
         {
+            bsp_board_led_off(LED_B);
+            bsp_board_led_off(LED_G);
+            bsp_board_led_invert(LED_R);
             // missed dongle, re-transmit ping payload
 
             if (self->dongle_in_range) {
