@@ -33,7 +33,7 @@ LOGITacker does currently not cover the following Logitech:
 
 *Note: KeyJack and CVE-2019-13053 are covered by mjackit*
 
-# feature overview (excerpt)
+# 1 feature summary
 
 - Discovery of Logitech devices on air (optimized pseudo promiscuous mode)
 - Device management (store/delete devices from/to flash, auto re-load parameters - like link encryption key - from flash
@@ -77,9 +77,9 @@ used for headless auto-injection** (LOGITacker could be power supplied from a ba
     
 There are still many ToDo's. The whole project is in **experimental state**.    
 
-# Installation
+# 2 Installation
 
-## Nordic nRF52840 Dongle (pca10059)
+## 2.1 Nordic nRF52840 Dongle (pca10059)
 
 `nRF Connect` software by Nordic provides a `Programmer` app, which could be used to flash the firmware from this repository
 to a Nordic nRF52840 dongle. After flashing the firmware, the dongle provides 4 new interfaces (USB serial, USB mouse, 
@@ -90,9 +90,9 @@ Reference: "Terminal Settings" section of nRF5 SDK documentation - https://infoc
 To put the dongle into programming mode (bootloader) push the button labeled `RESET`. The red LED starts to 
 "softblink" in red.
 
-The proper file to flash with the Programmer app is `logitacker_pca10059.hex`.
+The proper file to flash with the Programmer app is `build/logitacker_pca10059.hex`.
 
-## MakerDiary MDK Dongle (pca10059)
+## 2.2 MakerDiary MDK Dongle (pca10059)
 
 `nRF Connect` software by Nordic provides a `Programmer` app, which could be used to flash the firmware from this repository
 to a Nordic nRF52840 dongle. After flashing the firmware, the dongle provides 4 new interfaces (USB serial, USB mouse, 
@@ -106,20 +106,20 @@ To put the dongle into programming mode (bootloader) follow these steps:
 - re-connect the dongle to the host without releasing the button
 - the red LED of the dongle should "softblink" to indicate bootloader mode
 
-The proper file to flash with the Programmer app is `logitacker_mdk_dongle.hex`.
+The proper file to flash with the Programmer app is `build/logitacker_mdk_dongle.hex`.
 
-## MakerDiary MDK
+## 2.3 MakerDiary MDK
 
 Thanks to DAPLink support flashing this board is really easy:
 
 1) Connect the board to the host
 2) Push the button labeled "IF BOOT / RST"
 3) A mass storage with label "DAPLINK" should be detected and mounted to the host.
-4) Copy the `logitacker_mdk.hex` file to the DAPLINK volume.
+4) Copy the `build/logitacker_mdk.hex` file to the DAPLINK volume.
 5) Wait till the green LED stops flashing, and the "DAPLINK" volume is re-mounted.
 6) Push the "IF BOOT / RST" button again, in order to boot the LOGITacker firmware.
 
-# Basic usage concepts
+# 3 Basic usage concepts
 
 LOGITacker exposes four virtual USB devices:
 
@@ -140,7 +140,7 @@ has to be pressed to get BACKSPACE functionality**
 *Note: Makerdiary MDK exposes two USB serial ports (one belonging to CMSIS-DAP). Be sure to connect to the correct
 port, which runs the CLI. The other port only outputs log messages*
 
-## LOGITacker's modes of operation
+## 3.1 LOGITacker's modes of operation
 
 - **discover**: Used to find Logitech wireless devices on air aka. pseudo-promiscuous mode (default mode)
 - **passive-enum**: Receives all RX traffic of the selected device address (optained in discover mode or added manually).
@@ -163,7 +163,7 @@ injected unencrypted.
     - `pair device`: used to pair a new device to a receiver in pairing mode (or for a dedicated RF address if the 
     respective receiver is vulnerable to "forced pairing")
     
-## Distinguish between data is stored in LOGITacker's RAM (session data) and data stored on flash (persistent)
+## 3.2 Distinguish between data is stored in LOGITacker's RAM (session data) and data stored on flash (persistent)
 
 - **devices**: Discovered devices are stored in RAM only. They could be persistently stored to flash with the `devices storage save <address>`
 command and restored with `devices storage load <address>` command. Stored devices could be listed with `devices storage list`.
@@ -179,7 +179,7 @@ changes to options NEVER ARE PERSISTENT, unless the `options store` command is r
 is to reduce flash write&erase cycles (flash could not be written endlessly). Keep this in mind: options always have to
 be stored manually, in order to persist a reboot of LOGITacker.
 
-## Scripting
+## 3.3 Scripting
 
 Entering `script` to the CLI shows the sub-commands of the script command group. There are two kinds of commands:
 
@@ -411,7 +411,7 @@ For Logitech devices vulnerable to plain keystroke injection (see MouseJack rese
 directly be used. For encrypted devices, like Logitech R500 or Logitech SPOTLIGHT presentation clickers, the new script 
 can not be injected, without knowing the encryption key. This is issue is covered in the next section.
 
-## Encrypted injection
+## 3.4 Encrypted injection
 
 In order to execute the example scripts agains an encrypted Logitech device, the decryption key has to be obtained.
 There are two class of vulnerabilities, allow stealing those keys:
@@ -628,7 +628,7 @@ LOGITacker (injection) $ options inject onsuccess continue
 LOGITacker (injection) $ options store 
 ```
 
-## Eavesdropping encrypted keyboards
+## 3.5 Eavesdropping encrypted devices (keyboards)
 
 The process for eavesdropping follows the same steps as described for the "encrypted injection".
 
@@ -660,7 +660,7 @@ order to sniff the link encryption key. For presentation clickers, this could cu
 **WARNING: In current version, no filter could be applied on USB forwarded input. Everything entered with the sniffed
 keyboard is directly forwarded to the USB keyboard interface of LOGITacker.**
 
-## Format description for RF reports forwarded to raw USB HID interface
+## 3.6 Format description for RF reports forwarded to raw USB HID interface
 
 t.b.d.
 
@@ -676,25 +676,25 @@ typedef struct {
 } logitacker_usb_hidraw_rf_frame_representation_t;
 ```
 
-## Headless use / Automation 
+## 3.7 Headless use / Automation 
 
 t.b.d.
 
 Demo: https://youtu.be/nMoaXDQJNZ8
 
 
-# Other vVideo usage examples (Twitter)
+# 4 Other video usage examples (Twitter)
 
 Note: The videos have been created throughout development and command syntax has likely changed (and will change). 
 Please use tab completion and CLI inline help. All examples are included in current firmware.
 
-## Discover a device 
+## 4.1 Discover a device 
 
 Video: https://twitter.com/mame82/status/1126038501185806336
 
 Note: Discovery, especially of presentation clickers, has been improved since this test video.
 
-## Sniff pairing and eavesdropping for an encrypted keyboard
+## 4.2 Sniff pairing and eavesdropping for an encrypted keyboard
 
 Video: https://twitter.com/mame82/status/1128036281936642051
 
@@ -711,7 +711,7 @@ pair sniff (available via tab complete).
 In order to forward (decrypted) keyboard RF frames to the USB keyboard interface, like shown in the video, the 
 respective option has to be enabled with `options passive-enum pass-through-keyboard on`.
 
-## Inject keystrokes (encrypted device)
+## 4.3 Inject keystrokes (encrypted device)
 
 Video: https://twitter.com/mame82/status/1136992913714491392
 
@@ -743,13 +743,13 @@ The current script could be printed with `script show`.
 To set a script as default script on boot (could be used for auto-injection), the following option has to be altered:
 `options inject default-script "scriptname"`. To persist the new default-script option don't forget to run `options store`.
 
-## Using `altstring` feature in scripts (enter characters using ALT+NUMPAD on Windows targets)
+## 4.4 Using `altstring` feature in scripts (enter characters using ALT+NUMPAD on Windows targets)
 
 Video demo 1 (Mouse MX Anywhere 2S): https://twitter.com/mame82/status/1139671585042915329
 
 Video demo 2 (encrypted presentation clicker R500): https://twitter.com/mame82/status/1143093313924452353
   
-# DISCLAIMER
+# 5 DISCLAIMER
 
 **LOGITacker** should be used for authorized testing and/or educational purposes only. 
 The only exception is using it against devices or a network, owned by yourself.
