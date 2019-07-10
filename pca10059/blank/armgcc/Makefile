@@ -1,12 +1,12 @@
 PROJECT_NAME     := LOGITacker
-TARGETS          := nrf52840_xxaa
+TARGETS          := logitacker_pca10059
 OUTPUT_DIRECTORY := _build
 
 SDK_ROOT := ../../../../../..
 PROJ_DIR := ../../..
 
-$(OUTPUT_DIRECTORY)/nrf52840_xxaa.out: \
-  LINKER_SCRIPT  := logitacker.ld
+$(OUTPUT_DIRECTORY)/logitacker_pca10059.out: \
+  LINKER_SCRIPT  := logitacker_pca10059.ld
 
 # Source files common to all targets
 SRC_FILES += \
@@ -237,10 +237,10 @@ LDFLAGS += -Wl,--gc-sections
 # use newlib in nano version
 LDFLAGS += --specs=nano.specs
 
-nrf52840_xxaa: CFLAGS += -D__HEAP_SIZE=8192
-nrf52840_xxaa: CFLAGS += -D__STACK_SIZE=8192
-nrf52840_xxaa: ASMFLAGS += -D__HEAP_SIZE=8192
-nrf52840_xxaa: ASMFLAGS += -D__STACK_SIZE=8192
+logitacker_pca10059: CFLAGS += -D__HEAP_SIZE=8192
+logitacker_pca10059: CFLAGS += -D__STACK_SIZE=8192
+logitacker_pca10059: ASMFLAGS += -D__HEAP_SIZE=8192
+logitacker_pca10059: ASMFLAGS += -D__STACK_SIZE=8192
 
 # Add standard libraries at the very end of the linker input, after all objects
 # that may need symbols provided by these libraries.
@@ -250,7 +250,7 @@ LIB_FILES += -lc -lnosys -lm
 .PHONY: default help
 
 # Default target - first one defined
-default: nrf52840_xxaa
+default: logitacker_pca10059
 
 # Print all targets that can be built
 help:

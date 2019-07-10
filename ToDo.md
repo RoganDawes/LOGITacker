@@ -39,6 +39,7 @@ and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - [done] rework `options show`
 - implement `options pair-sniff pass-through-raw`
 - [done] remove unneeded modules in root folder (refactoring)
+- [done] add GCC build scripts for MDK and MDK dongle
 
 # further analysis
 - capabilities to send in new HID++ messages (maybe re-write device capabilities)
