@@ -2508,7 +2508,7 @@ uint32_t nrf_esb_validate_promiscuous_esb_payload(nrf_esb_payload_t * p_payload)
     for (uint8_t bitshift=0; bitshift<8; bitshift++) {
         for (uint8_t byteshift=0; byteshift<NRF_ESB_PROMISCUOUS_PAYLOAD_ADDITIONAL_LENGTH; byteshift++) {
             if (nrf_esb_validate_promiscuous_frame(&tmpData[byteshift], assumed_addrlen)) {
-                NRF_LOG_INFO("Promiscuous ESB CRC match: (bitshift %d, byteshift %d)", bitshift, byteshift);
+                NRF_LOG_DEBUG("Promiscuous ESB CRC match: (bitshift %d, byteshift %d)", bitshift, byteshift);
                 p_crc_match_array = &tmpData[byteshift];
 
                 break;

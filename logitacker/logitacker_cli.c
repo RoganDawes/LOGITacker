@@ -1226,7 +1226,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_pairsniff)
 // options inject onsuccess
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject_onsuccess)
 {
-    NRF_CLI_CMD(continue,   NULL, "stay in discover mode.", cmd_inject_onsuccess_continue),
+    NRF_CLI_CMD(continue,   NULL, "stay in inject mode.", cmd_inject_onsuccess_continue),
     NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_activeenum),
     NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_passiveenum),
     NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_inject_onsuccess_discover),
@@ -1235,7 +1235,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject_onsuccess)
 // options inject onfail
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject_onfail)
 {
-    NRF_CLI_CMD(continue,   NULL, "stay in discover mode.", cmd_inject_onfail_continue),
+    NRF_CLI_CMD(continue,   NULL, "stay in inject mode.", cmd_inject_onfail_continue),
     NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onfail_activeenum),
     NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onfail_passiveenum),
     NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_inject_onfail_discover),
