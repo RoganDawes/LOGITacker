@@ -1,7 +1,6 @@
 #include "logitacker_unifying.h"
 #include "string.h" // for memcpy
 #include "nrf.h"
-#include "flash_device_info.h"
 #include "fds.h"
 #include "nrf_esb_illegalmod.h"
 #include "nrf_log.h"

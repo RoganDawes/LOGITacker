@@ -32,7 +32,6 @@
 //Flash FDS
 #include <string.h>
 #include "fds.h"
-#include "flash_device_info.h"
 #include "logitacker_unifying.h"
 
 #include "logitacker_bsp.h"
