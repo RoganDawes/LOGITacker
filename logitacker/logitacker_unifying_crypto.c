@@ -1,5 +1,5 @@
-#include <unifying.h>
 #include "logitacker_unifying_crypto.h"
+#include "logitacker_unifying.h"
 #include "sdk_common.h"
 #include "nrf_crypto.h"
 #include "nrf_crypto_error.h"
@@ -119,7 +119,7 @@ uint32_t logitacker_unifying_crypto_encrypt_keyboard_frame(nrf_esb_payload_t * r
     }
 
     // update Logitech CRC
-    unifying_payload_update_checksum(result_rf_frame->data, result_rf_frame->length);
+    logitacker_unifying_payload_update_checksum(result_rf_frame->data, result_rf_frame->length);
 
     return NRF_SUCCESS;
 }

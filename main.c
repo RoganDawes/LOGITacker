@@ -33,7 +33,7 @@
 #include <string.h>
 #include "fds.h"
 #include "flash_device_info.h"
-#include "unifying.h"
+#include "logitacker_unifying.h"
 
 #include "logitacker_bsp.h"
 #include "logitacker_radio.h"
@@ -41,13 +41,11 @@
 
 //crypto
 #include "nrf_crypto.h"
-//#include "timestamp.h"
 
 
 #define CHANNEL_HOP_RESTART_DELAY 1300
 
 // Scheduler settings
-//#define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),MAX(sizeof(unifying_rf_record_set_t),sizeof(nrf_esb_evt_t))))))
 #define SCHED_MAX_EVENT_DATA_SIZE   BYTES_PER_WORD*BYTES_TO_WORDS(MAX(NRF_ESB_CHECK_PROMISCUOUS_SCHED_EVENT_DATA_SIZE,MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE,MAX(sizeof(nrf_esb_payload_t),sizeof(nrf_esb_evt_t)))))
 
 

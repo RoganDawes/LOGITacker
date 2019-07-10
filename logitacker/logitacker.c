@@ -6,7 +6,7 @@
 #include "nrf.h"
 #include "nrf_esb_illegalmod.h"
 #include "bsp.h"
-#include "unifying.h"
+#include "logitacker_unifying.h"
 #include "helper.h"
 #include "app_timer.h"
 #include "logitacker_pairing_parser.h"

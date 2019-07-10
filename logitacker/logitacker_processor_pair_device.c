@@ -7,7 +7,7 @@
 #include "string.h"
 #include "logitacker_devices.h"
 #include "logitacker_pairing_parser.h"
-#include "unifying.h"
+#include "logitacker_unifying.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_PAIR_DEVICE
 #include "nrf_log.h"
@@ -218,7 +218,7 @@ void processor_pair_device_timer_handler_func(logitacker_processor_t *p_processo
 
 void processor_pair_device_timer_handler_func_(logitacker_processor_pair_device_ctx_t *self, void *p_timer_ctx) {
     // if timer is called, write (and auto transmit) current ESB payload
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 
     if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
         NRF_LOG_INFO("Error writing payload");
@@ -308,7 +308,7 @@ void processor_pair_device_create_req1_pay(logitacker_processor_pair_device_ctx_
     self->tmp_tx_payload.pipe = 0; // first request is sent on pipe 0 (dongle pairing address)
 
     // update checksum
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 }
 
 void processor_pair_device_create_req1_pull_pay(logitacker_processor_pair_device_ctx_t *self) {
@@ -322,7 +322,7 @@ void processor_pair_device_create_req1_pull_pay(logitacker_processor_pair_device
     self->tmp_tx_payload.pipe = 0; // first request is sent on pipe 0 (dongle pairing address)
 
     // update checksum
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 }
 
 bool processor_pair_device_parse_rsp1_pay(logitacker_processor_pair_device_ctx_t *self) {
@@ -360,7 +360,7 @@ void processor_pair_device_create_phase1_address_accepted_pay(logitacker_process
     self->tmp_tx_payload.pipe = 0; // still sent on old address (pipe 0), while already listening on new one (pipe 1)
 
     // update checksum
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 }
 
 
@@ -385,7 +385,7 @@ void processor_pair_device_create_req2_pay(logitacker_processor_pair_device_ctx_
     self->tmp_tx_payload.pipe = 1; // request is sent on pipe 1 (offered address pairing address)
 
     // update checksum
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 }
 
 void processor_pair_device_create_req2_pull_pay(logitacker_processor_pair_device_ctx_t *self) {
@@ -399,7 +399,7 @@ void processor_pair_device_create_req2_pull_pay(logitacker_processor_pair_device
     self->tmp_tx_payload.pipe = 1; // first request is sent on pipe 0 (dongle pairing address)
 
     // update checksum
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 }
 
 bool processor_pair_device_parse_rsp2_pay(logitacker_processor_pair_device_ctx_t *self) {
@@ -429,7 +429,7 @@ void processor_pair_device_create_req3_pay(logitacker_processor_pair_device_ctx_
     self->tmp_tx_payload.pipe = 1; // request is sent on pipe 1 (offered address pairing address)
 
     // update checksum
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 }
 
 void processor_pair_device_create_req3_pull_pay(logitacker_processor_pair_device_ctx_t *self) {
@@ -443,7 +443,7 @@ void processor_pair_device_create_req3_pull_pay(logitacker_processor_pair_device
     self->tmp_tx_payload.pipe = 1; // first request is sent on pipe 0 (dongle pairing address)
 
     // update and checksum
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 }
 
 bool processor_pair_device_parse_rsp3_pay(logitacker_processor_pair_device_ctx_t *self) {
@@ -472,7 +472,7 @@ void processor_pair_device_create_final_req_pay(logitacker_processor_pair_device
     self->tmp_tx_payload.pipe = 1; // request is sent on pipe 1 (offered address pairing address)
 
     // update checksum
-    unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 }
 
 char tmp_str[10] = {0};

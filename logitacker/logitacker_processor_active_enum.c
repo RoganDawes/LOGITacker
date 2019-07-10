@@ -5,7 +5,7 @@
 #include "helper.h"
 #include "string.h"
 #include "logitacker_devices.h"
-#include "unifying.h"
+#include "logitacker_unifying.h"
 #include "logitacker_options.h"
 #include "logitacker_flash.h"
 
@@ -499,11 +499,11 @@ void processor_active_enum_update_tx_payload(logitacker_processor_active_enum_ct
 
 logitacker_processor_t * new_processor_active_enum(uint8_t *rf_address, app_timer_id_t timer_next_action) {
     //update checksums of RF payloads (only needed as they are not hardcoded, to allow changing payloads)
-    unifying_payload_update_checksum(rf_report_plain_keys_caps, sizeof(rf_report_plain_keys_caps));
-    unifying_payload_update_checksum(rf_report_plain_keys_release, sizeof(rf_report_plain_keys_release));
+    logitacker_unifying_payload_update_checksum(rf_report_plain_keys_caps, sizeof(rf_report_plain_keys_caps));
+    logitacker_unifying_payload_update_checksum(rf_report_plain_keys_release, sizeof(rf_report_plain_keys_release));
     rf_report_pairing_request1[0] = PAIRING_REQ_MARKER_BYTE;
-    unifying_payload_update_checksum(rf_report_pairing_request1, sizeof(rf_report_pairing_request1));
-    unifying_payload_update_checksum(rf_report_keep_alive, sizeof(rf_report_keep_alive));
+    logitacker_unifying_payload_update_checksum(rf_report_pairing_request1, sizeof(rf_report_pairing_request1));
+    logitacker_unifying_payload_update_checksum(rf_report_keep_alive, sizeof(rf_report_keep_alive));
 
 
     // initialize context (static in this case, has to use malloc for new instances)

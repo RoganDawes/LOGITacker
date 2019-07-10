@@ -1,5 +1,5 @@
 #include "logitacker_devices.h"
-#include "unifying.h"
+#include "logitacker_unifying.h"
 #include "helper.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_DEVICES
@@ -638,7 +638,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
     uint8_t len = frame.length;
     uint8_t unifying_report_type;
     bool unifying_is_keep_alive;
-    unifying_frame_classify(frame, &unifying_report_type, &unifying_is_keep_alive);
+    logitacker_unifying_frame_classify(frame, &unifying_report_type, &unifying_is_keep_alive);
 
 
     logitacker_device_frame_counter_t *p_frame_counters = &p_device->frame_counters;
@@ -647,7 +647,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
     if (len == 0) return NRF_SUCCESS; //ignore empty frames, as we can't retrieve valuable information (ack)
 
 
-    bool logitech_cksm = unifying_payload_validate_checksum(frame.data, frame.length);
+    bool logitech_cksm = logiteacker_unifying_payload_validate_checksum(frame.data, frame.length);
     if (logitech_cksm) {
         p_frame_counters->logitech_chksm++;
 
@@ -673,7 +673,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
             p_device->caps |= LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION;
             p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
 
-            unifying_extract_counter_from_encrypted_keyboard_frame(frame, &p_device->last_used_aes_ctr);
+            logitacker_unifying_extract_counter_from_encrypted_keyboard_frame(frame, &p_device->last_used_aes_ctr);
             break;
 
         case UNIFYING_RF_REPORT_HIDPP_LONG:
@@ -791,7 +791,7 @@ uint32_t logitacker_devices_generate_keyboard_frame_plain(nrf_esb_payload_t *p_r
     p_result_payload->data[7] = p_in_hid_report->keys[4];
     p_result_payload->data[8] = p_in_hid_report->keys[5];
     p_result_payload->data[9] = 0x00; // will be overwritten by logitech checksum
-    unifying_payload_update_checksum(p_result_payload->data, p_result_payload->length);
+    logitacker_unifying_payload_update_checksum(p_result_payload->data, p_result_payload->length);
 
     return NRF_SUCCESS;
 }

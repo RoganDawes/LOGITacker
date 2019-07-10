@@ -6,7 +6,7 @@
 #include "string.h"
 #include "logitacker_devices.h"
 #include "logitacker_tx_payload_provider.h"
-#include "unifying.h"
+#include "logitacker_unifying.h"
 #include "logitacker_tx_pay_provider_string_to_keys.h"
 #include "logitacker_tx_payload_provider_press_to_keys.h"
 #include "logitacker_flash.h"
@@ -198,7 +198,7 @@ void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *sel
             case INJECT_TASK_TYPE_TYPE_ALTSTRING:
             {
                 // if timer is called, write (and auto transmit) current ESB payload
-                unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+                logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
 
                 if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
                     NRF_LOG_INFO("Error writing payload");

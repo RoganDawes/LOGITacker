@@ -11,7 +11,7 @@
 #include "logitacker.h"
 #include "logitacker_devices.h"
 #include "helper.h"
-#include "unifying.h"
+#include "logitacker_unifying.h"
 #include "logitacker_flash.h"
 #include "logitacker_processor_inject.h"
 #include "logitacker_script_engine.h"

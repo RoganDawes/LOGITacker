@@ -23,7 +23,7 @@ The firmware evolves as needed by myself (on-stage demos, experiments). **No fea
 (raw RF addresses require noting down additional info) - this is low prio, as it requires additional relationships for data stored on flash, which means runtime-reference-creation
 and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - account for re-transmits from legit device (analyze PID of ESB PCF ... for passive enum, pair sniffing) - **must have for on-stage demos**
-- BSP: proper LED driving and button interaction for various modes
+- [partially] BSP: proper LED driving and button interaction for various modes
 - [done, `script`command] injection: allow entering inject mode without given RF address (block execution unless target RF address is set, instead)
 - [done] storing scripts
 - [done] loading scripts
@@ -38,6 +38,7 @@ and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - remove either key or raw key data from device struct, to save space (one could be derived from the other, as "key generation" is no one-way function)
 - [done] rework `options show`
 - implement `options pair-sniff pass-through-raw`
+- [done] remove unneeded modules in root folder (refactoring)
 
 # further analysis
 - capabilities to send in new HID++ messages (maybe re-write device capabilities)

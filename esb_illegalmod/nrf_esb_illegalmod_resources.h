@@ -1,4 +1,40 @@
 /**
+ * This is a modified version of the nrf_esb library by Marcus Mengs.
+ * The original library is provided with the nRF5 SDK by Nordic Semiconductor ASA.
+ * The copyright notice from the unmodified library could be found below.
+ *
+ * Many changes have been made to the library in order to support pseudo-promiscuous
+ * mode for ESB, amongst these changes:
+ *
+ * - Pseudo promiscuous mode has a "post processing step" (checks valid ESB frames
+ * in received noise). As this adds a huge amount of computation overhead, it was
+ * off-loaded to app_scheduler. Thus the library depends on app_scheduler.
+ * - The promiscuous mode post processing step, optionally checks captured ESB frames
+ * to be valid Logitech RF communication (additional vendor checksum, special length).
+ * Thus it depends on the `logitacker_unifying" module and can't be used stand-alone.
+ * This behavior could be changed by un-setting the `LOGITECH_FILTER` definition in
+ * `nrf_esb_illegalmod.h`
+ * - Additional operation modes for the radio are deployed and used by Logitacker.
+ * For example the mode `NRF_ESB_MODE_PTX_STAY_RX` which puts the radio into PTX mode,
+ * but toggles back AND STAYS in PRX mode after a single transmission. This was implemented
+ * to reduce timing overhead of manual toggling between PRX and PTX to an absolute minimum
+ * (utilizes PPI and proper SHORTS)
+ * - The `nrf_esb_payload_t` data structure contains a boolean field called `noack`.
+ * This boolean is connected to the no-acknowledge bit in the Packet Control Field (PCF)
+ * of an ESB frame. The unmodified `nrf_esb` library unsets the no-acknowledge bit in the
+ * PCF field if the `noack`boolean in the data structure is set to true (somehow reversed
+ * behavior). This has been changed in the `nrf_esb_illegalmod` library: If the `noack`
+ * boolean is set to true, the no-acknowledgment bit of the resulting ESB frame is set
+ * (not unset) before transmission.
+ *
+ * Note: The term `illegal`in the library name refers to undocumented register settings
+ * used for the nRF52844 radio, in order to obtain pseudo promiscuous RX capabilities.
+ * It does not mean that something illegal (in common sense of the word) is done by this
+ * library
+ *
+ */
+
+/**
  * Copyright (c) 2016 - 2018, Nordic Semiconductor ASA
  *
  * All rights reserved.
@@ -36,8 +72,7 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- */
-#ifndef NRF_ESB_ILLEGAL_RESOURCES_H__
+ */#ifndef NRF_ESB_ILLEGAL_RESOURCES_H__
 #define NRF_ESB_ILLEGAL_RESOURCES_H__
 
 #include <stdint.h>

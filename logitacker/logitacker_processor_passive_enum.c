@@ -1,7 +1,7 @@
 #include "logitacker_processor_passive_enum.h"
 
-#include "unifying.h"
 #include "logitacker.h"
+#include "logitacker_unifying.h"
 #include "logitacker_devices.h"
 #include "logitacker_unifying_crypto.h"
 #include "logitacker_keyboard_map.h"
@@ -235,7 +235,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
         uint8_t len = self->tmp_rx_payload.length;
         uint8_t unifying_report_type;
         bool unifying_is_keep_alive;
-        unifying_frame_classify(self->tmp_rx_payload, &unifying_report_type, &unifying_is_keep_alive);
+        logitacker_unifying_frame_classify(self->tmp_rx_payload, &unifying_report_type, &unifying_is_keep_alive);
 
 //            logitacker_devices_unifying_dongle_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
 
@@ -263,7 +263,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
             uint8_t ch = self->tmp_rx_payload.rx_channel;
             helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, addr);
             NRF_LOG_INFO("frame RX in passive enumeration mode (addr %s, len: %d, ch idx %d, raw ch %d)", addr_str_buff, len, ch_idx, ch);
-            unifying_frame_classify_log(self->tmp_rx_payload);
+            logitacker_unifying_frame_classify_log(self->tmp_rx_payload);
             NRF_LOG_HEXDUMP_INFO(self->tmp_rx_payload.data, self->tmp_rx_payload.length);
 
 
@@ -346,7 +346,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                             pseudo_frame.data[0] = self->tmp_rx_payload.data[0];
                             pseudo_frame.data[1] = 0xC1;
                             memcpy(&pseudo_frame.data[2], m_keyboard_report_decryption_buffer, 7);
-                            unifying_payload_update_checksum(pseudo_frame.data, 10);
+                            logitacker_unifying_payload_update_checksum(pseudo_frame.data, 10);
                             pseudo_frame.length = 10;
                             pseudo_frame.validated_promiscuous_frame = false;
 

@@ -84,14 +84,13 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_init.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_shared.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_rng.c \
-  $(PROJ_DIR)/helper.c \
-  $(PROJ_DIR)/unifying.c \
-  $(PROJ_DIR)/timestamp.c \
   $(PROJ_DIR)/main.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
   $(PROJ_DIR)/ringbuf/ringbuf.c \
+  $(PROJ_DIR)/logitacker/helper.c \
+  $(PROJ_DIR)/logitacker/logitacker_unifying.c \
   $(PROJ_DIR)/logitacker/logitacker_script_engine.c \
   $(PROJ_DIR)/logitacker/logitacker_flash.c \
   $(PROJ_DIR)/logitacker/logitacker_cli.c \
