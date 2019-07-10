@@ -69,6 +69,12 @@ SECTIONS
     KEEP(*(.cli_command))
     PROVIDE(__stop_cli_command = .);
   } > FLASH
+    .crypto_data :
+  {
+    PROVIDE(__start_crypto_data = .);
+    KEEP(*(SORT(.crypto_data*)))
+    PROVIDE(__stop_crypto_data = .);
+  } > FLASH
   .pwr_mgmt_data :
   {
     PROVIDE(__start_pwr_mgmt_data = .);
