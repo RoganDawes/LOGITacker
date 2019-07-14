@@ -129,7 +129,14 @@ To program the dongle follow these steps:
 - remove the dongle from host
 - reinsert dongle to host
 
-The proper file to flash with the Programmer app is `build/logitacker_aprdongle.uf2`.
+The proper file to flash with the Programmer app is `build/logitacker_aprdongle.hex`.
+
+You will need to create a firmware file (uf2) to copy to the removable drive 'NRF52BOOT' with uf2conv.py.
+uf2conv.py is available here: https://github.com/microsoft/uf2/blob/master/utils/uf2conv.py
+
+to convert the file hex to uf2 format
+
+$ uf2conv.py firmware.hex -c -f 0xADA52840 -o logitacker_aprdongle.uf2
 
 After flashing the firmware, the dongle provides 4 new interfaces (USB serial, USB mouse,
 USB keyboard and USB HID raw). The serial interface could be accessed using `PuTTY` or `screen` on Linux.
