@@ -229,8 +229,37 @@ static void print_logitacker_device_info(nrf_cli_t const * p_cli, const logitack
 
 }
 
-
 #ifdef CLI_TEST_COMMANDS
+
+static void cmd_testled(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    if (argc > 1) {
+        int count;
+        if (sscanf(argv[1], "%d", &count) != 1) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid argument, auto inject count has to be a integer number, but '%s' was given\r\n", argv[1]);
+        } else {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "Toggle LED %d\r\n", count);
+            switch (count) {
+                case 0:
+                    bsp_board_led_invert(BSP_BOARD_LED_0);
+                    break;
+                case 1:
+                    bsp_board_led_invert(BSP_BOARD_LED_1);
+                    break;
+                case 2:
+                    bsp_board_led_invert(BSP_BOARD_LED_2);
+                    break;
+                case 3:
+                    bsp_board_led_invert(BSP_BOARD_LED_3);
+                    break;
+            }
+        }
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid argument, testled arg has to be a integer number\r\n");
+    }
+}
+
+
+
 static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
 /*
@@ -1053,6 +1082,8 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_test)
                 NRF_CLI_SUBCMD_SET_END
         };
 NRF_CLI_CMD_REGISTER(test, &m_sub_test, "Debug command to test code", NULL);
+
+NRF_CLI_CMD_REGISTER(testled, NULL, "Debug command to test code", cmd_testled);
 #endif
 
 

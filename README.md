@@ -129,19 +129,26 @@ To program the dongle follow these steps:
 - remove the dongle from host
 - reinsert dongle to host
 
-The proper file to flash with the Programmer app is `build/logitacker_aprdongle.hex`.
-
-You will need to create a firmware file (uf2) to copy to the removable drive 'NRF52BOOT' with uf2conv.py.
-uf2conv.py is available here: https://github.com/microsoft/uf2/blob/master/utils/uf2conv.py
-
-to convert the file hex to uf2 format
-
-$ uf2conv.py firmware.hex -c -f 0xADA52840 -o logitacker_aprdongle.uf2
+The proper file to flash with the Programmer app is `build/logitacker_aprdongle.uf2`.
 
 After flashing the firmware, the dongle provides 4 new interfaces (USB serial, USB mouse,
 USB keyboard and USB HID raw). The serial interface could be accessed using `PuTTY` or `screen` on Linux.
 
-Reference: "Terminal Settings" section of nRF5 SDK documentation - https://infocenter.nordicsemi.com/topic/com.nordic.infocenter.sdk$
+Reference: "Terminal Settings" section of nRF5 SDK documentation - https://infocenter.nordicsemi.com/topic/com.nordic.infocenter.sdk
+
+### 2.4.1 Remark on LED issues of aprbrother dongle 
+
+The aprbrother dongle has LED issues, which are not caused by LOGITacker. See here for reference: https://github.com/AprilBrother/ab-hardware/issues/1
+
+### 2.4.2 Remark on bootloader
+
+Once LOGITacker has been flashed, double-tapping the hardware button does not start the bootloader anymore (UF2 flash mode).
+
+1) In order to get back to the bootloader, unplug the dongle
+2) Press and hold the hardware button (use something which fits the small hole)
+3) Re-plug the dongle with the button still pressed
+4) The blue LED should "soft blink", this indicates that the dongle is in bootloader mode again
+5) Copy the intended UF2 firmware image to the volume named 'NRF52BOOT' to flash a new firmware 
 
 # 3 Basic usage concepts
 
