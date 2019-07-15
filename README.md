@@ -21,8 +21,8 @@ LOGITacker covers the following Logitech vulnerabilities:
 - MouseJack (plain injection)
 - forced pairing
 - CVE-2019-13052 (AES key sniffing from pairing)
-- CVE-2019-13054 (injection with keys dumped via USB from Unifying devices)
-- CVE-2019-13055 (injection with keys dumped via USB from presentation clickers)
+- CVE-2019-13054 (injection with keys dumped via USB from presentation clickers)
+- CVE-2019-13055 (injection with keys dumped via USB from Unifying devices)
 
 LOGITacker does currently not cover the following Logitech:
 
