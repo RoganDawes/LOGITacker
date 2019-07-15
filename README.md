@@ -14,9 +14,7 @@ Additionally support for the following boards was addded:
 - Nordic nRF52840 Dongle (pca10059)
 - MakerDiary MDK Dongle
 - MakerDiary MDK
-
-AprBrother BLE dongle (nRF52840) won't receive support, as I only received 1 out of 3 payed devices, when I ordered
-from them.
+- April Brother Dongle
 
 LOGITacker covers the following Logitech vulnerabilities:
 
@@ -118,6 +116,32 @@ Thanks to DAPLink support flashing this board is really easy:
 4) Copy the `build/logitacker_mdk.hex` file to the DAPLINK volume.
 5) Wait till the green LED stops flashing, and the "DAPLINK" volume is re-mounted.
 6) Push the "IF BOOT / RST" button again, in order to boot the LOGITacker firmware.
+
+## 2.4 April Brother nRF52840 Dongle
+
+The April Brother dongle provides a removable drive, which accepts uf2 file to program the dongle.
+
+To program the dongle follow these steps:
+- disconnect the dongle from the host
+- double-click button on the dongle (through the tiny hole)
+- copy logitacker_apr-dongle.uf2 to the removable drive 'NRF52BOOT'
+- the dongle will restart
+- remove the dongle from host
+- reinsert dongle to host
+
+The proper file to flash with the Programmer app is `build/logitacker_aprdongle.hex`.
+
+You will need to create a firmware file (uf2) to copy to the removable drive 'NRF52BOOT' with uf2conv.py.
+uf2conv.py is available here: https://github.com/microsoft/uf2/blob/master/utils/uf2conv.py
+
+to convert the file hex to uf2 format
+
+$ uf2conv.py firmware.hex -c -f 0xADA52840 -o logitacker_aprdongle.uf2
+
+After flashing the firmware, the dongle provides 4 new interfaces (USB serial, USB mouse,
+USB keyboard and USB HID raw). The serial interface could be accessed using `PuTTY` or `screen` on Linux.
+
+Reference: "Terminal Settings" section of nRF5 SDK documentation - https://infocenter.nordicsemi.com/topic/com.nordic.infocenter.sdk$
 
 # 3 Basic usage concepts
 
