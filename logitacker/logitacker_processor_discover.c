@@ -85,7 +85,7 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
                 // classify device (determin if it is Logitech)
                 logitacker_devices_device_update_classification(p_device, *p_rx_payload);
                 if (p_device->p_dongle != NULL) {
-                    if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING) {
+                    if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING || p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED) {
                         NRF_LOG_INFO("discovered device is Logitech")
                         switch (g_logitacker_global_config.discovery_on_new_address) {
                             case OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE:

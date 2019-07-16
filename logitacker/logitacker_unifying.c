@@ -31,7 +31,9 @@ bool logitacker_unifying_payload_update_checksum(uint8_t *p_array, uint8_t payle
 bool logiteacker_unifying_payload_validate_checksum(uint8_t *p_array, uint8_t paylen) {
     if (paylen < 1) return false;
     uint8_t chksum = logitacker_unifying_calculate_checksum(p_array, paylen - 1);
-    return p_array[paylen-1] == chksum;
+
+    // Fix: for some reason last bit of Logitech CRC is sometimes wrong, even if there is no payload error
+    return p_array[paylen-1] == chksum || p_array[paylen-1] == (chksum & 0xfe);
 }
 
 uint32_t logitacker_unifying_extract_counter_from_encrypted_keyboard_frame(nrf_esb_payload_t frame, uint32_t *p_counter) {
