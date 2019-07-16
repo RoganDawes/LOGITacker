@@ -286,8 +286,9 @@ uint32_t logitacker_flash_get_dongle(logitacker_devices_unifying_dongle_t * p_do
     fds_record_desc_t record_desc;
     fds_flash_record_t flash_record;
 
+    char base_addr_str[LOGITACKER_DEVICE_ADDR_STR_LEN];
+    helper_addr_to_hex_str(base_addr_str, 4, base_addr);
     if (logitacker_flash_get_record_desc_for_dongle(&record_desc, base_addr) == NRF_SUCCESS) {
-        char base_addr_str[LOGITACKER_DEVICE_ADDR_STR_LEN];
         uint32_t res = fds_record_open(&record_desc, &flash_record);
         if (res != FDS_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
@@ -298,7 +299,7 @@ uint32_t logitacker_flash_get_dongle(logitacker_devices_unifying_dongle_t * p_do
         p_dongle->num_connected_devices = 0; // we haven't got the device structs, yet
         for (int i = 0; i < LOGITACKER_DEVICES_MAX_DEVICES_PER_DONGLE; i++) p_dongle->p_connected_devices[i] = NULL;
 
-        helper_addr_to_hex_str(base_addr_str, 4, base_addr);
+
         NRF_LOG_INFO("Found dongle %s ...", nrf_log_push(base_addr_str));
 
         if (fds_record_close(&record_desc) != FDS_SUCCESS) {
@@ -306,6 +307,8 @@ uint32_t logitacker_flash_get_dongle(logitacker_devices_unifying_dongle_t * p_do
         }
 
         return NRF_SUCCESS;
+    } else {
+        NRF_LOG_ERROR("dongle %s not found on flash", nrf_log_push(base_addr_str));
     }
 
     return NRF_ERROR_NOT_FOUND;
@@ -361,7 +364,7 @@ uint32_t logitacker_flash_get_record_desc_for_dongle(fds_record_desc_t * p_recor
         }
 
         logitacker_devices_unifying_dongle_t const * p_dongle_tmp = flash_record.p_data;
-        if (memcmp(p_dongle_tmp->base_addr, dongle_base_addr, sizeof(logitacker_devices_unifying_device_rf_address_t)) == 0) {
+        if (memcmp(p_dongle_tmp->base_addr, dongle_base_addr, sizeof(logitacker_devices_unifying_device_rf_addr_base_t)) == 0) {
             found = true;
         }
 

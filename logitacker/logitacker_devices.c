@@ -174,7 +174,7 @@ uint32_t logitacker_devices_restore_device_from_flash(logitacker_devices_unifyin
                 memcpy(p_dongle_ram, &tmp_dongle_flash, sizeof(logitacker_devices_unifying_dongle_t));
             } else {
                 // not able to restore dongle data from flash, we don't error out but log a warning
-                NRF_LOG_WARNING("couldn't restore dongle data from flash for restored device");
+                NRF_LOG_WARNING("couldn't restore dongle data from flash for restored device baseaddr %.02x:%.02x:%.02x:%.02x", p_dongle_ram->base_addr[3], p_dongle_ram->base_addr[2], p_dongle_ram->base_addr[1], p_dongle_ram->base_addr[0]);
             }
 
             p_device->executed_auto_inject_count = 0; // reset auto inject count
@@ -277,6 +277,7 @@ uint32_t logitacker_devices_store_ram_device_to_flash(logitacker_devices_unifyin
     logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
     if (p_dongle != NULL) {
         // try to store the dongle data, too
+        NRF_LOG_INFO("STORING DONGLE WITH BASE ADDR %0.2x:%0.2x:%0.2x:%0.2x", p_dongle->base_addr[0], p_dongle->base_addr[1], p_dongle->base_addr[2], p_dongle->base_addr[3])
         if (logitacker_flash_store_dongle(p_dongle) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to store dongle data along with device data")
         }
@@ -654,7 +655,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
         NRF_LOG_DEBUG("... valid Logitech CRC");
         //test if frame has valid logitech checksum
         if (p_dongle->classification == DONGLE_CLASSIFICATION_UNKNOWN) {
-            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
+            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING;
         }
     } else {
         NRF_LOG_DEBUG("... INVALID Logitech CRC");
@@ -672,6 +673,9 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
             if (len != 22) return NRF_ERROR_INVALID_DATA;
             p_device->caps |= LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION;
             p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
+
+            // LIGHTSPEED devices have additional encrypted data in bytes 14..17
+            if (frame.data[16] != 0x00) p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED;
 
             logitacker_unifying_extract_counter_from_encrypted_keyboard_frame(frame, &p_device->last_used_aes_ctr);
             break;

@@ -67,7 +67,8 @@ typedef uint16_t logitacker_device_unifying_device_fds_key_t;
 
 typedef enum {
     DONGLE_CLASSIFICATION_UNKNOWN = 0, //f.e. keep alive without type
-    DONGLE_CLASSIFICATION_IS_LOGITECH,
+    DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING,
+    DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED,
     DONGLE_CLASSIFICATION_IS_NOT_LOGITECH,
 } logitacker_devices_dongle_classification_t;
 

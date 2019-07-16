@@ -11,7 +11,7 @@ extern "C" {
 #include "nrf_esb_illegalmod.h"
 #include "logitacker_keyboard_map.h"
 
-#define VERSION_STRING "v0.1.1-beta"
+#define VERSION_STRING "v0.1.2-beta"
 
 //#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
 #define ACTIVE_ENUM_INNER_LOOP_MAX 20 //how many CAPS presses / key releases get send
@@ -20,7 +20,7 @@ extern "C" {
 
 
 #define LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS 500 // time in ms to stop channel hopping in discovery mode, once a valid ESB frame is received
-#define LOGITACKER_DISCOVERY_CHANNEL_HOP_INTERVAL_MS 30 // channel hop interval in discovery mode
+#define LOGITACKER_DISCOVERY_CHANNEL_HOP_INTERVAL_MS 50 // channel hop interval in discovery mode
 
 #define LOGITACKER_PASSIVE_ENUM_STAY_ON_CHANNEL_AFTER_RX_MS 1300 // time in ms to stop channel hopping in passive mode, once a valid ESB frame is received
 #define LOGITACKER_PASSIVE_ENUM_CHANNEL_HOP_INTERVAL_MS 30 // channel hop interval in passive enum mode

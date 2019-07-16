@@ -306,6 +306,7 @@ void processor_pair_sniff_esb_handler_func_(logitacker_processor_pair_sniff_ctx_
                         logitacker_pairing_info_t pi = self->device_pairing_info;
                         memcpy(p_device->serial, pi.device_serial, 4);
                         memcpy(p_device->device_name, pi.device_name, pi.device_name_len);
+                        p_device->device_name_len = pi.device_name_len;
                         memcpy(p_device->key, pi.device_key, 16);
                         memcpy(p_device->raw_key_data, pi.device_raw_key_material, 16);
                         memcpy(p_device->rf_address, pi.device_rf_address, 5);
@@ -320,9 +321,13 @@ void processor_pair_sniff_esb_handler_func_(logitacker_processor_pair_sniff_ctx_
                             logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
                             memcpy(p_dongle->wpid, pi.dongle_wpid, 2);
 
-                            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
+                            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING;
                             if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x02) p_dongle->is_nordic = true;
                             if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x08) p_dongle->is_texas_instruments = true;
+                            if (p_dongle->wpid[0] == 0x80 && p_dongle->wpid[1] == 0x0D) {
+                                p_dongle->is_texas_instruments = true;
+                                p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED;
+                            }
 
                         }
                         p_device->key_known = pi.key_material_complete;

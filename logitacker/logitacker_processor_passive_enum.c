@@ -330,10 +330,15 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                         NRF_LOG_INFO("Mod: %s", nrf_log_push(tmp_mod_str));
 
                         // print human readable form of keys
+                        bool no_key = true;
                         for (int k=1; k<7; k++) {
-                            if (m_keyboard_report_decryption_buffer[k] == 0x00 && k>0) break; //print no further keys
-                            NRF_LOG_INFO("Key %d: %s", k, keycode_to_str(m_keyboard_report_decryption_buffer[k]));
+                            if (m_keyboard_report_decryption_buffer[k] != 0x00) {
+                                NRF_LOG_INFO("Key: %s", keycode_to_str(m_keyboard_report_decryption_buffer[k]));
+                                no_key = false;
+                            }
+
                         }
+                        if (no_key) NRF_LOG_INFO("Key: NONE");
 
                         // if pass-through for keyboard is enabled, send keystrokes to USB HID keyboard
                         if (g_logitacker_global_config.passive_enum_pass_through_keyboard) {

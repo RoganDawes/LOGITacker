@@ -1,4 +1,4 @@
-#include <libraries/fds/fds.h>
+#include "fds.h"
 #include "ctype.h"
 #include "logitacker_tx_payload_provider.h"
 #include "logitacker_tx_pay_provider_string_to_keys.h"
@@ -211,21 +211,65 @@ static void print_logitacker_device_info(nrf_cli_t const * p_cli, const logitack
     char tmp_addr_str[16];
     helper_addr_to_hex_str(tmp_addr_str, LOGITACKER_DEVICE_ADDR_LEN, p_device->rf_address);
 
-
-    bool dev_is_logitech = p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH;
+    // select print color based on device data
+    bool dev_is_logitech = p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING;
     nrf_cli_vt100_color_t outcol = NRF_CLI_VT100_COLOR_DEFAULT;
     if (dev_is_logitech) outcol = NRF_CLI_VT100_COLOR_BLUE;
-    if (p_device->vuln_forced_pairing) outcol = NRF_CLI_VT100_COLOR_YELLOW;
+    //if (p_device->vuln_forced_pairing) outcol = NRF_CLI_VT100_COLOR_YELLOW;
     if (p_device->vuln_plain_injection) outcol = NRF_CLI_VT100_COLOR_GREEN;
     if (p_device->key_known) outcol = NRF_CLI_VT100_COLOR_RED;
+
+    /*
     nrf_cli_fprintf(p_cli, outcol, "%s %s, keyboard: %s (%s, %s), mouse: %s\r\n",
         nrf_log_push(tmp_addr_str),
-        p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH ? "Logitech device" : "unknown device",
+        p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING ? "Logitech device" : "unknown device",
         (p_device->report_types & LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD) > 0 ?  "yes" : "no",
         (p_device->caps & LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION) > 0 ?  "encrypted" : "not encrypted",
         p_device->key_known ?  "key ḱnown" : "key unknown",
         (p_device->report_types & LOGITACKER_DEVICE_REPORT_TYPES_MOUSE) > 0 ?  "yes" : "no"
         );
+    */
+
+    nrf_cli_fprintf(p_cli, outcol, "%s", tmp_addr_str);
+    nrf_cli_fprintf(p_cli, outcol, " '%s'", strlen(p_device->device_name) == 0 ? "unknown name" : p_device->device_name);
+
+    nrf_cli_fprintf(p_cli, outcol, " keyboard: ");
+    if ((p_device->report_types & LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD) > 0) {
+        nrf_cli_fprintf(p_cli, outcol, "%s", (p_device->caps & LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION) > 0 ? "encrypted" : "unencrypted");
+    } else {
+        nrf_cli_fprintf(p_cli, outcol, "no");
+    }
+
+    nrf_cli_fprintf(p_cli, outcol, " mouse: %s", (p_device->report_types & LOGITACKER_DEVICE_REPORT_TYPES_MOUSE) > 0 ? "yes" : "no");
+    nrf_cli_fprintf(p_cli, outcol, "\r\n");
+
+    nrf_cli_fprintf(p_cli, outcol, "\tclass: ");
+    switch (p_dongle->classification) {
+        case DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED:
+            nrf_cli_fprintf(p_cli, outcol, "Logitech LIGHTSPEED");
+            break;
+        case DONGLE_CLASSIFICATION_UNKNOWN:
+            nrf_cli_fprintf(p_cli, outcol, "Unknown");
+            break;
+        case DONGLE_CLASSIFICATION_IS_NOT_LOGITECH:
+            nrf_cli_fprintf(p_cli, outcol, "Not Logitech");
+            break;
+        case DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING:
+            nrf_cli_fprintf(p_cli, outcol, "Logitech Unifying compatible");
+            break;
+    }
+    nrf_cli_fprintf(p_cli, outcol, " device WPID: 0x%.2x%.2x", p_device->wpid[0], p_device->wpid[1]);
+    nrf_cli_fprintf(p_cli, outcol, " dongle WPID: 0x%.2x%.2x", p_dongle->wpid[0], p_dongle->wpid[1]);
+    if (p_dongle->is_nordic) nrf_cli_fprintf(p_cli, outcol, " (Nordic)");
+    if (p_dongle->is_texas_instruments) nrf_cli_fprintf(p_cli, outcol, " (Texas Instruments)");
+    nrf_cli_fprintf(p_cli, outcol, "\r\n");
+
+    if (p_device->key_known) {
+        nrf_cli_fprintf(p_cli, outcol, "\tlink key: ");
+        for (int i=0; i<16; i++) nrf_cli_fprintf(p_cli, outcol, "%.02x", p_device->key[i]);
+        nrf_cli_fprintf(p_cli, outcol, "\r\n");
+    }
+
 
 }
 

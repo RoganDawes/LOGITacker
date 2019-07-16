@@ -2477,8 +2477,8 @@ bool nrf_esb_validate_promiscuous_frame(uint8_t * p_array, uint8_t addrlen) {
 #ifndef LOGITECH_FILTER    
     if (framelen > 32) {
 #else        
-    //if (framelen != 22 && framelen != 0 && framelen != 10 && framelen != 5) { // logitech
-    if (framelen != 22 && framelen != 10 && framelen != 5) { // logitech, but no frames of length 0 (empty ack)
+    if (framelen != 22 && framelen != 0 && framelen != 10 && framelen != 5) { // logitech
+    //if (framelen != 22 && framelen != 10 && framelen != 5) { // logitech, but no frames of length 0 (empty ack)
 #endif    
         return false; // early out if ESB frame has a length > 32, this only accounts for "old style" ESB which is bound to 32 byte max payload length
     }
