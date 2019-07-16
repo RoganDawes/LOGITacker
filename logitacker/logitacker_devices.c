@@ -817,9 +817,19 @@ uint32_t logitacker_devices_generate_keyboard_frame_encrypted(logitacker_devices
     uint8_t key[16] = {0};
     memcpy(key, p_device->key, 16); // key is const, thus we need a copy
 
-    uint32_t res = logitacker_unifying_crypto_encrypt_keyboard_frame(p_result_payload, plain_payload, key,
-                                                             p_device->last_used_aes_ctr);
+    uint32_t res = logitacker_unifying_crypto_encrypt_keyboard_frame(p_result_payload, plain_payload, key, p_device->last_used_aes_ctr);
 
+/*
+    //FOR LIGHTSPEED
+    //inverted counter test
+    if (res == NRF_SUCCESS) {
+        uint32_t ctr = p_device->last_used_aes_ctr;
+        uint32_t inv_ctr = ((ctr >> 24) & 0x000000ff) | ((ctr >> 8) & 0x0000ff00) | ((ctr << 8) & 0x00ff0000) | ((ctr << 24) & 0xff000000);
+        inv_ctr++;
+        p_device->last_used_aes_ctr = ((inv_ctr >> 24) & 0x000000ff) | ((inv_ctr >> 8) & 0x0000ff00) | ((inv_ctr << 8) & 0x00ff0000) | ((inv_ctr << 24) & 0xff000000);
+    }
+    //END FOR LIGHTSPEED
+*/
     if (res == NRF_SUCCESS) p_device->last_used_aes_ctr++;
     return res;
 }

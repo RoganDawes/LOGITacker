@@ -121,6 +121,15 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
     res = nrf_esb_set_base_address_1(self->base_addr); // set base addr1
     if (res != NRF_SUCCESS) NRF_LOG_ERROR("nrf_esb_set_base_address_1: %d", res);
 
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying();
+            break;
+    }
+
     for (int i=0; i<prefix_count; i++) {
         res = nrf_esb_update_prefix(i+1, prefixes[i]); // set suffix 0x00 for pipe 1 (dongle address
         if (res == NRF_SUCCESS) {
@@ -233,6 +242,10 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
     bsp_board_led_invert(LED_G);
     while (nrf_esb_read_rx_payload(&(self->tmp_rx_payload)) == NRF_SUCCESS) {
         uint8_t len = self->tmp_rx_payload.length;
+
+//        NRF_LOG_INFO("Data RX on ch %d", self->tmp_rx_payload.rx_channel);
+//        NRF_LOG_HEXDUMP_INFO(self->tmp_rx_payload.data, len);
+
         uint8_t unifying_report_type;
         bool unifying_is_keep_alive;
         logitacker_unifying_frame_classify(self->tmp_rx_payload, &unifying_report_type, &unifying_is_keep_alive);

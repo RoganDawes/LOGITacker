@@ -216,7 +216,14 @@ void processor_pair_sniff_init_func_(logitacker_processor_pair_sniff_ctx_t *self
 
 
     // use special channel lookup table for pairing mode
-    nrf_esb_update_channel_frequency_table_unifying_pairing();
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed_pairing();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying_pairing();
+            break;
+    }
 
     // write payload (autostart TX is enabled for PTX mode)
     nrf_esb_write_payload(&self->tmp_tx_payload);
@@ -232,7 +239,15 @@ void processor_pair_sniff_deinit_func_(logitacker_processor_pair_sniff_ctx_t *se
     nrf_esb_set_mode(NRF_ESB_MODE_PRX); //should disable and end up in idle state
 
     //restore channel table
-    nrf_esb_update_channel_frequency_table_unifying();
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying();
+            break;
+    }
+
 
     // disable all pipes
     nrf_esb_enable_pipes(0x00);

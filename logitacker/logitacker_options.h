@@ -28,6 +28,11 @@ typedef enum {
     OPTION_AFTER_INJECT_SWITCH_DISCOVERY
 } option_after_inject_t;
 
+typedef enum {
+    OPTION_LOGITACKER_WORKMODE_UNIFYING,   // compatible to Unifying and (encrypted) presentation clickers
+    OPTION_LOGITACKER_WORKMODE_LIGHTSPEED,   // compatible to Logitech LIGHTSPEED
+} option_logitacker_workmode_t;
+
 typedef struct {
     uint32_t boot_count;
 } logitacker_options_stats_t;
@@ -54,6 +59,8 @@ typedef struct {
     char default_script[LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN];
 
     int max_auto_injects_per_device;
+
+    option_logitacker_workmode_t workmode;
 } logitacker_global_config_t;
 
 const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
@@ -75,6 +82,7 @@ const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .stats = {
         .boot_count = 0,
     },
+    .workmode = OPTION_LOGITACKER_WORKMODE_UNIFYING,
 };
 
 

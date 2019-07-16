@@ -19,7 +19,8 @@
 
 NRF_LOG_MODULE_REGISTER();
 
-#define INJECT_TX_DELAY_MS 8 //delay in ms between successful transmits
+#define INJECT_TX_DELAY_MS_UNIFYING 8 //delay in ms between successful transmits
+#define INJECT_TX_DELAY_MS_LIGHTSPEED 1
 #define INJECT_RETRANSMIT_BEFORE_FAIL 10
 
 // ToDo: change to initialized -> idle -> working -> idle -> not_initialized (SUCCESS/FAIL states aren't needed, proper events could be fired while processing)
@@ -120,7 +121,11 @@ void processor_inject_bsp_handler_func_(logitacker_processor_inject_ctx_t *self,
 
 void processor_inject_init_func_(logitacker_processor_inject_ctx_t *self) {
 //    *self->p_logitacker_mainstate = LOGITACKER_MODE_INJECT;
-    self->tx_delay_ms = INJECT_TX_DELAY_MS;
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
+        self->tx_delay_ms = INJECT_TX_DELAY_MS_LIGHTSPEED;
+    } else {
+        self->tx_delay_ms = INJECT_TX_DELAY_MS_UNIFYING;
+    }
 
     helper_addr_to_base_and_prefix(self->base_addr, &self->prefix, self->current_rf_address, LOGITACKER_DEVICE_ADDR_LEN);
 
@@ -149,6 +154,16 @@ void processor_inject_init_func_(logitacker_processor_inject_ctx_t *self) {
 
     // setup radio as PTX
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
+
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying();
+            break;
+    }
+
     nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
     nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
     nrf_esb_set_retransmit_count(1);
@@ -183,7 +198,7 @@ void processor_inject_deinit_func_(logitacker_processor_inject_ctx_t *self) {
 }
 
 void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *self, void *p_timer_ctx) {
-    if (self->state == INJECT_STATE_WORKING) {
+    if (self->state == INJECT_STATE_WORKING && self->execute) {
         switch (self->current_task.type) {
             case INJECT_TASK_TYPE_DELAY:
             {

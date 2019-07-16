@@ -2477,7 +2477,8 @@ bool nrf_esb_validate_promiscuous_frame(uint8_t * p_array, uint8_t addrlen) {
 #ifndef LOGITECH_FILTER    
     if (framelen > 32) {
 #else        
-    if (framelen != 22 && framelen != 0 && framelen != 10 && framelen != 5) { // logitech
+    //if (framelen != 22 && framelen != 0 && framelen != 10 && framelen != 5) { // logitech
+    if (framelen != 22 && framelen != 10 && framelen != 5) { // logitech, but no frames of length 0 (empty ack)
 #endif    
         return false; // early out if ESB frame has a length > 32, this only accounts for "old style" ESB which is bound to 32 byte max payload length
     }
@@ -2589,6 +2590,7 @@ uint32_t nrf_esb_convert_pipe_to_address(uint8_t pipeNum, uint8_t *p_dst) {
 }
 
 uint32_t nrf_esb_update_channel_frequency_table(uint8_t * values, uint8_t length) {
+    //NRF_LOG_INFO("Try to set new channel table with length %d, ESB_STATE %d", length, m_nrf_esb_mainstate);
     VERIFY_TRUE(m_nrf_esb_mainstate == NRF_ESB_STATE_IDLE, NRF_ERROR_BUSY);
     VERIFY_TRUE(length <= 100, NRF_ERROR_INVALID_PARAM);
     memcpy(m_esb_addr.channel_to_frequency, values, length);
@@ -2597,6 +2599,7 @@ uint32_t nrf_esb_update_channel_frequency_table(uint8_t * values, uint8_t length
     // reset frequency to first channel
     m_esb_addr.rf_channel = 0;
 
+    //NRF_LOG_INFO("New channel table with length %d", length);
     return NRF_SUCCESS;
 }
 
@@ -2606,9 +2609,15 @@ uint32_t nrf_esb_update_channel_frequency_table_unifying() {
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 
+uint32_t nrf_esb_update_channel_frequency_table_lightspeed() {
+    uint8_t unifying_frequencies[12] = { 1,49,56,41,79,80,81,24,89,78,26,3 };
+    uint8_t unifying_frequencies_len = 12;
+    return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
+}
+
 uint32_t nrf_esb_update_channel_frequency_table_unifying_reduced() {
     uint8_t unifying_frequencies[12] = { 5,8,14,17,32,35,41,44,62,65,71,74 };
-    uint8_t unifying_frequencies_len = 25;
+    uint8_t unifying_frequencies_len = 12;
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 
@@ -2618,9 +2627,15 @@ uint32_t nrf_esb_update_channel_frequency_table_unifying_pairing() {
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 
+uint32_t nrf_esb_update_channel_frequency_table_lightspeed_pairing() {
+    uint8_t unifying_frequencies[12] = { 26,41,79,3,1,80,81,56,49,89,25,82 };
+    uint8_t unifying_frequencies_len = 12;
+    return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
+}
+
 uint32_t nrf_esb_update_channel_frequency_table_all() {
-    uint8_t all_frequencies[101] = { 0 };
-    for (uint8_t i; i<sizeof(all_frequencies); i++) all_frequencies[i] = i;
+    uint8_t all_frequencies[100] = { 0 };
+    for (uint8_t i=0; i<sizeof(all_frequencies); i++) all_frequencies[i] = i;
     return nrf_esb_update_channel_frequency_table(all_frequencies, sizeof(all_frequencies));
 }
 

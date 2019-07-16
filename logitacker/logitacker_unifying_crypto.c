@@ -7,6 +7,7 @@
 #define NRF_LOG_MODULE_NAME LOGITACKER_UNIFYING_CRYPTO
 #include "nrf_log.h"
 #include "logitacker_devices.h"
+#include "logitacker_options.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -69,6 +70,9 @@ uint32_t logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(uint8_t * r
     ret_val = logitacker_unifying_crypto_calculate_frame_key(frame_key, device_key, counter);
     VERIFY_SUCCESS(ret_val);
 
+    NRF_LOG_DEBUG("Frame key:");
+    NRF_LOG_HEXDUMP_DEBUG(frame_key,16);
+
     //copy cipher part to result
     memcpy(result, &rf_frame->data[2], 8);
 
@@ -94,10 +98,17 @@ uint32_t logitacker_unifying_crypto_encrypt_keyboard_frame(nrf_esb_payload_t * r
 
     // add in counter
     uint8_t counter_bytes[4] = { 0 };
-    counter_bytes[0] = (uint8_t) ((counter & 0xff000000) >> 24);
-    counter_bytes[1] = (uint8_t) ((counter & 0x00ff0000) >> 16);
-    counter_bytes[2] = (uint8_t) ((counter & 0x0000ff00) >> 8);
-    counter_bytes[3] = (uint8_t) (counter & 0x000000ff);
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
+        counter_bytes[3] = (uint8_t) ((counter & 0xff000000) >> 24);
+        counter_bytes[2] = (uint8_t) ((counter & 0x00ff0000) >> 16);
+        counter_bytes[1] = (uint8_t) ((counter & 0x0000ff00) >> 8);
+        counter_bytes[0] = (uint8_t) (counter & 0x000000ff);
+    } else {
+        counter_bytes[0] = (uint8_t) ((counter & 0xff000000) >> 24);
+        counter_bytes[1] = (uint8_t) ((counter & 0x00ff0000) >> 16);
+        counter_bytes[2] = (uint8_t) ((counter & 0x0000ff00) >> 8);
+        counter_bytes[3] = (uint8_t) (counter & 0x000000ff);
+    }
 
     // extract counter
     memcpy(&result_rf_frame->data[10], counter_bytes, 4);
@@ -116,6 +127,18 @@ uint32_t logitacker_unifying_crypto_encrypt_keyboard_frame(nrf_esb_payload_t * r
     // xor decrypt with relevant part of AES key (yes, only half of the key - generated from high-entropy input data - is used)
     for (int i=0; i<8; i++) {
         result_rf_frame->data[i+2] ^= frame_key[i];
+    }
+
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
+        //for LIGHTSPEED
+        result_rf_frame->data[14] = 0xC9;
+        result_rf_frame->data[15] = 0xC9;
+        result_rf_frame->data[16] = 0xC9;
+        result_rf_frame->data[17] = 0xC9;
+        for (int i=8; i<12; i++) {
+            result_rf_frame->data[i+6] ^= frame_key[i];
+        }
+        //end LIGHTSPEED
     }
 
     // update Logitech CRC

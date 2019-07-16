@@ -202,14 +202,28 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
                 break;
         }
 
+        char * workmode_str = "unknown";
+        switch (g_logitacker_global_config.workmode) {
+            case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+                workmode_str = "Unifying compatible";
+                break;
+            case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+                workmode_str = "Logitech Lightspeed";
+                break;
+        }
+
 
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot count                              : %d\r\n", g_logitacker_global_config.stats.boot_count);
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "global options\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tworking mode                            : %s\r\n", workmode_str);
+
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "discover mode options\r\n");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after RF address dicovery        : %s\r\n", discover_on_hit_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after RF address discovered      : %s\r\n", discover_on_hit_str);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpass RF frames to USB raw HID           : %s\r\n", g_logitacker_global_config.discover_pass_through_hidraw ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store plain injectable devices     : %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
 

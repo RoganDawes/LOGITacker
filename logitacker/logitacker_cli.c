@@ -527,6 +527,16 @@ static void cmd_inject_onfail_discover(nrf_cli_t const *p_cli, size_t argc, char
     g_logitacker_global_config.inject_on_fail = OPTION_AFTER_INJECT_SWITCH_DISCOVERY;
 }
 
+static void cmd_option_global_workmode_unifying(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.workmode = OPTION_LOGITACKER_WORKMODE_UNIFYING;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "working mode set to Unifying compatible\r\n");
+}
+
+static void cmd_option_global_workmode_lightspeed(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.workmode = OPTION_LOGITACKER_WORKMODE_LIGHTSPEED;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "working mode set to LIGHTSPEED compatible\r\n");
+}
+
 static void cmd_options_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc == 2)
     {
@@ -1289,6 +1299,23 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject)
     NRF_CLI_SUBCMD_SET_END
 };
 
+
+// options global workmode
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global_workmode)
+{
+    NRF_CLI_CMD(unifying,   NULL, "Unifying compatible workmode.", cmd_option_global_workmode_unifying),
+    NRF_CLI_CMD(lightspeed,   NULL, "G-Series LIGHTSPEED workmode.", cmd_option_global_workmode_lightspeed),
+    NRF_CLI_SUBCMD_SET_END
+};
+
+// options global
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global)
+{
+    NRF_CLI_CMD(workmode, &m_sub_options_global_workmode, "LOGITacker working mode", cmd_help),
+
+    NRF_CLI_SUBCMD_SET_END
+};
+
 // options
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
 {
@@ -1303,6 +1330,8 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options)
     NRF_CLI_CMD(pair-sniff, &m_sub_options_pairsniff, "options for pair sniff mode", cmd_help),
 
     NRF_CLI_CMD(inject, &m_sub_options_inject, "options for inject mode", cmd_help),
+
+    NRF_CLI_CMD(global, &m_sub_options_global, "global options", cmd_help),
 
 
     //NRF_CLI_CMD(pass-keyboard,   NULL, "pass-through keystrokes to USB keyboard", cmd_options_passiveenum_pass_keyboard),
