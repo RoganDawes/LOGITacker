@@ -84,6 +84,78 @@ uint32_t logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(uint8_t * r
     return NRF_SUCCESS;
 }
 
+uint32_t logitacker_unifying_crypto_decrypt_encrypted_hidpp_frame(uint8_t * result, uint8_t * device_key, nrf_esb_payload_t * rf_frame) {
+    /*
+     * <info> app: Unifying RF frame: ENCRYPTED HID++ long
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 5B 5F BF 8C 1A 86 A6|.[_.....
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  4F 0A 94 51 74 16 EE 20|O..Qt..
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  9F C0 21 37 9A B6 85 B1|..!7....
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  29 12 17 45 0C FF      |)..E..
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM: frame RX in passive enumeration mode (addr C6:1B:34:4A:26, len: 30, ch idx 17, raw ch 56)
+<info> app: Unifying RF frame: ENCRYPTED HID++ long
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  00 5B F2 B2 8B 04 60 BA|.[....`.
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  E8 EF 06 61 75 D2 D7 BA|...au...
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  E2 FA 29 A7 84 C5 32 AF|..)...2.
+<info> LOGITACKER_PROCESSOR_PASIVE_ENUM:  9D 14 17 45 0C 53      |...E.S
+
+     */
+
+
+    // validate frame
+    VERIFY_PARAM_NOT_NULL(result);
+    VERIFY_PARAM_NOT_NULL(device_key);
+    VERIFY_PARAM_NOT_NULL(rf_frame);
+    VERIFY_TRUE(rf_frame->length == 30, NRF_ERROR_INVALID_DATA);
+    VERIFY_TRUE((rf_frame->data[1] & 0x1f) == UNIFYING_RF_REPORT_ENCRYPTED_HIDPP_LONG, NRF_ERROR_INVALID_DATA); //encrypted keyboard frame
+
+    ret_code_t ret_val;
+
+    //two successive counters are used to calculate two keys
+
+    // extract counter
+    uint8_t counter[4] = { 0 };
+    uint8_t counter2[4] = { 0 };
+    memcpy(counter, &rf_frame->data[0x19], 4);
+
+    uint32_t tmp_counter = * ((uint32_t *) counter);
+    uint32_t tmp_counter2 = tmp_counter;
+    tmp_counter2++;
+    memcpy(counter2, &tmp_counter2, 4);
+
+    NRF_LOG_INFO("COUNTER1: %08x", tmp_counter)
+    NRF_LOG_INFO("COUNTER1: %08x", tmp_counter2)
+
+    //generate frame key1
+    uint8_t frame_key1[16] = { 0 };
+    ret_val = logitacker_unifying_crypto_calculate_frame_key(frame_key1, device_key, counter);
+    VERIFY_SUCCESS(ret_val);
+    //generate frame key2
+    uint8_t frame_key2[16] = { 0 };
+    ret_val = logitacker_unifying_crypto_calculate_frame_key(frame_key2, device_key, counter2);
+    VERIFY_SUCCESS(ret_val);
+
+    NRF_LOG_INFO("Frame key1:");
+    NRF_LOG_HEXDUMP_INFO(frame_key1,16);
+    NRF_LOG_INFO("Frame key2:");
+    NRF_LOG_HEXDUMP_INFO(frame_key2,16);
+
+    //copy cipher part to result
+    memcpy(result, &rf_frame->data[2], 23);
+
+    // xor decrypt with relevant part of AES key (yes, only half of the key - generated from high-entropy input data - is used)
+    for (int i=0; i<16; i++) {
+        result[i] ^= frame_key1[i];
+    }
+    for (int i=0; i<7; i++) {
+        result[16+i] ^= frame_key2[i];
+    }
+
+    NRF_LOG_INFO("Decrypt:");
+    NRF_LOG_HEXDUMP_INFO(result,23);
+
+    return NRF_SUCCESS;
+}
+
 uint32_t logitacker_unifying_crypto_encrypt_keyboard_frame(nrf_esb_payload_t * result_rf_frame, uint8_t * plain_payload, logitacker_device_unifying_device_key_t device_key, uint32_t counter) {
     // validate frame
     VERIFY_PARAM_NOT_NULL(plain_payload);

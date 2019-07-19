@@ -2599,43 +2599,49 @@ uint32_t nrf_esb_update_channel_frequency_table(uint8_t * values, uint8_t length
     // reset frequency to first channel
     m_esb_addr.rf_channel = 0;
 
-    //NRF_LOG_INFO("New channel table with length %d", length);
+    NRF_LOG_INFO("New channel table with length %d", length);
     return NRF_SUCCESS;
 }
 
 uint32_t nrf_esb_update_channel_frequency_table_unifying() {
     uint8_t unifying_frequencies[25] = { 5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59,62,65,68,71,74,77 };
     uint8_t unifying_frequencies_len = 25;
+    NRF_LOG_INFO("Using channel table 'Unifying'");
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 
 uint32_t nrf_esb_update_channel_frequency_table_lightspeed() {
     uint8_t unifying_frequencies[12] = { 1,49,56,41,79,80,81,24,89,78,26,3 };
     uint8_t unifying_frequencies_len = 12;
+    NRF_LOG_INFO("Using channel table 'Lightspeed'");
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 
 uint32_t nrf_esb_update_channel_frequency_table_unifying_reduced() {
     uint8_t unifying_frequencies[12] = { 5,8,14,17,32,35,41,44,62,65,71,74 };
     uint8_t unifying_frequencies_len = 12;
+    NRF_LOG_INFO("Using channel table 'Unifying reduced'");
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 
 uint32_t nrf_esb_update_channel_frequency_table_unifying_pairing() {
     uint8_t unifying_frequencies[11] = { 62,8,35,65,14,41,71,17,44,74,5 };
     uint8_t unifying_frequencies_len = 11;
+    NRF_LOG_INFO("Using channel table 'Unifying pairing'");
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 
 uint32_t nrf_esb_update_channel_frequency_table_lightspeed_pairing() {
     uint8_t unifying_frequencies[12] = { 26,41,79,3,1,80,81,56,49,89,25,82 };
     uint8_t unifying_frequencies_len = 12;
+    NRF_LOG_INFO("Using channel table 'Lightspeed pairing'");
     return nrf_esb_update_channel_frequency_table(unifying_frequencies, unifying_frequencies_len);
 }
 
 uint32_t nrf_esb_update_channel_frequency_table_all() {
     uint8_t all_frequencies[100] = { 0 };
     for (uint8_t i=0; i<sizeof(all_frequencies); i++) all_frequencies[i] = i;
+    NRF_LOG_INFO("Using channel table 'ALL'");
     return nrf_esb_update_channel_frequency_table(all_frequencies, sizeof(all_frequencies));
 }
 

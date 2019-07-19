@@ -34,6 +34,7 @@ static logitacker_processor_t m_processor = {0};
 static logitacker_processor_passive_enum_ctx_t m_static_passive_enum_ctx; //we reuse the same context, alternatively an malloc'ed ctx would allow separate instances
 static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static uint8_t m_keyboard_report_decryption_buffer[8] = { 0 };
+static uint8_t m_hidpp_long_report_decryption_buffer[23] = { 0 };
 
 void processor_passive_enum_init_func(logitacker_processor_t *p_processor);
 void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *self);
@@ -313,6 +314,31 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                     }
                 }
 
+            }
+
+            if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_HIDPP_LONG) {
+                if (p_device != NULL && p_device->key_known) {
+                    if (logitacker_unifying_crypto_decrypt_encrypted_hidpp_frame(m_hidpp_long_report_decryption_buffer, p_device->key, &self->tmp_rx_payload) == NRF_SUCCESS) {
+                        if (g_logitacker_global_config.passive_enum_pass_through_hidraw) {
+                            // generate decrypted pseudo frame for hidraw pass trough
+                            // 07 C1 00 4E 00 00 00 00 00 EA
+                            nrf_esb_payload_t pseudo_frame;
+                            pseudo_frame.rssi = self->tmp_rx_payload.rssi;
+                            pseudo_frame.pid = self->tmp_rx_payload.pid;
+                            pseudo_frame.rx_channel = self->tmp_rx_payload.rx_channel;
+                            pseudo_frame.data[0] = self->tmp_rx_payload.data[0];
+                            pseudo_frame.data[1] = 0x51; //HID++ long with keep alive bit
+                            memcpy(&pseudo_frame.data[2], m_hidpp_long_report_decryption_buffer, 19);
+                            logitacker_unifying_payload_update_checksum(pseudo_frame.data, 22);
+                            pseudo_frame.length = 22;
+                            pseudo_frame.validated_promiscuous_frame = false;
+
+                            if (logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_PASSIVE_ENUMERATION, addr, &pseudo_frame) != NRF_SUCCESS) {
+                                NRF_LOG_ERROR("Failed wirting decrypted frame to hidraw");
+                            }
+                        }
+                    }
+                }
             }
 
             if (unifying_report_type == UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD) {

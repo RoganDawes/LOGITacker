@@ -680,6 +680,11 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
             logitacker_unifying_extract_counter_from_encrypted_keyboard_frame(frame, &p_device->last_used_aes_ctr);
             break;
 
+        case UNIFYING_RF_REPORT_ENCRYPTED_HIDPP_LONG:
+            if (len != 30) return NRF_ERROR_INVALID_DATA;
+            p_device->caps |= LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE;
+            p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP;
+            break;
         case UNIFYING_RF_REPORT_HIDPP_LONG:
             //ToDo: check if HID++ reports provide additional information (f.e. long version of device name is exchanged)
             if (len != 22) return NRF_ERROR_INVALID_DATA;

@@ -11,5 +11,5 @@ uint32_t logitacker_unifying_crypto_decrypt_encrypted_keyboard_frame(uint8_t * r
 uint32_t logitacker_unifying_crypto_encrypt_keyboard_frame(nrf_esb_payload_t *result_rf_frame, uint8_t *plain_payload,
                                                            logitacker_device_unifying_device_key_t device_key,
                                                            uint32_t counter);
-
+uint32_t logitacker_unifying_crypto_decrypt_encrypted_hidpp_frame(uint8_t * result, uint8_t * device_key, nrf_esb_payload_t * rf_frame);
 #endif //LOGITACKER_UNIFYING_CRYPTO_H

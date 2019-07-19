@@ -167,7 +167,7 @@ static void usbd_hid_generic_event_handler(app_usbd_class_inst_t const *p_inst, 
         }
         case APP_USBD_HID_USER_EVT_IN_REPORT_DONE:
         {
-            NRF_LOG_DEBUG("report sent successfully")
+            NRF_LOG_INFO("HID raw report sent successfully")
             m_current_hidraw_in_report_buf_read++;
             m_current_hidraw_in_report_buf_read &= (HIDRAW_IN_REPORT_BUF_COUNT-1);
             m_current_hidraw_in_report_buf_enqueued--;

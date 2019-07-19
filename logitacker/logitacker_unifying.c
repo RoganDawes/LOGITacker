@@ -102,6 +102,9 @@ void logitacker_unifying_frame_classify_log(nrf_esb_payload_t frame) {
         case UNIFYING_RF_REPORT_HIDPP_LONG:
             NRF_LOG_INFO("%sHID++ long", UNIFYING_CLASSIFY_LOG_PREFIX);
             return;
+        case UNIFYING_RF_REPORT_ENCRYPTED_HIDPP_LONG:
+            NRF_LOG_INFO("%sENCRYPTED HID++ long", UNIFYING_CLASSIFY_LOG_PREFIX);
+            return;
         case UNIFYING_RF_REPORT_ENCRYPTED_KEYBOARD:
             //counter = frame.data[10] << 24 | frame.data[11] << 16 | frame.data[12] << 8 | frame.data[13];
             counter = 0;
