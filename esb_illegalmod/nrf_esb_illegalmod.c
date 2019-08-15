@@ -1383,7 +1383,7 @@ static void clear_events_do_not_restart_rx(void)
 
 static void on_radio_disabled_rx(void)
 {
-    NRF_LOG_INFO("on_rx_disabled");
+    NRF_LOG_DEBUG("on_rx_disabled");
     bool            ack                = false;
     bool            retransmit_payload = false;
     bool            send_rx_event      = true;

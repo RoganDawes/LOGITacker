@@ -1,4 +1,4 @@
-#include "logitacker_processor_passive_enum.h"
+#include "logitacker_processor_prx.h"
 
 #include "logitacker.h"
 #include "logitacker_unifying.h"
@@ -8,7 +8,7 @@
 #include "logitacker_bsp.h"
 #include "helper.h"
 
-#define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_PASIVE_ENUM
+#define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_PRX
 #include "nrf_log.h"
 #include "logitacker_usb.h"
 #include "logitacker_options.h"
@@ -27,50 +27,53 @@ typedef struct {
 
     logitacker_devices_unifying_dongle_t devices[NRF_ESB_PIPE_COUNT];
 
+    uint32_t tx_count;
+
     nrf_esb_payload_t tmp_rx_payload;
-} logitacker_processor_passive_enum_ctx_t;
+    nrf_esb_payload_t tmp_tx_payload;
+} logitacker_processor_prx_ctx_t;
 
 static logitacker_processor_t m_processor = {0};
-static logitacker_processor_passive_enum_ctx_t m_static_passive_enum_ctx; //we reuse the same context, alternatively an malloc'ed ctx would allow separate instances
+static logitacker_processor_prx_ctx_t m_static_prx_ctx; //we reuse the same context, alternatively an malloc'ed ctx would allow separate instances
 static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 static uint8_t m_keyboard_report_decryption_buffer[8] = { 0 };
 static uint8_t m_hidpp_long_report_decryption_buffer[23] = { 0 };
 
-void processor_passive_enum_init_func(logitacker_processor_t *p_processor);
-void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *self);
+void processor_prx_init_func(logitacker_processor_t *p_processor);
+void processor_prx_init_func_(logitacker_processor_prx_ctx_t *self);
 
-void processor_passive_enum_deinit_func(logitacker_processor_t *p_processor);
-void processor_passive_enum_deinit_func_(logitacker_processor_passive_enum_ctx_t *self);
+void processor_prx_deinit_func(logitacker_processor_t *p_processor);
+void processor_prx_deinit_func_(logitacker_processor_prx_ctx_t *self);
 
-void processor_passive_enum_esb_handler_func(logitacker_processor_t *p_processor, nrf_esb_evt_t *p_esb_evt);
-void processor_passive_enum_esb_handler_func_(logitacker_processor_passive_enum_ctx_t *self, nrf_esb_evt_t *p_esb_event);
+void processor_prx_esb_handler_func(logitacker_processor_t *p_processor, nrf_esb_evt_t *p_esb_evt);
+void processor_prx_esb_handler_func_(logitacker_processor_prx_ctx_t *self, nrf_esb_evt_t *p_esb_event);
 
-void processor_passive_enum_radio_handler_func(logitacker_processor_t *p_processor, radio_evt_t const *p_event);
-void processor_passive_enum_radio_handler_func_(logitacker_processor_passive_enum_ctx_t *self, radio_evt_t const *p_event);
+void processor_prx_radio_handler_func(logitacker_processor_t *p_processor, radio_evt_t const *p_event);
+void processor_prx_radio_handler_func_(logitacker_processor_prx_ctx_t *self, radio_evt_t const *p_event);
 
-void processor_passive_enum_bsp_handler_func(logitacker_processor_t *p_processor, bsp_event_t event);
-void processor_passive_enum_bsp_handler_func_(logitacker_processor_passive_enum_ctx_t *self, bsp_event_t event);
+void processor_prx_bsp_handler_func(logitacker_processor_t *p_processor, bsp_event_t event);
+void processor_prx_bsp_handler_func_(logitacker_processor_prx_ctx_t *self, bsp_event_t event);
 
-void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self);
+void prx_process_rx(logitacker_processor_prx_ctx_t *self);
 
-logitacker_processor_t * contruct_processor_passive_enum_instance(logitacker_processor_passive_enum_ctx_t *const passive_enum_ctx) {
-    m_processor.p_ctx = passive_enum_ctx;
+logitacker_processor_t * contruct_processor_prx_instance(logitacker_processor_prx_ctx_t *const prx_ctx) {
+    m_processor.p_ctx = prx_ctx;
 
-    m_processor.p_init_func = processor_passive_enum_init_func;
-    m_processor.p_deinit_func = processor_passive_enum_deinit_func;
-    m_processor.p_esb_handler = processor_passive_enum_esb_handler_func;
+    m_processor.p_init_func = processor_prx_init_func;
+    m_processor.p_deinit_func = processor_prx_deinit_func;
+    m_processor.p_esb_handler = processor_prx_esb_handler_func;
 //    m_processor.p_timer_handler = processor_active_enum_timer_handler_func;
-    m_processor.p_bsp_handler = processor_passive_enum_bsp_handler_func;
-    m_processor.p_radio_handler = processor_passive_enum_radio_handler_func;
+    m_processor.p_bsp_handler = processor_prx_bsp_handler_func;
+    m_processor.p_radio_handler = processor_prx_radio_handler_func;
 
     return &m_processor;
 }
 
-void processor_passive_enum_init_func(logitacker_processor_t *p_processor) {
-    processor_passive_enum_init_func_((logitacker_processor_passive_enum_ctx_t *) p_processor->p_ctx);
+void processor_prx_init_func(logitacker_processor_t *p_processor) {
+    processor_prx_init_func_((logitacker_processor_prx_ctx_t *) p_processor->p_ctx);
 }
 
-void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *self) {
+void processor_prx_init_func_(logitacker_processor_prx_ctx_t *self) {
 
     helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, self->current_rf_address);
     NRF_LOG_INFO("Entering passive enumeration mode for address %s", addr_str_buff);
@@ -79,6 +82,8 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
     nrf_esb_stop_rx(); //stop rx in case running
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
+
+    self->tx_count = 0;
 
 //    *self->p_logitacker_mainstate = LOGITACKER_MODE_PASSIVE_ENUMERATION;
 
@@ -117,7 +122,8 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
 
     uint32_t res = 0;
 
-    res = nrf_esb_set_mode(NRF_ESB_MODE_SNIFF);
+    //res = nrf_esb_set_mode(NRF_ESB_MODE_SNIFF);
+    res = nrf_esb_set_mode(NRF_ESB_MODE_PRX);
     if (res != NRF_SUCCESS) NRF_LOG_ERROR("nrf_esb_set_mode SNIFF: %d", res);
     res = nrf_esb_set_base_address_1(self->base_addr); // set base addr1
     if (res != NRF_SUCCESS) NRF_LOG_ERROR("nrf_esb_set_base_address_1: %d", res);
@@ -156,14 +162,14 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
     res = nrf_esb_start_rx();
     if (res != NRF_SUCCESS) NRF_LOG_ERROR("start_rx: %d", res);
 
-    radio_enable_rx_timeout_event(LOGITACKER_PASSIVE_ENUM_STAY_ON_CHANNEL_AFTER_RX_MS); //set RX timeout, the eventhandler starts channel hopping once this timeout is reached
+    radio_enable_rx_timeout_event(LOGITACKER_PRX_STAY_ON_CHANNEL_AFTER_RX_MS); //set RX timeout, the eventhandler starts channel hopping once this timeout is reached
 }
 
-void processor_passive_enum_deinit_func(logitacker_processor_t *p_processor) {
-    processor_passive_enum_deinit_func_((logitacker_processor_passive_enum_ctx_t *) p_processor->p_ctx);
+void processor_prx_deinit_func(logitacker_processor_t *p_processor) {
+    processor_prx_deinit_func_((logitacker_processor_prx_ctx_t *) p_processor->p_ctx);
 }
 
-void processor_passive_enum_deinit_func_(logitacker_processor_passive_enum_ctx_t *self) {
+void processor_prx_deinit_func_(logitacker_processor_prx_ctx_t *self) {
 
     NRF_LOG_INFO("Leaving passive enumeration mode");
 
@@ -171,32 +177,39 @@ void processor_passive_enum_deinit_func_(logitacker_processor_passive_enum_ctx_t
     radio_stop_channel_hopping(); // disable channel hopping
     nrf_esb_stop_rx(); //stop rx in case running
 
+    self->tx_count = 0;
+
 //    *self->p_logitacker_mainstate = LOGITACKER_MODE_IDLE;
 
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
 }
 
-void processor_passive_enum_esb_handler_func(logitacker_processor_t *p_processor, nrf_esb_evt_t *p_esb_evt) {
-    processor_passive_enum_esb_handler_func_((logitacker_processor_passive_enum_ctx_t *) p_processor->p_ctx, p_esb_evt);
+void processor_prx_esb_handler_func(logitacker_processor_t *p_processor, nrf_esb_evt_t *p_esb_evt) {
+    processor_prx_esb_handler_func_((logitacker_processor_prx_ctx_t *) p_processor->p_ctx, p_esb_evt);
 }
 
-void processor_passive_enum_esb_handler_func_(logitacker_processor_passive_enum_ctx_t *self, nrf_esb_evt_t *p_esb_event) {
+void processor_prx_esb_handler_func_(logitacker_processor_prx_ctx_t *self, nrf_esb_evt_t *p_esb_event) {
     switch (p_esb_event->evt_id) {
         case NRF_ESB_EVENT_RX_RECEIVED:
             NRF_LOG_DEBUG("ESB EVENT HANDLER PASSIVE ENUMERATION RX_RECEIVED");
-            passive_enum_process_rx(self);
+            prx_process_rx(self);
             break;
+        /*
+        case NRF_ESB_EVENT_TX_SUCCESS:
+            NRF_LOG_INFO("PRX tx'de");
+            self->tx_count++;
+        */
         default:
             break;
     }
 
 }
 
-void processor_passive_enum_radio_handler_func(logitacker_processor_t *p_processor, radio_evt_t const *p_event) {
-    processor_passive_enum_radio_handler_func_((logitacker_processor_passive_enum_ctx_t *) p_processor->p_ctx, p_event);
+void processor_prx_radio_handler_func(logitacker_processor_t *p_processor, radio_evt_t const *p_event) {
+    processor_prx_radio_handler_func_((logitacker_processor_prx_ctx_t *) p_processor->p_ctx, p_event);
 }
 
-void processor_passive_enum_radio_handler_func_(logitacker_processor_passive_enum_ctx_t *self, radio_evt_t const *p_event) {
+void processor_prx_radio_handler_func_(logitacker_processor_prx_ctx_t *self, radio_evt_t const *p_event) {
     //helper_log_priority("UNIFYING_event_handler");
     switch (p_event->evt_id)
     {
@@ -217,11 +230,11 @@ void processor_passive_enum_radio_handler_func_(logitacker_processor_passive_enu
     }
 }
 
-void processor_passive_enum_bsp_handler_func(logitacker_processor_t *p_processor, bsp_event_t event) {
-    processor_passive_enum_bsp_handler_func_((logitacker_processor_passive_enum_ctx_t *) p_processor->p_ctx, event);
+void processor_prx_bsp_handler_func(logitacker_processor_t *p_processor, bsp_event_t event) {
+    processor_prx_bsp_handler_func_((logitacker_processor_prx_ctx_t *) p_processor->p_ctx, event);
 }
 
-void processor_passive_enum_bsp_handler_func_(logitacker_processor_passive_enum_ctx_t *self, bsp_event_t event) {
+void processor_prx_bsp_handler_func_(logitacker_processor_prx_ctx_t *self, bsp_event_t event) {
     NRF_LOG_INFO("Passive enumeration BSP event: %d", (unsigned int)event);
     switch ((unsigned int)event)
     {
@@ -239,7 +252,7 @@ void processor_passive_enum_bsp_handler_func_(logitacker_processor_passive_enum_
 static uint8_t m_pass_through_keyboard_hid_input_report[8] = {0};
 static uint8_t m_pass_through_mouse_hid_input_report[7] = {0};
 
-void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
+void prx_process_rx(logitacker_processor_prx_ctx_t *self) {
     bsp_board_led_invert(LED_G);
     while (nrf_esb_read_rx_payload(&(self->tmp_rx_payload)) == NRF_SUCCESS) {
         uint8_t len = self->tmp_rx_payload.length;
@@ -251,13 +264,13 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
         bool unifying_is_keep_alive;
         logitacker_unifying_frame_classify(self->tmp_rx_payload, &unifying_report_type, &unifying_is_keep_alive);
 
-//            logitacker_devices_unifying_dongle_t *p_device = &m_state_local.substate_passive_enumeration.devices[rx_payload.pipe]; //pointer to correct device meta data
+//            logitacker_devices_unifying_dongle_t *p_device = &m_state_local.substate_prxeration.devices[rx_payload.pipe]; //pointer to correct device meta data
 
         uint8_t addr[5];
         nrf_esb_convert_pipe_to_address(self->tmp_rx_payload.pipe, addr);
 
         if (g_logitacker_global_config.passive_enum_pass_through_hidraw) {
-            logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_PASSIVE_ENUMERATION, addr, &self->tmp_rx_payload);
+            //logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_prxERATION, addr, &self->tmp_rx_payload);
         }
 
 
@@ -272,7 +285,29 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
         if (p_device != NULL) logitacker_devices_device_update_classification(p_device, self->tmp_rx_payload);
 
 
+
         if (!(unifying_report_type == 0x00 && unifying_is_keep_alive) && len != 0) { //ignore keep-alive only frames and empty frames
+            // Write a test payload
+            if (self->tx_count < 100) {
+                NRF_LOG_INFO("Writing TX payload %d", self->tx_count);
+                self->tmp_tx_payload.pipe = self->tmp_rx_payload.pipe;
+                self->tmp_tx_payload.data[0] = 0x00;
+                self->tmp_tx_payload.data[1] = 0x10;
+                self->tmp_tx_payload.data[2] = prefix;
+                self->tmp_tx_payload.data[3] = 0x00;
+                self->tmp_tx_payload.data[4] = 0x1F;
+                self->tmp_tx_payload.data[5] = 0x00;
+                self->tmp_tx_payload.data[6] = 0x00;
+                self->tmp_tx_payload.data[7] = 0x00;
+                self->tmp_tx_payload.data[8] = 0xFF;
+                self->tmp_tx_payload.data[9] = 0xAC;
+                self->tmp_tx_payload.length = 10;
+                logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
+                nrf_esb_write_payload(&self->tmp_tx_payload);
+                self->tx_count++;
+            }
+
+
             uint8_t ch_idx = self->tmp_rx_payload.rx_channel_index;
             uint8_t ch = self->tmp_rx_payload.rx_channel;
             helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, addr);
@@ -327,7 +362,7 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                             pseudo_frame.pid = self->tmp_rx_payload.pid;
                             pseudo_frame.rx_channel = self->tmp_rx_payload.rx_channel;
                             pseudo_frame.data[0] = self->tmp_rx_payload.data[0];
-                            pseudo_frame.data[1] = unifying_is_keep_alive ? 0x51 : 0x11; //HID++ long (with keep alive bit if it was set for the encrypted version)
+                            pseudo_frame.data[1] = 0x51; //HID++ long with keep alive bit
                             memcpy(&pseudo_frame.data[2], m_hidpp_long_report_decryption_buffer, 19);
                             logitacker_unifying_payload_update_checksum(pseudo_frame.data, 22);
                             pseudo_frame.length = 22;
@@ -406,12 +441,12 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
     }
 }
 
-logitacker_processor_t * new_processor_passive_enum(uint8_t *rf_address) {
+logitacker_processor_t * new_processor_prx(uint8_t *rf_address) {
     //update checksums of RF payloads (only needed as they are not hardcoded, to allow changing payloads)
 
 
     // initialize context (static in this case, has to use malloc for new instances)
-    logitacker_processor_passive_enum_ctx_t *const p_ctx = &m_static_passive_enum_ctx;
+    logitacker_processor_prx_ctx_t *const p_ctx = &m_static_prx_ctx;
     memset(p_ctx, 0, sizeof(*p_ctx)); //replace with malloc for dedicated instance
 
     //initialize member variables
@@ -419,7 +454,7 @@ logitacker_processor_t * new_processor_passive_enum(uint8_t *rf_address) {
 
 
 
-    return contruct_processor_passive_enum_instance(&m_static_passive_enum_ctx);
+    return contruct_processor_prx_instance(&m_static_prx_ctx);
 }
 
 

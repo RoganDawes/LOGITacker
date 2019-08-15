@@ -7,3 +7,5 @@ pca10059/blank/armgcc/_build
 apr-dongle/blank/armgcc/_build/
 cmake-build-debug
 
+build/uf2conv.py
+build/convert.sh

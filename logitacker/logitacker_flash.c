@@ -67,18 +67,21 @@ uint32_t logitacker_flash_init() {
         NRF_LOG_ERROR("failed to initialize flash-storage, event handler registration failed: %d", ret);
         return ret;
     }
+    NRF_LOG_INFO("fds_register main callback succeeded")
 
     ret = fds_register(logitacker_script_engine_fds_event_handler);
     if (ret != NRF_SUCCESS) {
         NRF_LOG_ERROR("failed to register FDS event handler for script processor: %d", ret);
         return ret;
     }
+    NRF_LOG_INFO("fds_register script callback succeeded")
 
     ret = fds_init();
     if (ret != NRF_SUCCESS) {
         NRF_LOG_ERROR("failed to initialize flash-storage: %d", ret);
         return ret;
     }
+    NRF_LOG_INFO("fds_init")
 
     wait_for_fds_ready();
     NRF_LOG_INFO("flash-storage initialized");

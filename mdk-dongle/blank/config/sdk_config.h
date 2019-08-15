@@ -1975,7 +1975,7 @@
 // <i> Note: This value is not editable in Configuration Wizard.
 // <i> Serial number that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
 #ifndef APP_USBD_STRING_SERIAL
-#define APP_USBD_STRING_SERIAL APP_USBD_STRING_DESC("v0.1.2-beta")
+#define APP_USBD_STRING_SERIAL APP_USBD_STRING_DESC("v0.1.3-beta")
 #endif
 
 // </e>

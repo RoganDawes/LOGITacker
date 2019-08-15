@@ -11,7 +11,7 @@ extern "C" {
 #include "nrf_esb_illegalmod.h"
 #include "logitacker_keyboard_map.h"
 
-#define VERSION_STRING "v0.1.2-beta"
+#define VERSION_STRING "v0.1.3-beta"
 
 //#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
 #define ACTIVE_ENUM_INNER_LOOP_MAX 20 //how many CAPS presses / key releases get send
@@ -25,6 +25,9 @@ extern "C" {
 #define LOGITACKER_PASSIVE_ENUM_STAY_ON_CHANNEL_AFTER_RX_MS 1300 // time in ms to stop channel hopping in passive mode, once a valid ESB frame is received
 #define LOGITACKER_PASSIVE_ENUM_CHANNEL_HOP_INTERVAL_MS 30 // channel hop interval in passive enum mode
 
+#define LOGITACKER_PRX_STAY_ON_CHANNEL_AFTER_RX_MS 1300 // time in ms to stop channel hopping in passive mode, once a valid ESB frame is received
+#define LOGITACKER_PRX_ENUM_CHANNEL_HOP_INTERVAL_MS 30 // channel hop interval in passive enum mode
+
 #define LOGITACKER_SNIFF_PAIR_STAY_ON_CHANNEL_AFTER_RX_MS 1300
 #define LOGITACKER_SNIFF_PAIR_CHANNEL_HOP_INTERVAL_MS 10
 
@@ -35,6 +38,7 @@ typedef enum {
     LOGITACKER_MODE_PASSIVE_ENUMERATION,   // radio in SNIFF mode, collecting device frames to determin caps
     LOGITACKER_MODE_SNIFF_PAIRING,
     LOGITACKER_MODE_PAIR_DEVICE,
+    LOGITACKER_MODE_PRX,
     LOGITACKER_MODE_INJECT,
     LOGITACKER_MODE_IDLE
 } logitacker_mode_t;
@@ -45,6 +49,8 @@ uint32_t logitacker_init();
 
 void logitacker_enter_mode_discovery();
 
+
+void logitacker_enter_mode_prx(uint8_t *rf_address);
 
 void logitacker_enter_mode_passive_enum(uint8_t *rf_address);
 

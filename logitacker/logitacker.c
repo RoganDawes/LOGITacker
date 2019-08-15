@@ -15,6 +15,7 @@
 #include "logitacker_processor.h"
 #include "logitacker_processor_active_enum.h"
 #include "logitacker_processor_passive_enum.h"
+#include "logitacker_processor_prx.h"
 #include "logitacker_processor_pair_device.h"
 #include "logitacker_processor_inject.h"
 #include "logitacker_usb.h"
@@ -145,6 +146,15 @@ void logitacker_enter_mode_passive_enum(uint8_t *rf_address) {
     sprintf(g_logitacker_cli_name, "LOGITacker (passive enum) $ ");
 }
 
+void logitacker_enter_mode_prx(uint8_t *rf_address) {
+    if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
+    p_processor = new_processor_prx(rf_address);
+    p_processor->p_init_func(p_processor);
+
+    m_state_local.mainstate = LOGITACKER_MODE_PRX;
+    sprintf(g_logitacker_cli_name, "LOGITacker (prx) $ ");
+}
+
 
 void logitacker_enter_mode_pair_sniff() {
     if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
@@ -174,20 +184,20 @@ void logitacker_enter_mode_pair_device(uint8_t const *rf_address) {
     char dev_name[] = "LOGITacker";
     logitacker_pairing_info_t pi = {
             .device_name_len = sizeof(dev_name),
-            .device_usability_info = LOGITACKER_DEVICE_USABILITY_INFO_PS_LOCATION_OTHER,
-            .device_nonce = {0x011, 0x22, 0x33, 0x44},
+            .device_usability_info = LOGITACKER_DEVICE_USABILITY_INFO_PS_LOCATION_ON_THE_TOP_EDGE,
+            .device_nonce = {0xde, 0xad, 0xbe, 0xef},
             .device_report_types = LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD |
                     LOGITACKER_DEVICE_REPORT_TYPES_POWER_KEYS |
                     LOGITACKER_DEVICE_REPORT_TYPES_MULTIMEDIA |
-                    LOGITACKER_DEVICE_REPORT_TYPES_MEDIA_CENTER |
+//                    LOGITACKER_DEVICE_REPORT_TYPES_MEDIA_CENTER |
                     LOGITACKER_DEVICE_REPORT_TYPES_MOUSE |
-                    LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD_LED |
-                    LOGITACKER_DEVICE_REPORT_TYPES_SHORT_HIDPP |
-                    LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP,
-            .device_serial = { 0xde, 0xad, 0x13, temp_dev_id++ },
-            .device_caps = LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE, // no link encryption (we could enable and calculate keys if we like)
-            .device_type = LOGITACKER_DEVICE_UNIFYING_TYPE_MOUSE, // of course this is shown as a mouse in Unifying software
-            .device_wpid = { 0x04, 0x02 }, // random
+//                    LOGITACKER_DEVICE_REPORT_TYPES_SHORT_HIDPP |
+//                    LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP |
+                    LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD_LED,
+            .device_serial = { 0x2d, 0x9a, 0x9f, temp_dev_id++ },
+            .device_caps = LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE | LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION, // use link encryption, to account for MouseJack patched firmwares
+            .device_type = LOGITACKER_DEVICE_UNIFYING_TYPE_KEYBOARD, // use keyboard, for latest receiver firmwares character keys [a-zA-Z] are blacklisted for non-keyboard devices
+            .device_wpid = { 0x13, 0x37 }, // random
     };
     memcpy(pi.device_name, dev_name, pi.device_name_len);
 

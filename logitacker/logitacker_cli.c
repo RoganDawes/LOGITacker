@@ -1105,6 +1105,29 @@ static void cmd_enum_passive(nrf_cli_t const * p_cli, size_t argc, char **argv) 
     }
 }
 
+#ifdef CLI_TEST_COMMANDS
+static void cmd_prx(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1)
+    {
+
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Starting PRX with address %s\r\n", tmp_addr_str);
+        logitacker_enter_mode_prx(addr);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+    }
+}
+#endif
+
 static void cmd_enum_active(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     if (argc > 1)
     {
@@ -1236,6 +1259,10 @@ NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram)
 
 NRF_CLI_CMD_REGISTER(active_enum, &m_sub_enum_device_list, "start active enumeration of given device", cmd_enum_active);
 NRF_CLI_CMD_REGISTER(passive_enum, &m_sub_enum_device_list, "start passive enumeration of given device", cmd_enum_passive);
+
+#ifdef CLI_TEST_COMMANDS
+NRF_CLI_CMD_REGISTER(prx, &m_sub_enum_device_list, "start a PRX for the given device address", cmd_prx);
+#endif
 
 NRF_CLI_CMD_REGISTER(erase_flash, NULL, "erase all data stored on flash", cmd_erase_flash);
 

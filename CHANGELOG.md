@@ -1,4 +1,4 @@
-# LOGITacker v0.1.2-beta
+# LOGITacker v0.1.3-beta
 
 - experimental Logitech LIGHTSPEED support (G-Series, tested with G603)
 - adjusted device listing with `devices` command (prints more data, especially for devices obtained from sniffed pairing)
