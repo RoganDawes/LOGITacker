@@ -11,7 +11,7 @@ extern "C" {
 #include "nrf_esb_illegalmod.h"
 #include "logitacker_keyboard_map.h"
 
-#define VERSION_STRING "v0.1.3-beta"
+#define VERSION_STRING "v0.1.4-beta"
 
 //#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
 #define ACTIVE_ENUM_INNER_LOOP_MAX 20 //how many CAPS presses / key releases get send

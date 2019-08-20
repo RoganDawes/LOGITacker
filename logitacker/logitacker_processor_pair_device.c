@@ -357,10 +357,21 @@ void processor_pair_device_create_req1_pay(logitacker_processor_pair_device_ctx_
     memcpy(&self->tmp_tx_payload.data[3], pseudo_device_address, 5); // 3..7 pseudo device's current RF address
     self->tmp_tx_payload.data[8] = 0x08; //likely default keep-alive interval
     memcpy(&self->tmp_tx_payload.data[9], self->device_pairing_info.device_wpid, 2); //WPID of device
-    self->tmp_tx_payload.data[11] = LOGITACKER_DEVICE_PROTOCOL_UNIFYING; //likely protocol (0x04 == Unifying ?)
-    self->tmp_tx_payload.data[12] = 0x00; //unknown 0x00 for some devices (mouse, keyboard), 0x02 for others (mouse Anywhere MX 2, presenter)
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_UNIFYING) {
+        self->tmp_tx_payload.data[11] = LOGITACKER_DEVICE_PROTOCOL_UNIFYING; //likely protocol (0x04 == Unifying ?)
+        self->tmp_tx_payload.data[12] = 0x00; //unknown 0x00 for some devices (mouse, keyboard), 0x02 for others (mouse Anywhere MX 2, presenter)
+    } else {
+        self->tmp_tx_payload.data[11] = LOGITACKER_DEVICE_PROTOCOL_LIGHTSPEED;
+        self->tmp_tx_payload.data[12] = 0x02; //unknown 0x00 for some devices (mouse, keyboard), 0x02 for others (mouse Anywhere MX 2, presenter)
+    }
+
     self->tmp_tx_payload.data[13] = self->device_pairing_info.device_type;
-    self->tmp_tx_payload.data[14] = self->device_pairing_info.device_caps; // should have LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE set and LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION unset
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_UNIFYING) {
+        self->tmp_tx_payload.data[14] = self->device_pairing_info.device_caps; // should have LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE set and LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION unset
+    } else {
+        self->tmp_tx_payload.data[14] = 0xB3; // should have LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE set and LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION unset
+    }
+
     //15 is unknown
 
     self->tmp_tx_payload.pipe = 0; // first request is sent on pipe 0 (dongle pairing address)
