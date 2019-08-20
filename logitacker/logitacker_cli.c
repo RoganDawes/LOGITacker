@@ -1,4 +1,7 @@
 #include "fds.h"
+#include <libraries/fds/fds_internal_defs.h>
+#include <libraries/fstorage/nrf_fstorage.h>
+#include <libraries/fstorage/nrf_fstorage_nvmc.h>
 #include "ctype.h"
 #include "logitacker_tx_payload_provider.h"
 #include "logitacker_tx_pay_provider_string_to_keys.h"
@@ -417,7 +420,18 @@ static void cmd_version(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
 }
 
+
+void callback_dummy(nrf_fstorage_evt_t * p_evt) {};
+NRF_FSTORAGE_DEF(nrf_fstorage_t m_nfs) =
+        {
+                .evt_handler    = callback_dummy,
+//                .start_addr     = 0xFD000,
+//                .end_addr       = 0xFFFFF,
+        };
+static bool nfs_initiated = false;
+
 static void cmd_erase_flash(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+/*
     fds_find_token_t ft;
     memset(&ft, 0x00, sizeof(fds_find_token_t));
     fds_record_desc_t rd;
@@ -426,6 +440,38 @@ static void cmd_erase_flash(nrf_cli_t const * p_cli, size_t argc, char **argv) {
         fds_record_delete(&rd);
     }
     fds_gc();
+    fds_stat_t stats;
+    fds_stat(&stats);
+*/
+
+    uint32_t flash_size  = (FDS_PHY_PAGES * FDS_PHY_PAGE_SIZE * sizeof(uint32_t));
+    uint32_t end_addr   = helper_flash_end_addr();
+    uint32_t start_addr = end_addr - flash_size;
+
+    m_nfs.start_addr = start_addr;
+    m_nfs.end_addr = end_addr;
+
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Erasing flash from start addr: %x, pages: %d\n", start_addr, FDS_PHY_PAGES);
+
+/*
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Freeable words:  %d\n", stats.freeable_words);
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Largest contig:  %d\n", stats.largest_contig);
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Words used:      %d\n", stats.words_used);
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Words reserved:  %d\n", stats.words_reserved);
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Dirty records:   %d\n", stats.dirty_records);
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Valid records:   %d\n", stats.valid_records);
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Open records:    %d\n", stats.open_records);
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Pages available: %d\n", stats.pages_available);
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "Corruption:      %s\n", stats.corruption ? "yes" : "no");
+*/
+
+    if (!nfs_initiated) {
+        if (nrf_fstorage_init(&m_nfs, &nrf_fstorage_nvmc, NULL) == NRF_SUCCESS) nfs_initiated = true;
+    }
+    if (nfs_initiated) nrf_fstorage_erase(&m_nfs, start_addr, FDS_PHY_PAGES, NULL);
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_RED, "... page erase issued, wait some seconds and re-plug the dongle\n");
 }
 
 static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv) {
