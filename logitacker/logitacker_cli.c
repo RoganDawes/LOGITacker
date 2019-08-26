@@ -1,7 +1,7 @@
 #include "fds.h"
-#include <libraries/fds/fds_internal_defs.h>
-#include <libraries/fstorage/nrf_fstorage.h>
-#include <libraries/fstorage/nrf_fstorage_nvmc.h>
+#include "fds_internal_defs.h"
+#include "nrf_fstorage.h"
+#include "nrf_fstorage_nvmc.h"
 #include "ctype.h"
 #include "logitacker_tx_payload_provider.h"
 #include "logitacker_tx_pay_provider_string_to_keys.h"
@@ -18,6 +18,8 @@
 #include "logitacker_flash.h"
 #include "logitacker_processor_inject.h"
 #include "logitacker_script_engine.h"
+
+#define CLI_TEST_COMMANDS
 
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
 static void cmd_script_press(nrf_cli_t const *p_cli, size_t argc, char **argv);
@@ -398,8 +400,29 @@ static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
     fds_gc();
 }
 
-static void cmd_test_b(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static bool pre_process_commands = false;
+bool pre_cmd_callback_test(nrf_cli_t const * p_cli, char const * const p_cmd_buf) {
+    NRF_LOG_INFO("parse command: %s", NRF_LOG_PUSH(p_cli->p_ctx->cmd_buff));
+    if (strcmp(p_cmd_buf, "exit") == 0) {
+        NRF_LOG_INFO("Entered exit")
+        pre_process_commands = false;
+        nrf_cli_register_pre_cmd_callback(p_cli, NULL);
+    }
+    return true;
+}
 
+static void cmd_test_b(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    pre_process_commands = !pre_process_commands;
+
+    if (pre_process_commands) {
+        // enable command pre-processing
+        nrf_cli_register_pre_cmd_callback(p_cli, &pre_cmd_callback_test);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "command pre processing enabled\n");
+    } else {
+        // disable command pre-processing
+        nrf_cli_register_pre_cmd_callback(p_cli, NULL);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "command pre processing disabled\n");
+    }
 }
 
 static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {

@@ -2428,11 +2428,18 @@ static void cli_execute(nrf_cli_t const * p_cli)
         cursor_next_line_move(p_cli);
     }
 
+    if (p_cli->p_ctx->pre_cmd_callback != NULL) {
+        bool done = (*(p_cli->p_ctx->pre_cmd_callback))(p_cli, p_cli->p_ctx->cmd_buff);
+        if (done) return;
+    }
+
     /* create argument list */
     quote = make_argv(&argc,
                       &argv[0],
                       p_cli->p_ctx->cmd_buff,
                       NRF_CLI_ARGC_MAX);
+
+
 
     if (!argc)
     {
@@ -3643,6 +3650,11 @@ static void nrf_cli_cmd_resize(nrf_cli_t const * p_cli, size_t argc, char **argv
         return;
     }
     nrf_cli_error(p_cli, "%s:%s%s", argv[0], NRF_CLI_MSG_UNKNOWN_PARAMETER, argv[1]);
+}
+
+
+void nrf_cli_register_pre_cmd_callback(nrf_cli_t const * p_cli, nrf_cli_pre_cmd_callback callback) {
+    p_cli->p_ctx->pre_cmd_callback = callback;
 }
 
 #if NRF_MODULE_ENABLED(NRF_CLI_VT100_COLORS)

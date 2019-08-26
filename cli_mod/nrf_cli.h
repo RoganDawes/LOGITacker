@@ -103,6 +103,8 @@ typedef struct nrf_cli_static_entry nrf_cli_static_entry_t;
  */
 typedef void (*nrf_cli_dynamic_get)(size_t idx, nrf_cli_static_entry_t * p_static);
 
+typedef bool (*nrf_cli_pre_cmd_callback)(nrf_cli_t const * p_cli, char const * const p_cmd_buf);
+
 /**
  * @brief CLI command descriptor.
  */
@@ -396,6 +398,8 @@ typedef struct
     nrf_memobj_t * p_cmd_list_element;  //!< Pointer to an element of history list.
 #endif
     volatile nrf_cli_internal_t internal;   //!< Internal CLI data
+
+    nrf_cli_pre_cmd_callback pre_cmd_callback;
 } nrf_cli_ctx_t;
 
 extern const nrf_log_backend_api_t nrf_log_backend_cli_api;
@@ -676,6 +680,9 @@ void nrf_cli_help_print(nrf_cli_t const *               p_cli,
 void nrf_cli_print_stream(void const * p_user_ctx, char const * p_data, size_t data_len);
 
 /** @} */
+
+
+void nrf_cli_register_pre_cmd_callback(nrf_cli_t const * p_cli, nrf_cli_pre_cmd_callback callback);
 
 #ifdef __cplusplus
 }

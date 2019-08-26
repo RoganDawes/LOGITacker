@@ -1,5 +1,5 @@
 #include "fds.h"
-#include <libraries/fds/fds_internal_defs.h>
+#include "fds_internal_defs.h"
 #include "helper.h"
 #include "crc16.h"
 #include "app_util_platform.h"

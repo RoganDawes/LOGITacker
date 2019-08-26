@@ -1,7 +1,7 @@
 #ifndef LOGITACKER_UNIFYING_CRYPTO_H
 #define LOGITACKER_UNIFYING_CRYPTO_H
 
-#include <nrf_esb_illegalmod.h>
+#include "nrf_esb_illegalmod.h"
 #include "stdint.h"
 #include "logitacker_devices.h"
 
