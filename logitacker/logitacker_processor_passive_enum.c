@@ -333,8 +333,9 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                             pseudo_frame.length = 22;
                             pseudo_frame.validated_promiscuous_frame = false;
 
-                            if (logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_PASSIVE_ENUMERATION, addr, &pseudo_frame) != NRF_SUCCESS) {
-                                NRF_LOG_ERROR("Failed wirting decrypted frame to hidraw");
+                            uint32_t result = logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_PASSIVE_ENUMERATION, addr, &pseudo_frame);
+                            if (result != NRF_SUCCESS) {
+                                NRF_LOG_ERROR("Failed writing decrypted frame to hidraw: %x", result);
                             }
                         }
                     }
@@ -394,9 +395,11 @@ void passive_enum_process_rx(logitacker_processor_passive_enum_ctx_t *self) {
                             pseudo_frame.length = 10;
                             pseudo_frame.validated_promiscuous_frame = false;
 
-                            if (logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_PASSIVE_ENUMERATION, addr, &pseudo_frame) != NRF_SUCCESS) {
-                                NRF_LOG_ERROR("Failed wirting decrypted frame to hidraw");
+                            uint32_t result = logitacker_usb_write_hidraw_input_report_rf_frame(LOGITACKER_MODE_PASSIVE_ENUMERATION, addr, &pseudo_frame);
+                            if (result != NRF_SUCCESS) {
+                                NRF_LOG_ERROR("Failed writing decrypted frame to hidraw: %x", result);
                             }
+
                         }
 
                     }

@@ -60,7 +60,7 @@ typedef struct {
 #define LOGITACKER_USB_HID_GENERIC_INTERFACE  2                        // HID generic class interface number.
 #define LOGITACKER_USB_HID_GENERIC_EPIN       NRF_DRV_USBD_EPIN3       // HID generic class endpoint number.
 #define LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE  64
-#define LOGITACKER_USB_HID_GENERIC_REPORT_IN_QUEUE_SIZE    1                       // Number of reports defined in report descriptor.
+#define LOGITACKER_USB_HID_GENERIC_REPORT_IN_QUEUE_SIZE    4                       // Number of reports defined in report descriptor.
 #define LOGITACKER_USB_HID_GENERIC_IN_REPORT_MAXSIZE LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE
 #define LOGITACKER_USB_HID_GENERIC_INTERFACE_ENDPOINT_LIST()         \
 (                                                            \
@@ -72,7 +72,7 @@ typedef struct {
 #define LOGITACKER_USB_HID_KEYBOARD_EPIN       NRF_DRV_USBD_EPIN4
 #define LOGITACKER_USB_HID_KEYBOARD_OUT_REPORT_MAXSIZE  1
 #define LOGITACKER_USB_HID_KEYBOARD_IN_REPORT_MAXSIZE  8
-#define LOGITACKER_USB_HID_KEYBOARD_REPORT_IN_QUEUE_SIZE    1
+#define LOGITACKER_USB_HID_KEYBOARD_REPORT_IN_QUEUE_SIZE    4
 #define LOGITACKER_USB_HID_KEYBOARD_INTERFACE_ENDPOINT_LIST()       \
 (                                                                   \
         LOGITACKER_USB_HID_KEYBOARD_EPIN                            \
@@ -82,7 +82,7 @@ typedef struct {
 #define LOGITACKER_USB_HID_MOUSE_EPIN       NRF_DRV_USBD_EPIN5
 //#define LOGITACKER_USB_HID_MOUSE_BUTTON_COUNT 2
 #define LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE  7
-#define LOGITACKER_USB_HID_MOUSE_REPORT_IN_QUEUE_SIZE    1
+#define LOGITACKER_USB_HID_MOUSE_REPORT_IN_QUEUE_SIZE    4
 #define LOGITACKER_USB_HID_MOUSE_INTERFACE_ENDPOINT_LIST()       \
 (                                                                   \
         LOGITACKER_USB_HID_MOUSE_EPIN                            \
