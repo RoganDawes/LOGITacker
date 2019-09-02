@@ -27,6 +27,7 @@
 
 typedef enum {
     LOGITACKER_USB_HIDRAW_REPORT_TYPE_RF_FRAME = 0x01,
+    LOGITACKER_USB_HIDRAW_REPORT_TYPE_COMMAND = 0x02,
 } logitacker_usb_hidraw_report_type_t;
 
 typedef struct {
@@ -38,6 +39,14 @@ typedef struct {
     uint8_t payload_data[32]; //maximum of 32 bytes (we ignore capabilities of newer nRF5 series, as it doesn't apply to Logitech devices)
 
 } logitacker_usb_hidraw_rf_frame_representation_t;
+
+typedef enum {
+    LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_STRING = 0x10,
+    LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_ALTSTRING = 0x11,
+    LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_PRESS = 0x12,
+    LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_DELAY = 0x13,
+    LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_CLEAR = 0x14,
+} loigtacker_usb_hidraw_command_t;
 
 /*
 

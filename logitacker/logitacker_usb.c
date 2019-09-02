@@ -10,6 +10,7 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_USB
 #include "nrf_log.h"
+#include "logitacker_script_engine.h"
 
 
 NRF_LOG_MODULE_REGISTER();
@@ -22,7 +23,7 @@ static void usbd_device_event_handler(app_usbd_event_type_t event);
 static void usbd_hid_generic_event_handler(app_usbd_class_inst_t const *p_inst, app_usbd_hid_user_event_t event);
 static void usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const * p_inst, app_usbd_hid_user_event_t event);
 static void usbd_hid_mouse_event_handler(app_usbd_class_inst_t const * p_inst, app_usbd_hid_user_event_t event);
-
+uint32_t logitacker_usb_read_hidraw_output_report();
 
 // created HID report descriptor with vendor define output / input report of max size in raw_desc
 APP_USBD_HID_GENERIC_SUBCLASS_REPORT_DESC(raw_desc,APP_USBD_HID_RAW_REPORT_DSC_SIZE(LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE));
@@ -151,6 +152,8 @@ static void usbd_hid_generic_event_handler(app_usbd_class_inst_t const *p_inst, 
     {
         case APP_USBD_HID_USER_EVT_OUT_REPORT_READY:
         {
+            logitacker_usb_read_hidraw_output_report();
+            /*
             NRF_LOG_INFO("hid generic raw evt: APP_USBD_HID_USER_EVT_OUT_REPORT_READY");
             size_t out_rep_size = LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE;
             const uint8_t* out_rep = app_usbd_hid_generic_out_report_get(&m_app_hid_generic, &out_rep_size);
@@ -159,6 +162,7 @@ static void usbd_hid_generic_event_handler(app_usbd_class_inst_t const *p_inst, 
 
 //            memcpy(&hid_out_report, out_rep, LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE);
 //            processing_hid_out_report = true;
+             */
             break;
         }
         case APP_USBD_HID_USER_EVT_IN_REPORT_DONE:
@@ -341,6 +345,41 @@ uint32_t logitacker_usb_write_mouse_input_report(const void * p_buf) {
     // write report
     NRF_LOG_HEXDUMP_INFO(m_mouse_hid_input_report, 8);
     return app_usbd_hid_generic_in_report_set(&m_app_hid_mouse, m_mouse_hid_input_report, LOGITACKER_USB_HID_MOUSE_IN_REPORT_MAXSIZE);
+}
+
+uint32_t logitacker_usb_read_hidraw_output_report() {
+    size_t len = LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE;
+    const uint8_t * p_report = app_usbd_hid_generic_out_report_get(&m_app_hid_generic, &len);
+
+    NRF_LOG_HEXDUMP_INFO(p_report, len)
+    logitacker_usb_hidraw_report_type_t type = p_report[1];
+    loigtacker_usb_hidraw_command_t command = p_report[2];
+
+    NRF_LOG_INFO("type: %02x, command: %02x\n", type, command);
+
+    switch (type) {
+        case LOGITACKER_USB_HIDRAW_REPORT_TYPE_COMMAND:
+        {
+            switch (command) {
+                case LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_STRING:
+                {
+                    size_t slen = p_report[3];
+                    char buf[61] = {0};
+                    if (slen > 60) slen = 60;
+                    memcpy(buf,&p_report[4],slen);
+                    logitacker_script_engine_append_task_type_string(buf);
+                }
+                break;
+                default:
+                    NRF_LOG_WARNING("Unhandled raw report command %02x\n", type)
+            }
+        }
+        break;
+        default:
+            NRF_LOG_WARNING("Unhandled raw report type %02x\n", type)
+    }
+
+    return NRF_SUCCESS;
 }
 
 uint32_t logitacker_usb_write_hidraw_input_report(logitacker_mode_t logitacker_mode, logitacker_usb_hidraw_report_type_t type, size_t length, const void * data) {
