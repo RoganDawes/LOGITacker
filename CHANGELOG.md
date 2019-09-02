@@ -1,3 +1,14 @@
+# LOGITacker v0.1.5-beta
+
+- experimental USB injection support with `inject target USB`
+- introduction of `options global bootmode` to toggle between USB injection and default behavior
+- script used for USB injection on boot is set with `options inject default-script <scriptname>`, the respective script
+has to be stored with the proper name using `script store <scriptname>`
+- fix: script storage, scriptname buffer not trimmed down to new length if new scriptname of successive storage attempts 
+gets shorter
+- fix: issue #8 (typos for passive enum)
+- Note: As the update changes the structure for persistent options `erase_flash` has to be executed once after update
+
 # LOGITacker v0.1.4-beta
 
 - experimental Logitech LIGHTSPEED support (G-Series, tested with G603)

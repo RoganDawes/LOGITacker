@@ -212,6 +212,16 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
                 break;
         }
 
+        char * bootmode_str = "unknown";
+        switch (g_logitacker_global_config.bootmode) {
+            case OPTION_LOGITACKER_BOOTMODE_USB_INJECT:
+                bootmode_str = "USB keystroke injection";
+                break;
+            case OPTION_LOGITACKER_BOOTMODE_DISCOVER:
+                bootmode_str = "Discover";
+                break;
+        }
+
 
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n");
@@ -219,6 +229,7 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "global options\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot mode                               : %s\r\n", bootmode_str);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tworking mode                            : %s\r\n", workmode_str);
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");

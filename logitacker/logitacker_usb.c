@@ -236,6 +236,8 @@ static void usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const *p_inst,
         default:
             break;
     }
+
+    main_usbd_hid_keyboard_event_handler(p_inst, event); //pass-through to logitacker.c to use in processors
 }
 
 static bool currently_sending_mouse_input;

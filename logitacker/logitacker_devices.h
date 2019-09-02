@@ -173,5 +173,6 @@ uint32_t logitacker_devices_generate_keyboard_frame(logitacker_devices_unifying_
                                                     nrf_esb_payload_t *p_result_payload,
                                                     hid_keyboard_report_t const *const p_in_hid_report);
 
+uint32_t logitacker_devices_generate_keyboard_frame_USB(nrf_esb_payload_t *p_result_payload, hid_keyboard_report_t const *const p_in_hid_report);
 
 #endif

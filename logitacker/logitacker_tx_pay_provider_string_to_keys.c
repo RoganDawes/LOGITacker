@@ -21,6 +21,7 @@ typedef struct {
     logitacker_keyboard_map_lang_t language_layout;
     //uint32_t pos_in_seq; //position in current report sequence
     logitacker_devices_unifying_device_t * p_device;
+    bool use_USB;
 
 } logitacker_tx_payload_provider_string_ctx_t;
 
@@ -88,7 +89,12 @@ bool provider_string_inject_get_next(logitacker_tx_payload_provider_string_ctx_t
     //return next position in current sequence
     hid_keyboard_report_t * p_cur_hid_report = self->p_current_hid_report_seq;
 
-    convert_hid_report_to_rf_payload(self, p_next_payload, p_cur_hid_report);
+    if (self->use_USB) {
+        logitacker_devices_generate_keyboard_frame_USB(p_next_payload, p_cur_hid_report);
+    } else {
+        convert_hid_report_to_rf_payload(self, p_next_payload, p_cur_hid_report);
+    }
+
 
 
     self->remaining_reports_in_sequence--;
@@ -108,8 +114,8 @@ void provider_string_inject_reset(logitacker_tx_payload_provider_string_ctx_t *s
 }
 
 
-logitacker_tx_payload_provider_t * new_payload_provider_string(logitacker_devices_unifying_device_t * p_device_caps, logitacker_keyboard_map_lang_t lang, char const * const str) {
-    if (p_device_caps == NULL) {
+logitacker_tx_payload_provider_t * new_payload_provider_string(bool use_USB, logitacker_devices_unifying_device_t * p_device_caps, logitacker_keyboard_map_lang_t lang, char const * const str) {
+    if (p_device_caps == NULL && !use_USB) {
         NRF_LOG_WARNING("cannot create payload provider string, no device capabilities given");
     }
 
@@ -120,6 +126,7 @@ logitacker_tx_payload_provider_t * new_payload_provider_string(logitacker_device
     // again no real instance
 
     m_local_ctx.p_device = p_device_caps;
+    m_local_ctx.use_USB = use_USB;
     m_local_ctx.language_layout = lang;
     m_local_ctx.p_current_hid_report_seq = NULL;
     m_local_ctx.remaining_reports_in_sequence = 0;

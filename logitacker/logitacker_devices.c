@@ -783,6 +783,21 @@ typedef enum {
 
 
 
+uint32_t logitacker_devices_generate_keyboard_frame_USB(nrf_esb_payload_t *p_result_payload, hid_keyboard_report_t const *const p_in_hid_report) {
+
+    p_result_payload->length = 8;
+    p_result_payload->data[0] = p_in_hid_report->mod;
+    p_result_payload->data[1] = 0x00;
+    p_result_payload->data[2] = p_in_hid_report->keys[0];
+    p_result_payload->data[3] = p_in_hid_report->keys[1];
+    p_result_payload->data[4] = p_in_hid_report->keys[2];
+    p_result_payload->data[5] = p_in_hid_report->keys[3];
+    p_result_payload->data[6] = p_in_hid_report->keys[4];
+    p_result_payload->data[7] = p_in_hid_report->keys[5];
+
+    return NRF_SUCCESS;
+}
+
 uint32_t logitacker_devices_generate_keyboard_frame_plain(nrf_esb_payload_t *p_result_payload,
                                                           hid_keyboard_report_t const *const p_in_hid_report) {
     /*

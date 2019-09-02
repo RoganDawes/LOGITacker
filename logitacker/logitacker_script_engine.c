@@ -594,6 +594,7 @@ bool logitacker_script_engine_store_current_script_to_flash(const char *script_n
     m_current_fds_op_fds_script_info.script_tasks_record_id = LOGITACKER_FLASH_RECORD_ID_STORED_SCRIPT_TASKS;
     size_t slen = strlen(script_name);
     slen = slen > LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN ? LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN : slen;
+    memset(m_current_fds_op_fds_script_info.script_name, 0, LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN);
     memcpy(m_current_fds_op_fds_script_info.script_name, script_name, slen);
 
 

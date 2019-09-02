@@ -144,6 +144,25 @@ static void dynamic_device_addr_list_ram_with_all(size_t idx, nrf_cli_static_ent
     }
 }
 
+static void dynamic_device_addr_list_ram_with_usb(size_t idx, nrf_cli_static_entry_t *p_static)
+{
+    // Must be sorted alphabetically to ensure correct CLI completion.
+    p_static->handler  = NULL;
+    p_static->p_subcmd = NULL;
+    p_static->p_help   = "Connect with address.";
+
+
+    if (idx == 0) {
+        device_address_str_list_update(); // update list if idx 0 is requested
+        memcpy(m_device_addr_str_list[0], "USB\x00", 4);
+        p_static->p_syntax = m_device_addr_str_list[0];
+    } else if (idx < m_device_addr_str_list_len) {
+        p_static->p_syntax = m_device_addr_str_list[idx];
+    } else {
+        p_static->p_syntax = NULL;
+    }
+}
+
 // dynamic creation of command addresses
 static void dynamic_device_addr_list_ram(size_t idx, nrf_cli_static_entry_t *p_static)
 {
@@ -503,22 +522,27 @@ static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
 static void cmd_inject_target(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "inject target %s\r\n", argv[1]);
+
     if (argc > 1)
     {
-        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_DEFAULT, "parameter count %d\r\n", argc);
+        //nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_DEFAULT, "parameter count %d\r\n", argc);
 
         //parse arg 1 as address
         uint8_t addr[5];
-        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
-            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
-            return;
+        if (strcmp(argv[1], "USB") == 0) {
+            memset(addr,0x00,5);
+            nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Trying to send keystrokes to USB keyboard interface\r\n");
+        } else {
+            if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+                nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+                return;
+            }
+
+            char tmp_addr_str[16];
+            helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+            nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Trying to send keystrokes using address %s\r\n", tmp_addr_str);
         }
-
-        char tmp_addr_str[16];
-        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
-        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Trying to send keystrokes using address %s\r\n", tmp_addr_str);
-
-
 
         //logitacker_keyboard_map_test();
         logitacker_enter_mode_injection(addr);
@@ -648,6 +672,16 @@ static void cmd_option_global_workmode_unifying(nrf_cli_t const *p_cli, size_t a
 static void cmd_option_global_workmode_lightspeed(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     g_logitacker_global_config.workmode = OPTION_LOGITACKER_WORKMODE_LIGHTSPEED;
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "working mode set to LIGHTSPEED compatible\r\n");
+}
+
+static void cmd_option_global_bootmode_discover(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.bootmode = OPTION_LOGITACKER_BOOTMODE_DISCOVER;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "boot mode set to 'discover'\r\n");
+}
+
+static void cmd_option_global_bootmode_usbinject(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.bootmode = OPTION_LOGITACKER_BOOTMODE_USB_INJECT;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "boot mode set to 'usb inject'\r\n");
 }
 
 static void cmd_options_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
@@ -1287,7 +1321,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_script)
 NRF_CLI_CMD_REGISTER(script, &m_sub_script, "scripting for injection", cmd_inject);
 
 //level 2
-NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ram);
+NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_inject_target_addr, dynamic_device_addr_list_ram_with_usb);
 
 // level 1
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_inject)
@@ -1366,7 +1400,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_discover_onhit)
 {
     NRF_CLI_CMD(continue,   NULL, "stay in discover mode.", cmd_discover_onhit_continue),
     NRF_CLI_CMD(active-enum, NULL, "enter active enumeration mode", cmd_discover_onhit_activeenum),
-    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration mode", cmd_discover_onhit_passiveenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter passive enumeration mode", cmd_discover_onhit_passiveenum),
     NRF_CLI_CMD(auto-inject, NULL, "enter injection mode and execute injection", cmd_discover_onhit_autoinject),
     NRF_CLI_SUBCMD_SET_END
 };
@@ -1409,7 +1443,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject_onsuccess)
 {
     NRF_CLI_CMD(continue,   NULL, "stay in inject mode.", cmd_inject_onsuccess_continue),
     NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_activeenum),
-    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onsuccess_passiveenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter passive enumeration", cmd_inject_onsuccess_passiveenum),
     NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_inject_onsuccess_discover),
     NRF_CLI_SUBCMD_SET_END
 };
@@ -1418,7 +1452,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_inject_onfail)
 {
     NRF_CLI_CMD(continue,   NULL, "stay in inject mode.", cmd_inject_onfail_continue),
     NRF_CLI_CMD(active-enum, NULL, "enter active enumeration", cmd_inject_onfail_activeenum),
-    NRF_CLI_CMD(passive-enum, NULL, "enter active enumeration", cmd_inject_onfail_passiveenum),
+    NRF_CLI_CMD(passive-enum, NULL, "enter passive enumeration", cmd_inject_onfail_passiveenum),
     NRF_CLI_CMD(discover, NULL, "enter discover mode", cmd_inject_onfail_discover),
     NRF_CLI_SUBCMD_SET_END
 };
@@ -1448,10 +1482,19 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global_workmode)
     NRF_CLI_SUBCMD_SET_END
 };
 
+// options global workmode
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global_bootmode)
+{
+    NRF_CLI_CMD(discover,   NULL, "Boot in 'discover' mode.", cmd_option_global_bootmode_discover),
+    NRF_CLI_CMD(usbinject,   NULL, "Boot in 'USB key stroke injection' mode.", cmd_option_global_bootmode_usbinject),
+    NRF_CLI_SUBCMD_SET_END
+};
+
 // options global
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global)
 {
     NRF_CLI_CMD(workmode, &m_sub_options_global_workmode, "LOGITacker working mode", cmd_help),
+    NRF_CLI_CMD(bootmode, &m_sub_options_global_bootmode, "LOGITacker boot mode", cmd_help),
 
     NRF_CLI_SUBCMD_SET_END
 };

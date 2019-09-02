@@ -6,12 +6,14 @@ extern "C" {
 #endif
 
 
+#include <libraries/usbd/app_usbd_types.h>
+#include <libraries/usbd/class/hid/app_usbd_hid.h>
 #include "stdint.h"
 #include "nrf_cli.h"
 #include "nrf_esb_illegalmod.h"
 #include "logitacker_keyboard_map.h"
 
-#define VERSION_STRING "v0.1.4-beta"
+#define VERSION_STRING "v0.1.5-beta"
 
 //#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
 #define ACTIVE_ENUM_INNER_LOOP_MAX 20 //how many CAPS presses / key releases get send
@@ -63,6 +65,8 @@ void logitacker_enter_mode_pair_sniff();
 void logitacker_enter_mode_injection(uint8_t const *rf_address);
 
 void logitacker_injection_start_execution(bool execute);
+
+void main_usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const *p_inst, app_usbd_hid_user_event_t event); //for pass-through in logitacker_usb.c
 
 #ifdef __cplusplus
 }

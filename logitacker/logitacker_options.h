@@ -33,6 +33,11 @@ typedef enum {
     OPTION_LOGITACKER_WORKMODE_LIGHTSPEED,   // compatible to Logitech LIGHTSPEED
 } option_logitacker_workmode_t;
 
+typedef enum {
+    OPTION_LOGITACKER_BOOTMODE_DISCOVER,
+    OPTION_LOGITACKER_BOOTMODE_USB_INJECT,
+} option_logitacker_bootmode_t;
+
 typedef struct {
     uint32_t boot_count;
 } logitacker_options_stats_t;
@@ -61,6 +66,7 @@ typedef struct {
     int max_auto_injects_per_device;
 
     option_logitacker_workmode_t workmode;
+    option_logitacker_bootmode_t bootmode;
 } logitacker_global_config_t;
 
 const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
@@ -83,6 +89,7 @@ const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
         .boot_count = 0,
     },
     .workmode = OPTION_LOGITACKER_WORKMODE_UNIFYING,
+    .bootmode = OPTION_LOGITACKER_BOOTMODE_DISCOVER,
 };
 
 
