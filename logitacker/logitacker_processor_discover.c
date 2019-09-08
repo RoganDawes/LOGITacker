@@ -85,7 +85,7 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
                 // classify device (determin if it is Logitech)
                 logitacker_devices_device_update_classification(p_device, *p_rx_payload);
                 if (p_device->p_dongle != NULL) {
-                    if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING || p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED) {
+                    if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING || p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_G700|| p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED) {
                         NRF_LOG_INFO("discovered device is Logitech")
                         switch (g_logitacker_global_config.discovery_on_new_address) {
                             case OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE:
@@ -168,6 +168,7 @@ void processor_discover_init_func_(logitacker_processor_discover_ctx_t *self) {
         case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
             nrf_esb_update_channel_frequency_table_lightspeed();
             break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
         case OPTION_LOGITACKER_WORKMODE_UNIFYING:
             nrf_esb_update_channel_frequency_table_unifying_reduced();
             break;

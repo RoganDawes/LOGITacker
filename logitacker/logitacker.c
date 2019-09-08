@@ -29,6 +29,7 @@
 #define NRF_LOG_MODULE_NAME LOGITACKER
 
 #include "nrf_log.h"
+#include "logitacker_processor_covert_channel.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -187,6 +188,16 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
 
     m_state_local.mainstate = LOGITACKER_MODE_ACTIVE_ENUMERATION;
     sprintf(g_logitacker_cli_name, "LOGITacker (active enum) $ ");
+}
+
+void logitacker_enter_mode_covert_channel(uint8_t *rf_address) {
+    if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
+
+    p_processor = new_processor_covert_channel(rf_address, m_timer_next_tx_action);
+    p_processor->p_init_func(p_processor);
+
+    m_state_local.mainstate = LOGITACKER_MODE_COVERT_CHANNEL;
+    sprintf(g_logitacker_cli_name, "LOGITacker (covert channel) $ ");
 }
 
 static uint8_t temp_dev_id = 1;

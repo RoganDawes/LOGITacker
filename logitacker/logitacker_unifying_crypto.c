@@ -170,16 +170,20 @@ uint32_t logitacker_unifying_crypto_encrypt_keyboard_frame(nrf_esb_payload_t * r
 
     // add in counter
     uint8_t counter_bytes[4] = { 0 };
-    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
-        counter_bytes[3] = (uint8_t) ((counter & 0xff000000) >> 24);
-        counter_bytes[2] = (uint8_t) ((counter & 0x00ff0000) >> 16);
-        counter_bytes[1] = (uint8_t) ((counter & 0x0000ff00) >> 8);
-        counter_bytes[0] = (uint8_t) (counter & 0x000000ff);
-    } else {
-        counter_bytes[0] = (uint8_t) ((counter & 0xff000000) >> 24);
-        counter_bytes[1] = (uint8_t) ((counter & 0x00ff0000) >> 16);
-        counter_bytes[2] = (uint8_t) ((counter & 0x0000ff00) >> 8);
-        counter_bytes[3] = (uint8_t) (counter & 0x000000ff);
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            counter_bytes[3] = (uint8_t) ((counter & 0xff000000) >> 24);
+            counter_bytes[2] = (uint8_t) ((counter & 0x00ff0000) >> 16);
+            counter_bytes[1] = (uint8_t) ((counter & 0x0000ff00) >> 8);
+            counter_bytes[0] = (uint8_t) (counter & 0x000000ff);
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            counter_bytes[0] = (uint8_t) ((counter & 0xff000000) >> 24);
+            counter_bytes[1] = (uint8_t) ((counter & 0x00ff0000) >> 16);
+            counter_bytes[2] = (uint8_t) ((counter & 0x0000ff00) >> 8);
+            counter_bytes[3] = (uint8_t) (counter & 0x000000ff);
+            break;
     }
 
     // extract counter

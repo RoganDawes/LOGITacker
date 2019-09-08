@@ -54,8 +54,8 @@ static void convert_hid_report_to_rf_payload(logitacker_tx_payload_provider_pres
 
     logitacker_devices_generate_keyboard_frame(self->p_device, p_out_payload, p_hid_report);
 
-    NRF_LOG_INFO("Updated TX payload (%d):", rc++);
-    NRF_LOG_HEXDUMP_INFO(p_out_payload->data, p_out_payload->length);
+    NRF_LOG_DEBUG("Updated TX payload (%d):", rc++);
+    NRF_LOG_HEXDUMP_DEBUG(p_out_payload->data, p_out_payload->length);
 
 }
 

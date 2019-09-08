@@ -132,6 +132,7 @@ void processor_prx_init_func_(logitacker_processor_prx_ctx_t *self) {
         case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
             nrf_esb_update_channel_frequency_table_lightspeed();
             break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
         case OPTION_LOGITACKER_WORKMODE_UNIFYING:
             nrf_esb_update_channel_frequency_table_unifying();
             break;

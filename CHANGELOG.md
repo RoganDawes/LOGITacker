@@ -1,3 +1,8 @@
+# LOGITacker v0.1.6-beta
+
+- experimental G700/G700s receiver support (`options global workmode g700`)
+- up to 4-times faster injection for unifying
+
 # LOGITacker v0.1.5-beta
 
 - experimental USB injection support with `inject target USB`

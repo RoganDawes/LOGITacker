@@ -220,6 +220,9 @@ void processor_pair_sniff_init_func_(logitacker_processor_pair_sniff_ctx_t *self
         case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
             nrf_esb_update_channel_frequency_table_lightspeed_pairing();
             break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+            nrf_esb_update_channel_frequency_table_unifying_pairing();
+            break;
         case OPTION_LOGITACKER_WORKMODE_UNIFYING:
             nrf_esb_update_channel_frequency_table_unifying_pairing();
             break;
@@ -243,6 +246,7 @@ void processor_pair_sniff_deinit_func_(logitacker_processor_pair_sniff_ctx_t *se
         case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
             nrf_esb_update_channel_frequency_table_lightspeed();
             break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
         case OPTION_LOGITACKER_WORKMODE_UNIFYING:
             nrf_esb_update_channel_frequency_table_unifying();
             break;
@@ -327,6 +331,10 @@ void processor_pair_sniff_esb_handler_func_(logitacker_processor_pair_sniff_ctx_
                             if (p_dongle->wpid[0] == 0x80 && p_dongle->wpid[1] == 0x0D) {
                                 p_dongle->is_texas_instruments = true;
                                 p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED;
+                            }
+                            if (p_dongle->wpid[0] == 0x80 && p_dongle->wpid[1] == 0x06) {
+                                p_dongle->is_nordic = true;
+                                p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_G700;
                             }
 
                         }

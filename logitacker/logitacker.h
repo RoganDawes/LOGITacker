@@ -13,7 +13,7 @@ extern "C" {
 #include "nrf_esb_illegalmod.h"
 #include "logitacker_keyboard_map.h"
 
-#define VERSION_STRING "v0.1.5-beta"
+#define VERSION_STRING "v0.1.6-beta"
 
 //#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
 #define ACTIVE_ENUM_INNER_LOOP_MAX 20 //how many CAPS presses / key releases get send
@@ -37,6 +37,7 @@ extern "C" {
 typedef enum {
     LOGITACKER_MODE_DISCOVERY,   // radio in promiscuous mode, logs devices
     LOGITACKER_MODE_ACTIVE_ENUMERATION,   // radio in PTX mode, actively collecting dongle info
+    LOGITACKER_MODE_COVERT_CHANNEL,   // radio in PTX mode, actively collecting dongle info
     LOGITACKER_MODE_PASSIVE_ENUMERATION,   // radio in SNIFF mode, collecting device frames to determin caps
     LOGITACKER_MODE_SNIFF_PAIRING,
     LOGITACKER_MODE_PAIR_DEVICE,
@@ -57,6 +58,8 @@ void logitacker_enter_mode_prx(uint8_t *rf_address);
 void logitacker_enter_mode_passive_enum(uint8_t *rf_address);
 
 void logitacker_enter_mode_active_enum(uint8_t *rf_address);
+
+void logitacker_enter_mode_covert_channel(uint8_t *rf_address);
 
 void logitacker_enter_mode_pair_device(uint8_t const *rf_address);
 

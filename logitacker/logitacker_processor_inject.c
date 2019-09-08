@@ -21,7 +21,7 @@
 
 NRF_LOG_MODULE_REGISTER();
 
-#define INJECT_TX_DELAY_MS_UNIFYING 8 //delay in ms between successful transmits
+#define INJECT_TX_DELAY_MS_UNIFYING 1 //delay in ms between successful transmits (delay of 1ms instead of 8ms should be handled by re-transmits)
 #define INJECT_TX_DELAY_MS_LIGHTSPEED 1
 #define INJECT_RETRANSMIT_BEFORE_FAIL 10
 
@@ -187,10 +187,17 @@ void processor_inject_bsp_handler_func_(logitacker_processor_inject_ctx_t *self,
 
 void processor_inject_init_func_(logitacker_processor_inject_ctx_t *self) {
 //    *self->p_logitacker_mainstate = LOGITACKER_MODE_INJECT;
-    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
-        self->tx_delay_ms = INJECT_TX_DELAY_MS_LIGHTSPEED;
-    } else {
-        self->tx_delay_ms = INJECT_TX_DELAY_MS_UNIFYING;
+
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            self->tx_delay_ms = INJECT_TX_DELAY_MS_LIGHTSPEED;
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+            self->tx_delay_ms = INJECT_TX_DELAY_MS_LIGHTSPEED;
+            break;
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            self->tx_delay_ms = INJECT_TX_DELAY_MS_UNIFYING;
+            break;
     }
 
     helper_addr_to_base_and_prefix(self->base_addr, &self->prefix, self->current_rf_address,
@@ -227,6 +234,9 @@ void processor_inject_init_func_(logitacker_processor_inject_ctx_t *self) {
             nrf_esb_update_channel_frequency_table_lightspeed();
             break;
         case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
             nrf_esb_update_channel_frequency_table_unifying();
             break;
     }
@@ -293,7 +303,7 @@ void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *sel
                     } else {
                         nrf_esb_convert_pipe_to_address(self->tmp_tx_payload.pipe, tmp_addr);
                         helper_addr_to_hex_str(addr_str_buff, 5, tmp_addr);
-                        NRF_LOG_INFO("TX'ed to %s", nrf_log_push(addr_str_buff));
+                        NRF_LOG_DEBUG("TX'ed to %s", nrf_log_push(addr_str_buff));
                     }
                 }
                 break;
@@ -427,7 +437,7 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
             nrf_esb_flush_rx(); //ignore inbound payloads
             // fall through
         case NRF_ESB_EVENT_TX_SUCCESS: {
-            NRF_LOG_INFO("TX_SUCCESS");
+            NRF_LOG_DEBUG("TX_SUCCESS");
             self->retransmit_counter = 0;
 
             if (self->p_payload_provider == NULL) {

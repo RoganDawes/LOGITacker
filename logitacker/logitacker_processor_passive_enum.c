@@ -126,6 +126,7 @@ void processor_passive_enum_init_func_(logitacker_processor_passive_enum_ctx_t *
         case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
             nrf_esb_update_channel_frequency_table_lightspeed();
             break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
         case OPTION_LOGITACKER_WORKMODE_UNIFYING:
             nrf_esb_update_channel_frequency_table_unifying();
             break;

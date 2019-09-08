@@ -269,6 +269,9 @@ static void print_logitacker_device_info(nrf_cli_t const * p_cli, const logitack
 
     nrf_cli_fprintf(p_cli, outcol, "\tclass: ");
     switch (p_dongle->classification) {
+        case DONGLE_CLASSIFICATION_IS_LOGITECH_G700:
+            nrf_cli_fprintf(p_cli, outcol, "Logitech G700/G700s");
+            break;
         case DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED:
             nrf_cli_fprintf(p_cli, outcol, "Logitech LIGHTSPEED");
             break;
@@ -672,6 +675,11 @@ static void cmd_option_global_workmode_unifying(nrf_cli_t const *p_cli, size_t a
 static void cmd_option_global_workmode_lightspeed(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     g_logitacker_global_config.workmode = OPTION_LOGITACKER_WORKMODE_LIGHTSPEED;
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "working mode set to LIGHTSPEED compatible\r\n");
+}
+
+static void cmd_option_global_workmode_g700(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.workmode = OPTION_LOGITACKER_WORKMODE_G700;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "working mode set to G700/G700s compatible\r\n");
 }
 
 static void cmd_option_global_bootmode_discover(nrf_cli_t const *p_cli, size_t argc, char **argv) {
@@ -1252,6 +1260,29 @@ static void cmd_enum_active(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     }
 }
 
+#ifdef CLI_TEST_COMMANDS
+static void cmd_covert_channel(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    if (argc > 1)
+    {
+
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+            return;
+        }
+
+        char tmp_addr_str[16];
+        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Starting covert channel for device %s\r\n", tmp_addr_str);
+        logitacker_enter_mode_covert_channel(addr);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+    }
+}
+
+#endif
 
 #ifdef CLI_TEST_COMMANDS
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_test)
@@ -1360,6 +1391,9 @@ NRF_CLI_CMD_REGISTER(devices, &m_sub_devices, "List discovered devices", cmd_dev
 
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram);
 
+#ifdef CLI_TEST_COMMANDS
+NRF_CLI_CMD_REGISTER(covert_channel, &m_sub_enum_device_list, "start covert channel for given device", cmd_covert_channel);
+#endif
 NRF_CLI_CMD_REGISTER(active_enum, &m_sub_enum_device_list, "start active enumeration of given device", cmd_enum_active);
 NRF_CLI_CMD_REGISTER(passive_enum, &m_sub_enum_device_list, "start passive enumeration of given device", cmd_enum_passive);
 
@@ -1479,6 +1513,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global_workmode)
 {
     NRF_CLI_CMD(unifying,   NULL, "Unifying compatible workmode.", cmd_option_global_workmode_unifying),
     NRF_CLI_CMD(lightspeed,   NULL, "G-Series LIGHTSPEED workmode.", cmd_option_global_workmode_lightspeed),
+    NRF_CLI_CMD(g700,   NULL, "G700/G700s receiver workmode.", cmd_option_global_workmode_g700),
     NRF_CLI_SUBCMD_SET_END
 };
 

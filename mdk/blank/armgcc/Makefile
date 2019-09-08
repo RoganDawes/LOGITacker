@@ -100,6 +100,7 @@ SRC_FILES += \
   $(PROJ_DIR)/logitacker/logitacker_processor_discover.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_pair_sniff.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_active_enum.c \
+  $(PROJ_DIR)/logitacker/logitacker_processor_covert_channel.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_passive_enum.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_prx.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_pair_device.c \

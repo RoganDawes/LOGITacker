@@ -22,7 +22,7 @@ typedef enum {
 pairing_frame_class_t classify_frame(nrf_esb_payload_t const * const rx_payload) {
     if (rx_payload->length < 5) return UNKNOWN;
     if (rx_payload->length == 22) {
-        if (rx_payload->data[1] == 0x5f) { //req
+        if (rx_payload->data[1] == 0x5f || rx_payload->data[1] == 0xDF) { //req
             switch (rx_payload->data[2]) {
                 case 0x01:
                     return REQ1;
