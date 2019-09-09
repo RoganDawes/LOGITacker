@@ -19,7 +19,7 @@
 #include "logitacker_processor_inject.h"
 #include "logitacker_script_engine.h"
 
-#define CLI_TEST_COMMANDS
+//#define CLI_TEST_COMMANDS
 
 static void cmd_devices_remove_all(nrf_cli_t const * p_cli, size_t argc, char **argv);
 static void cmd_script_press(nrf_cli_t const *p_cli, size_t argc, char **argv);

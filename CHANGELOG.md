@@ -1,7 +1,11 @@
 # LOGITacker v0.1.6-beta
 
-- experimental G700/G700s receiver support (`options global workmode g700`)
+- experimental G700/G700s receiver support (`options global workmode g700`), Note: The mode is basically Unifying 
+compatible but required for the `pair device run` command (different pairing parameters). Additionally, keystroke 
+injection for G700 receivers is ALWAYS UNENCRYPTED.
 - up to 4-times faster injection for unifying
+- reduced output during injection
+- fix: `pair sniff run` uses channel map according to working mode (Unifying / Lightspeed / G700)
 
 # LOGITacker v0.1.5-beta
 

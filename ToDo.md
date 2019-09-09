@@ -33,7 +33,7 @@ and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - [done] command for flash erase
 - [done] remove test commands
 - emulation of dongle in pairing mode
-- utilizing scripts for "classical" USB injection instead of RF (bonus: trigger from RF, f.e. presentation clicker)
+- [done, without triggers] utilizing scripts for "classical" USB injection instead of RF (bonus: trigger from RF, f.e. presentation clicker)
 - check options to ship stored FDS data with hex image for firmware (pre-built scripts, down&exec demo as default)
 - remove either key or raw key data from device struct, to save space (one could be derived from the other, as "key generation" is no one-way function)
 - [done] rework `options show`
