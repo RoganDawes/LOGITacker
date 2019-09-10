@@ -21,7 +21,7 @@
 
 NRF_LOG_MODULE_REGISTER();
 
-#define INJECT_TX_DELAY_MS_UNIFYING 1 //delay in ms between successful transmits (delay of 1ms instead of 8ms should be handled by re-transmits)
+#define INJECT_TX_DELAY_MS_UNIFYING 8 //delay in ms between successful transmits (delay of 1ms instead of 8ms should be handled by re-transmits)
 #define INJECT_TX_DELAY_MS_LIGHTSPEED 1
 #define INJECT_RETRANSMIT_BEFORE_FAIL 10
 
