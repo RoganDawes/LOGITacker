@@ -218,7 +218,7 @@ static void usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const *p_inst,
                 m_append_key_release = false;
             }
             */
-            NRF_LOG_INFO("hid kbd evt: APP_USBD_HID_USER_EVT_IN_REPORT_DONE");
+            NRF_LOG_DEBUG("hid kbd evt: APP_USBD_HID_USER_EVT_IN_REPORT_DONE");
             break;
         }
         case APP_USBD_HID_USER_EVT_SET_BOOT_PROTO:

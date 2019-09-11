@@ -21,7 +21,15 @@
 
 NRF_LOG_MODULE_REGISTER();
 
-#define INJECT_TX_DELAY_MS_UNIFYING 8 //delay in ms between successful transmits (delay of 1ms instead of 8ms should be handled by re-transmits)
+// Note: The receiver accepts ESB keyboard frames from a single device, with a delay shorter than 8ms
+// According USB HID input reports seem to be produced, even if the USB host hasn't consumed previous
+// input reports. For Windows 7, if tx_delays are smaller than 8ms USB HID input reports get lost (although
+// all RF ESB reports are properly acknowledged). For Kali x64 (Debian), even with a tx_delay as short as 1ms,
+// all USB HID reports arrive at the target. THIS ONLY HOLDS TRUE FOR UNIFYING RECEIVERS, for G-Series receivers
+// or Unifying receivers with a G-Series firmware, even with 1ms tx_delay, no USB HID input reports are lost.
+
+#define INJECT_TX_DELAY_MS_UNIFYING_FAST 1
+#define INJECT_TX_DELAY_MS_UNIFYING 8
 #define INJECT_TX_DELAY_MS_LIGHTSPEED 1
 #define INJECT_RETRANSMIT_BEFORE_FAIL 10
 
@@ -135,8 +143,10 @@ static void processor_inject_hid_keyboard_event_handler_(logitacker_processor_in
             if ((*self->p_payload_provider->p_get_next)(self->p_payload_provider, &self->tmp_tx_payload)) {
                 //next payload retrieved
                 NRF_LOG_DEBUG("New payload retrieved from TX_payload_provider");
+
                 // schedule payload transmission
-                app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL);
+                //app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL); //no delay for USB
+                processor_inject_timer_handler_func_(self, self->timer_next_action);
 
             } else {
                 // no more payloads, we succeeded
@@ -295,7 +305,7 @@ void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *sel
                     if (logitacker_usb_write_keyboard_input_report(self->tmp_tx_payload.data) != NRF_SUCCESS) {
                         NRF_LOG_WARNING("Failed to write keyboard report, busy with old report");
                     } else {
-                        NRF_LOG_INFO("keyboard report sent to USB");
+                        NRF_LOG_DEBUG("keyboard report sent to USB");
                     }
                 } else {
                     if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
@@ -417,17 +427,10 @@ void processor_inject_esb_handler_func_(logitacker_processor_inject_ctx_t *self,
         transfer_state(self, INJECT_STATE_FAILED);
     }
 
-    /*
-    if (self->state == INJECT_STATE_FAILED) {
-        NRF_LOG_WARNING("Injection failed, switching mode to discovery");
-        transfer_state(self,INJECT_STATE_IDLE);
-        //logitacker_enter_mode_discovery();
-        return;
-    }
-    */
-
     switch (p_esb_event->evt_id) {
         case NRF_ESB_EVENT_TX_FAILED: {
+            NRF_LOG_WARNING("TX FAILED")
+
             //re-transmit last frame (payload still enqued)
             nrf_esb_start_tx();
             self->retransmit_counter++;

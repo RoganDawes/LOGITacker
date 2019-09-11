@@ -190,14 +190,15 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
     sprintf(g_logitacker_cli_name, "LOGITacker (active enum) $ ");
 }
 
-void logitacker_enter_mode_covert_channel(uint8_t *rf_address) {
+void logitacker_enter_mode_covert_channel(uint8_t *rf_address, nrf_cli_t const * p_cli) {
     if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
 
-    p_processor = new_processor_covert_channel(rf_address, m_timer_next_tx_action);
+    p_processor = new_processor_covert_channel(rf_address, m_timer_next_tx_action, p_cli);
     p_processor->p_init_func(p_processor);
 
     m_state_local.mainstate = LOGITACKER_MODE_COVERT_CHANNEL;
-    sprintf(g_logitacker_cli_name, "LOGITacker (covert channel) $ ");
+    //sprintf(g_logitacker_cli_name, "LOGITacker (covert channel) $ ");
+    sprintf(g_logitacker_cli_name, " "); // empty prompt, use the one from bound shell
 }
 
 static uint8_t temp_dev_id = 1;
@@ -269,6 +270,15 @@ void logitacker_injection_start_execution(bool execute) {
     } else {
         NRF_LOG_INFO("Injection processing paused");
     }
+}
+
+uint32_t logitacker_covert_channel_push_data(covert_channel_payload_data_t const * p_tx_data) {
+    if (m_state_local.mainstate != LOGITACKER_MODE_COVERT_CHANNEL) {
+        NRF_LOG_ERROR("Can't push data, not in covert channel mode");
+        return NRF_ERROR_FORBIDDEN;
+    }
+
+    return logitacker_processor_covert_channel_push_tx_data(p_processor, p_tx_data);
 }
 
 void clocks_start(void) {

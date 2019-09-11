@@ -3,8 +3,9 @@
 - experimental G700/G700s receiver support (`options global workmode g700`), Note: The mode is basically Unifying 
 compatible but required for the `pair device run` command (different pairing parameters). Additionally, keystroke 
 injection for G700 receivers is ALWAYS UNENCRYPTED.
-- up to 4-times faster injection for unifying
-- reduced output during injection
+- (feature disabled, not reliable on windows) up to 4-times faster injection for unifying
+- reduced debug output during injection
+- fix: no delay between HID reports in USB injection mode (about 9-times faster typing)
 - fix: `pair sniff run` uses channel map according to working mode (Unifying / Lightspeed / G700)
 
 # LOGITacker v0.1.5-beta

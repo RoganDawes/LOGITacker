@@ -6,12 +6,13 @@ extern "C" {
 #endif
 
 
-#include <libraries/usbd/app_usbd_types.h>
-#include <libraries/usbd/class/hid/app_usbd_hid.h>
+#include "app_usbd_types.h"
+#include "app_usbd_hid.h"
 #include "stdint.h"
 #include "nrf_cli.h"
 #include "nrf_esb_illegalmod.h"
 #include "logitacker_keyboard_map.h"
+#include "logitacker_processor_covert_channel.h"
 
 #define VERSION_STRING "v0.1.6-beta"
 
@@ -59,7 +60,7 @@ void logitacker_enter_mode_passive_enum(uint8_t *rf_address);
 
 void logitacker_enter_mode_active_enum(uint8_t *rf_address);
 
-void logitacker_enter_mode_covert_channel(uint8_t *rf_address);
+void logitacker_enter_mode_covert_channel(uint8_t *rf_address, nrf_cli_t const * p_cli);
 
 void logitacker_enter_mode_pair_device(uint8_t const *rf_address);
 
@@ -70,6 +71,8 @@ void logitacker_enter_mode_injection(uint8_t const *rf_address);
 void logitacker_injection_start_execution(bool execute);
 
 void main_usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const *p_inst, app_usbd_hid_user_event_t event); //for pass-through in logitacker_usb.c
+
+uint32_t logitacker_covert_channel_push_data(covert_channel_payload_data_t const * p_tx_data);
 
 #ifdef __cplusplus
 }

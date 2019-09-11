@@ -4,6 +4,14 @@
 #include "logitacker_processor.h"
 #include "app_timer.h"
 
-logitacker_processor_t * new_processor_covert_channel(uint8_t *rf_address, app_timer_id_t timer_next_action);
+typedef struct {
+    uint8_t len;
+    uint8_t data[16];
+
+} covert_channel_payload_data_t;
+
+logitacker_processor_t * new_processor_covert_channel(uint8_t *rf_address, app_timer_id_t timer_next_action, nrf_cli_t const * p_cli);
+
+uint32_t logitacker_processor_covert_channel_push_tx_data(logitacker_processor_t *p_processor_covert_channel, covert_channel_payload_data_t const * p_tx_data);
 
 #endif //LOGITACKER_PROCESSOR_COVERT_CHANNEL_H
