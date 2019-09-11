@@ -177,6 +177,8 @@ void processor_covert_channel_update_tx_frame(logitacker_processor_covert_channe
     self->tmp_tx_frame.data[0x03] = self->marker; // mark as covert channel frame
     if (self->tmp_covert_channel_tx_data.len >= 16) {
         self->tmp_tx_frame.data[0x03] = self->marker | 0x01; //update covert channel marker, to represent a control frame
+        // set control type
+        self->tmp_tx_frame.data[0x04] = COVERT_CHANNEL_CONTROL_TYPE_MAXIMUM_PAYLOAD_LENGTH_FRAME << 4;
         //copy in data
         memcpy(&self->tmp_tx_frame.data[0x05], self->tmp_covert_channel_tx_data.data, 16);
     } else {
@@ -438,9 +440,12 @@ void processor_covert_channel_timer_handler_func(logitacker_processor_t *p_proce
 }
 
 void processor_covert_channel_timer_handler_func_(logitacker_processor_covert_channel_ctx_t *self, void *p_timer_ctx) {
+    NRF_LOG_DEBUG("TX FRAME");
+    NRF_LOG_HEXDUMP_DEBUG(self->tmp_tx_frame.data, self->tmp_tx_frame.length);
+
     // transmit current TX payload
     if (nrf_esb_write_payload(&self->tmp_tx_frame) != NRF_SUCCESS) {
-        NRF_LOG_INFO("Error writing payload");
+        NRF_LOG_WARNING("Error writing payload");
     }
 
 }
@@ -470,6 +475,7 @@ void processor_covert_channel_esb_handler_func_(logitacker_processor_covert_chan
                 NRF_LOG_DEBUG("ACK_PAY received");
 
                 while (nrf_esb_read_rx_payload(&self->tmp_rx_frame) == NRF_SUCCESS) {
+                    NRF_LOG_DEBUG("RX FRAME")
                     NRF_LOG_HEXDUMP_DEBUG(self->tmp_rx_frame.data, self->tmp_rx_frame.length);
                     uint32_t err = processor_covert_channel_process_rx_frame(self);
                     if (err != NRF_SUCCESS) {

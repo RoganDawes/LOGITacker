@@ -1262,6 +1262,8 @@ static void cmd_enum_active(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 #ifdef CLI_TEST_COMMANDS
+
+#define MAX_CC_PAY_SIZE 16
 bool pre_cmd_callback_covert_channel(nrf_cli_t const * p_cli, char const * const p_cmd_buf) {
     if (strcmp(p_cmd_buf, "!exit") == 0) {
         nrf_cli_register_pre_cmd_callback(p_cli, NULL);
@@ -1275,7 +1277,7 @@ bool pre_cmd_callback_covert_channel(nrf_cli_t const * p_cli, char const * const
 
     // ToDo: fix client
     //payload size reduzed to 15, because client agent doesn't ack full size payloads
-#define MAX_CC_PAY_SIZE 15
+
 
     int pos = 0;
     while (strlen(&p_cmd_buf[pos]) >= MAX_CC_PAY_SIZE) {
