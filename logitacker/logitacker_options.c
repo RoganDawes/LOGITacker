@@ -9,7 +9,7 @@
 NRF_LOG_MODULE_REGISTER();
 
 logitacker_global_config_t g_logitacker_global_config = {0};
-
+logitacker_global_state_t g_logitacker_global_runtime_state = {0};
 
 uint32_t logitacker_options_update_flash(void) {
     fds_record_t record;
@@ -225,6 +225,16 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
                 break;
         }
 
+        char * usbinjecttrigger_str = "unknown";
+        switch (g_logitacker_global_config.usbinject_trigger) {
+            case OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_LEDUPDATE:
+                usbinjecttrigger_str = "Start USB injection once keyboard LED state received (indicates driver ready, not on all OS)";
+                break;
+            case OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_POWERUP:
+                usbinjecttrigger_str = "Start USB injection once powered up (less accurate, works on all OS)";
+                break;
+        }
+
 
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "stats\r\n");
@@ -234,6 +244,7 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "global options\r\n");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot mode                               : %s\r\n", bootmode_str);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tworking mode                            : %s\r\n", workmode_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tUSB injection mode (trigger)            : %s\r\n", usbinjecttrigger_str);
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "discover mode options\r\n");

@@ -190,7 +190,7 @@ void logitacker_enter_mode_active_enum(uint8_t *rf_address) {
     sprintf(g_logitacker_cli_name, "LOGITacker (active enum) $ ");
 }
 
-void logitacker_enter_mode_covert_channel(uint8_t *rf_address, nrf_cli_t const * p_cli) {
+void logitacker_enter_mode_covert_channel(uint8_t *rf_address, nrf_cli_t const *p_cli) {
     if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
 
     p_processor = new_processor_covert_channel(rf_address, m_timer_next_tx_action, p_cli);
@@ -272,7 +272,7 @@ void logitacker_injection_start_execution(bool execute) {
     }
 }
 
-uint32_t logitacker_covert_channel_push_data(covert_channel_payload_data_t const * p_tx_data) {
+uint32_t logitacker_covert_channel_push_data(covert_channel_payload_data_t const *p_tx_data) {
     if (m_state_local.mainstate != LOGITACKER_MODE_COVERT_CHANNEL) {
         NRF_LOG_ERROR("Can't push data, not in covert channel mode");
         return NRF_ERROR_FORBIDDEN;
@@ -313,20 +313,23 @@ uint32_t logitacker_init() {
     switch (g_logitacker_global_config.bootmode) {
         case OPTION_LOGITACKER_BOOTMODE_DISCOVER: {
             logitacker_enter_mode_discovery();
-        }
             break;
+        }
         case OPTION_LOGITACKER_BOOTMODE_USB_INJECT: {
             //enter inject mode for address 00:00:00:00:00 == USB
             logitacker_enter_mode_injection(rf_addr_usb);
-            logitacker_injection_start_execution(true);
-            //execute injection
-        }
+            // execute script if it should fire on boot
+            if (g_logitacker_global_config.usbinject_trigger == OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_POWERUP) {
+                //execute injection
+                logitacker_injection_start_execution(true);
+            }
+
             break;
+        }
         default: {
             logitacker_enter_mode_discovery(); //default for now
-        }
             break;
-
+        }
     }
 
 

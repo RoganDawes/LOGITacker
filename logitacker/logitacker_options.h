@@ -39,6 +39,11 @@ typedef enum {
     OPTION_LOGITACKER_BOOTMODE_USB_INJECT,
 } option_logitacker_bootmode_t;
 
+typedef enum {
+    OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_POWERUP,
+    OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_LEDUPDATE,
+} option_logitacker_usbinject_trigger_t;
+
 typedef struct {
     uint32_t boot_count;
 } logitacker_options_stats_t;
@@ -68,7 +73,13 @@ typedef struct {
 
     option_logitacker_workmode_t workmode;
     option_logitacker_bootmode_t bootmode;
+    option_logitacker_usbinject_trigger_t usbinject_trigger;
 } logitacker_global_config_t;
+
+typedef struct {
+    bool usb_inject_script_triggered;
+    uint8_t usb_led_out_report_count;
+} logitacker_global_state_t;
 
 const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .discovery_on_new_address = OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE,
@@ -91,15 +102,16 @@ const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     },
     .workmode = OPTION_LOGITACKER_WORKMODE_UNIFYING,
     .bootmode = OPTION_LOGITACKER_BOOTMODE_DISCOVER,
+    .usbinject_trigger = OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_POWERUP,
 };
 
 
 extern logitacker_global_config_t g_logitacker_global_config;
+extern logitacker_global_state_t g_logitacker_global_runtime_state;
 
 uint32_t logitacker_options_store_to_flash(void);
 uint32_t logitacker_options_restore_from_flash(void);
 void logitacker_options_print(nrf_cli_t const * p_cli);
-
 
 
 #endif //LOGITACKER_OPTIONS_H

@@ -5,6 +5,9 @@ compatible but required for the `pair device run` command (different pairing par
 injection for G700 receivers is ALWAYS UNENCRYPTED.
 - (feature disabled, not reliable on windows) up to 4-times faster injection for unifying
 - reduced debug output during injection
+- USB injection works immediately on operating systems which send an USB keyboard LED report to newly attached
+devices (Windows/Linux). In this mode, no initial delay is needed for USB injection scripts. The behavior could be
+enabled with `options global usbtrigger ledupdate`
 - fix: no delay between HID reports in USB injection mode (about 9-times faster typing)
 - fix: `pair sniff run` uses channel map according to working mode (Unifying / Lightspeed / G700)
 

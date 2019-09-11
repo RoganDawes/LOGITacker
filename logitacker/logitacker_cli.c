@@ -423,29 +423,10 @@ static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
     fds_gc();
 }
 
-static bool pre_process_commands = false;
-bool pre_cmd_callback_test(nrf_cli_t const * p_cli, char const * const p_cmd_buf) {
-    NRF_LOG_INFO("parse command: %s", NRF_LOG_PUSH(p_cli->p_ctx->cmd_buff));
-    if (strcmp(p_cmd_buf, "exit") == 0) {
-        NRF_LOG_INFO("Entered exit")
-        pre_process_commands = false;
-        nrf_cli_register_pre_cmd_callback(p_cli, NULL);
-    }
-    return true;
-}
 
 static void cmd_test_b(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    pre_process_commands = !pre_process_commands;
-
-    if (pre_process_commands) {
-        // enable command pre-processing
-        nrf_cli_register_pre_cmd_callback(p_cli, &pre_cmd_callback_test);
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "command pre processing enabled\n");
-    } else {
-        // disable command pre-processing
-        nrf_cli_register_pre_cmd_callback(p_cli, NULL);
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "command pre processing disabled\n");
-    }
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "usb report received  : %d\r\n", g_logitacker_global_runtime_state.usb_led_out_report_count);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "usb script triggered: %s\r\n", g_logitacker_global_runtime_state.usb_inject_script_triggered ? "true" : "false");
 }
 
 static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -691,6 +672,16 @@ static void cmd_option_global_bootmode_discover(nrf_cli_t const *p_cli, size_t a
 static void cmd_option_global_bootmode_usbinject(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     g_logitacker_global_config.bootmode = OPTION_LOGITACKER_BOOTMODE_USB_INJECT;
     nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "boot mode set to 'usb inject'\r\n");
+}
+
+static void cmd_option_global_usbinjecttrigger_onpowerup(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.usbinject_trigger = OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_POWERUP;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "USB injection mode set to 'on power up'\r\n");
+}
+
+static void cmd_option_global_usbinjecttrigger_onledupdate(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    g_logitacker_global_config.usbinject_trigger = OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_LEDUPDATE;
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "USB injection mode set to 'on LED state update'\r\n");
 }
 
 static void cmd_options_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **argv) {
@@ -1577,6 +1568,14 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global_workmode)
     NRF_CLI_SUBCMD_SET_END
 };
 
+// options global usbinjectmode
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global_usbinjectmode)
+{
+    NRF_CLI_CMD(powerup,   NULL, "Start USB injection when device is powered on (not accurate, but on every OS).", cmd_option_global_usbinjecttrigger_onpowerup),
+    NRF_CLI_CMD(ledupdate,   NULL, "Start USB injection when device receives a keyboard LED report (accurate, not on every OS) ", cmd_option_global_usbinjecttrigger_onledupdate),
+    NRF_CLI_SUBCMD_SET_END
+};
+
 // options global workmode
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global_bootmode)
 {
@@ -1590,6 +1589,7 @@ NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_options_global)
 {
     NRF_CLI_CMD(workmode, &m_sub_options_global_workmode, "LOGITacker working mode", cmd_help),
     NRF_CLI_CMD(bootmode, &m_sub_options_global_bootmode, "LOGITacker boot mode", cmd_help),
+    NRF_CLI_CMD(usbtrigger, &m_sub_options_global_usbinjectmode, "When to trigger USB injection", cmd_help),
 
     NRF_CLI_SUBCMD_SET_END
 };
