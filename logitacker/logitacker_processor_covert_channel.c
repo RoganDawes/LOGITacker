@@ -379,10 +379,10 @@ void processor_covert_channel_init_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_covert_channel_init_func_(logitacker_processor_covert_channel_ctx_t *self) {
-    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
-        self->tx_delay_ms = COVERT_CHANNEL_TX_DELAY_MS_G900;
-    } else {
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_UNIFYING) {
         self->tx_delay_ms = COVERT_CHANNEL_TX_DELAY_MS_UNIFYING;
+    } else {
+        self->tx_delay_ms = COVERT_CHANNEL_TX_DELAY_MS_G900_G700;
     }
 
 

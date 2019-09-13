@@ -18,6 +18,7 @@
 #include "nrf_log.h"
 #include "logitacker_tx_payload_provider_string_to_altkeys.h"
 #include "logitacker_usb.h"
+#include "logitacker_bsp.h"
 
 NRF_LOG_MODULE_REGISTER();
 
@@ -139,19 +140,29 @@ static void processor_inject_hid_keyboard_event_handler_(logitacker_processor_in
                 return;
             }
 
-            // fetch next payload
-            if ((*self->p_payload_provider->p_get_next)(self->p_payload_provider, &self->tmp_tx_payload)) {
-                //next payload retrieved
-                NRF_LOG_DEBUG("New payload retrieved from TX_payload_provider");
+            if (g_logitacker_global_config.bootmode == OPTION_LOGITACKER_BOOTMODE_USB_INJECT &&
+                g_logitacker_global_config.usbinject_trigger == OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_LEDUPDATE &&
+                !g_logitacker_global_runtime_state.usb_inject_script_triggered) {
 
-                // schedule payload transmission
-                //app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL); //no delay for USB
-                processor_inject_timer_handler_func_(self, self->timer_next_action);
-
+                app_timer_start(self->timer_next_action, APP_TIMER_TICKS(LOGITACKER_PROCESSOR_INJECT_USB_LED_TRIGGER_INJECTION_PRE_DELAY_MS), NULL);
+                g_logitacker_global_runtime_state.usb_inject_script_triggered = true;
+                bsp_board_led_on(LED_G);
             } else {
-                // no more payloads, we succeeded
-                transfer_state(self, INJECT_STATE_TASK_SUCCEEDED);
+                // fetch next payload
+                if ((*self->p_payload_provider->p_get_next)(self->p_payload_provider, &self->tmp_tx_payload)) {
+                    //next payload retrieved
+                    NRF_LOG_DEBUG("New payload retrieved from TX_payload_provider");
+
+                    // schedule payload transmission
+                    //app_timer_start(self->timer_next_action, APP_TIMER_TICKS(self->tx_delay_ms), NULL); //no delay for USB
+                    processor_inject_timer_handler_func_(self, self->timer_next_action);
+
+                } else {
+                    // no more payloads, we succeeded
+                    transfer_state(self, INJECT_STATE_TASK_SUCCEEDED);
+                }
             }
+
 
             break;
         }

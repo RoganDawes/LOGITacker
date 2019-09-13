@@ -113,11 +113,8 @@ static void usbd_device_event_handler(app_usbd_event_type_t event) {
 
     switch (event) {
         case APP_USBD_EVT_DRV_SOF:
-            g_logitacker_global_runtime_state.usb_inject_script_triggered = false; // allow script to trigger again after SOF, as Kali/Debian issues one SOF immediately
-            //bsp_board_led_off(LED_G);
             break;
         case APP_USBD_EVT_DRV_RESET:
-            //bsp_board_led_off(LED_G);
             break;
         case APP_USBD_EVT_DRV_SUSPEND:
             app_usbd_suspend_req(); // Allow the library to put the peripheral into sleep mode
@@ -205,6 +202,7 @@ static void usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const *p_inst,
             g_logitacker_global_runtime_state.usb_led_out_report_count &= 0x7f; //avoid overrun of counter
 
             // if bootmode is USB injection && inject trigger is LED_update && injection wasn't executed --> inject now
+/*
             if (g_logitacker_global_config.bootmode == OPTION_LOGITACKER_BOOTMODE_USB_INJECT &&
                 g_logitacker_global_config.usbinject_trigger == OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_LEDUPDATE &&
                 !g_logitacker_global_runtime_state.usb_inject_script_triggered &&
@@ -215,6 +213,15 @@ static void usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const *p_inst,
                 logitacker_enter_mode_injection((uint8_t[5]) {0, 0, 0, 0, 0});
                 logitacker_injection_start_execution(true);
                 g_logitacker_global_runtime_state.usb_inject_script_triggered = true;
+                bsp_board_led_on(LED_G);
+            }
+*/
+            if (g_logitacker_global_config.bootmode == OPTION_LOGITACKER_BOOTMODE_USB_INJECT &&
+                g_logitacker_global_config.usbinject_trigger == OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_LEDUPDATE) {
+
+                //logitacker_script_engine_append_task_type_string("event");
+                logitacker_enter_mode_injection((uint8_t[5]) {0, 0, 0, 0, 0});
+                logitacker_injection_start_execution(true);
             }
 
             /*
