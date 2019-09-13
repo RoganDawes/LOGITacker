@@ -79,7 +79,17 @@ typedef struct {
 typedef struct {
     bool usb_inject_script_triggered;
     uint8_t usb_led_out_report_count;
+//    uint8_t covert_channel_tx_delay;
+//    uint8_t covert_channel_data_marker;
 } logitacker_global_state_t;
+
+const static logitacker_global_state_t LOGITACKER_STATE_DEFAULTS = {
+        .usb_led_out_report_count = false,
+        .usb_inject_script_triggered = false,
+//        .covert_channel_tx_delay = COVERT_CHANNEL_TX_DELAY_MS_UNIFYING,
+//        .covert_channel_data_marker = COVERT_CHANNEL_DATA_MARKER,
+};
+
 
 const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .discovery_on_new_address = OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE,
@@ -112,6 +122,6 @@ extern logitacker_global_state_t g_logitacker_global_runtime_state;
 uint32_t logitacker_options_store_to_flash(void);
 uint32_t logitacker_options_restore_from_flash(void);
 void logitacker_options_print(nrf_cli_t const * p_cli);
-
+void logitacker_options_init_state();
 
 #endif //LOGITACKER_OPTIONS_H

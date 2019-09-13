@@ -291,6 +291,7 @@ void clocks_start(void) {
 uint8_t rf_addr_usb[5] = {0};
 
 uint32_t logitacker_init() {
+    logitacker_options_init_state();
     sprintf(g_logitacker_cli_name, "LOGITacker $ ");
     logitacker_flash_init();
     logitacker_options_restore_from_flash(); // try to restore options from flash (updates stats like boot count)

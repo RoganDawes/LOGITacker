@@ -11,6 +11,10 @@ NRF_LOG_MODULE_REGISTER();
 logitacker_global_config_t g_logitacker_global_config = {0};
 logitacker_global_state_t g_logitacker_global_runtime_state = {0};
 
+void logitacker_options_init_state() {
+    g_logitacker_global_runtime_state = LOGITACKER_STATE_DEFAULTS;
+}
+
 uint32_t logitacker_options_update_flash(void) {
     fds_record_t record;
     fds_record_desc_t record_desc;

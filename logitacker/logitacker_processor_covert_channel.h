@@ -4,6 +4,11 @@
 #include "logitacker_processor.h"
 #include "app_timer.h"
 
+#define COVERT_CHANNEL_TX_DELAY_MS_UNIFYING 20
+#define COVERT_CHANNEL_TX_DELAY_MS_G900 2
+#define COVERT_CHANNEL_DATA_MARKER 0xba
+
+
 typedef struct {
     uint8_t len;
     uint8_t data[16];
