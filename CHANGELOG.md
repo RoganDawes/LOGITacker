@@ -1,19 +1,26 @@
-# LOGITacker v0.1.6-beta
+# LOGITacker v0.2.0-beta
 
-- covert channel demo implementation (Windows)
+- covert channel demo implementation (Windows only; tested on Windows 7 - 32bit, Windows 10 - 64bit)
     - `covert_channel deploy <device address>` for client agent deployment
     - `covert_channel run <device address>` to access the remote shell of a target with deployed cover channel agent
-- added covert channel support for G900 receiver (deployment is 8 times faster)     
+    - added covert channel support for G900 receiver (deployment is 8 times faster than Unifying, encrypted)     
+    - added covert channel support for G700 receiver (deployment is 8 times faster than Unifying, unencrypted)     
 - experimental G700/G700s receiver support (`options global workmode g700`), Note: The mode is basically Unifying 
 compatible but required for the `pair device run` command (different pairing parameters). Additionally, keystroke 
-injection for G700 receivers is ALWAYS UNENCRYPTED.
-- (feature disabled, not reliable on windows) up to 4-times faster injection for unifying
+injection for G700 receivers is ALWAYS UNENCRYPTED. For covert channel usage with G700, this mode has to be enabled, too.
+- removed unpublished speed up for 4-times faster injection on Unifying (doesn't work reliable on all targets)
 - reduced debug output during injection
 - USB injection works immediately on operating systems which send an USB keyboard LED report to newly attached
-devices (Windows/Linux). In this mode, no initial delay is needed for USB injection scripts. The behavior could be
+devices (Windows/Linux). In this mode, no initial delay is required for USB injection scripts. The behavior could be
 enabled with `options global usbtrigger ledupdate`
 - fix: no delay between HID reports in USB injection mode (about 9-times faster typing)
 - fix: `pair sniff run` uses channel map according to working mode (Unifying / Lightspeed / G700)
+- known bug: If USB injection is used with "LED update trigger", attaching an additional device to the USB host could
+trigger the injection payload, again, if LOGITacker is still connected (USB SOF event).
+
+# LOGITacker v0.1.6-beta
+
+- not released
 
 # LOGITacker v0.1.5-beta
 
