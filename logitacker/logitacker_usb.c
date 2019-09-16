@@ -376,16 +376,42 @@ uint32_t logitacker_usb_read_hidraw_output_report() {
     switch (type) {
         case LOGITACKER_USB_HIDRAW_REPORT_TYPE_COMMAND: {
             switch (command) {
+                case LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_CLEAR: {
+                    logitacker_script_engine_flush_tasks();
+                    break;
+                }
                 case LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_STRING: {
                     size_t slen = p_report[3];
                     char buf[61] = {0};
                     if (slen > 60) slen = 60;
                     memcpy(buf, &p_report[4], slen);
                     logitacker_script_engine_append_task_type_string(buf);
-                }
                     break;
+                }
+                case LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_PRESS: {
+                    size_t slen = p_report[3];
+                    char buf[61] = {0};
+                    if (slen > 60) slen = 60;
+                    memcpy(buf, &p_report[4], slen);
+                    logitacker_script_engine_append_task_press_combo(buf);
+                    break;
+                }
+                case LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_ALTSTRING: {
+                    size_t slen = p_report[3];
+                    char buf[61] = {0};
+                    if (slen > 60) slen = 60;
+                    memcpy(buf, &p_report[4], slen);
+                    logitacker_script_engine_append_task_type_altstring(buf);
+                    break;
+                }
+                case LOGITACKER_USB_HIDRAW_COMMAND_SCRIPT_DELAY: {
+                    uint32_t delay;
+                    memcpy(&delay, &p_report[3], 4);
+                    logitacker_script_engine_append_task_delay(delay);
+                    break;
+                }
                 default:
-                    NRF_LOG_WARNING("Unhandled raw report command %02x\n", type)
+                    NRF_LOG_WARNING("Unhandled raw report command %02x\n", command)
             }
         }
             break;

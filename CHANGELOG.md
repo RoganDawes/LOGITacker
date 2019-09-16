@@ -1,3 +1,8 @@
+# LOGITacker v0.2.1-beta
+
+- adjusted FDS virtual page size to account for library error, when records of same key and file ID are 
+spread across multiple virtual pages (needs more testing) --> new page size is 4096*4 (should allow 16KB scripts)
+
 # LOGITacker v0.2.0-beta
 
 - covert channel demo implementation (Windows only; tested on Windows 7 - 32bit, Windows 10 - 64bit)
