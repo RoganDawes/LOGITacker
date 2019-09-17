@@ -2,6 +2,13 @@
 
 - adjusted FDS virtual page size to account for library error, when records of same key and file ID are 
 spread across multiple virtual pages (needs more testing) --> new page size is 4096*4 (should allow 16KB scripts)
+- started working on command interface via raw HID (work in progress)
+    - COMMAND_SCRIPT_STRING = 0x10
+    - COMMAND_SCRIPT_ALTSTRING = 0x11
+    - COMMAND_SCRIPT_PRESS = 0x12
+    - COMMAND_SCRIPT_DELAY = 0x13
+    - COMMAND_SCRIPT_CLEAR = 0x14
+    - example (not generic ... directly writing to `/dev/rawhid0`) in `companion2.py`
 
 # LOGITacker v0.2.0-beta
 
