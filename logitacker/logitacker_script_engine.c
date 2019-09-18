@@ -624,6 +624,47 @@ bool logitacker_script_engine_store_current_script_to_flash(const char *script_n
     return true;
 }
 
+/*
+ * The assumption that `fds_record_find` returns records for NOT CHANGING file_id and record_key in the same
+ * order they have been written IS WRONG.
+ *
+ * The documentation sub-section "storage format" of FDS states the following:
+ *
+ * ```
+ * Record layout
+ *
+ * Records consist of a header (the record metadata) and the actual content. They are stored contiguously in flash in
+ * the order they are written.
+ * ```
+ *
+ * It turns out that this rule doesn't apply if virtual page boundaries are crossed.
+ * The behavior seems to be the following:
+ *
+ * If a record should be written but a virtual page couldn't take it (because the virtual page has too few space left)
+ * it is written to the next virtual page with enough remaining space. If a successive operation tries to write a
+ * smaller record, which still fits into the virtual page which couldn't be used for the first write (the last record
+ * was too large, but this one * fits) this record is written to the virtual page preceding the one used for the first
+ * fds_record_write call. From fsstorage perspective, this means that these two records aren't layed out in write order,
+ * because they are swapped.
+ *
+ * Now the `fds_record_find` method follows a simple logic, if multiple records with same file_id and record_id should
+ * be returned. It steps through each virtual page (in order) and for each virtual page it steps through all records and
+ * returns the next record (according to the find_token), which matches the filter criteria (file_id and record_key).
+ * For the example above, the iteration would hit the record which was written in the second call to `fds_record_write`
+ * FIRST, because it was stored in the virtual page preceding the virtual page of the first call to fds_record_write.
+ *
+ * This means if order of data is critical, different record_key (e.g. incrementing) or file_ids have to be used.
+ * Records with same file_id and record_key have to be seen as "set" where read order (fds_record_find) isn't guaranteed
+ * to reflect write order (successive calls to fds_record_write).
+ *
+ * Note 1: Increasing virtual page size for FDS could mitigate the problem, but it still occurs if page boundaries are
+ * crossed for records with same file_id and record_key.
+ *
+ * Note 2: Not waiting for write operations to finish isn't part of the problem described here, as it was assured that
+ * no successive `fds_record_write` calls have been enqueued, before the respective FDS_EVT_WRITE occurred.
+ *
+ */
+
 bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
     if (m_script_engine_state != SCRIPT_ENGINE_STATE_IDLE) {
         NRF_LOG_ERROR("can't load script from flash, script engine not in IDLE state: %d", m_script_engine_state);
@@ -672,6 +713,12 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
         }
 
         NRF_LOG_INFO("task type: %d", m_current_fds_op_task.type);
+        if (m_current_fds_op_task.type > 5) {
+            NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: invalid type");
+            script_engine_transfer_state(SCRIPT_ENGINE_STATE_FDS_READ_FAILED);
+            return false;
+
+        }
 
         // try to load next record, which should be the task data
         if (fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_fds_op_fds_script_info.script_tasks_record_id, &fds_record_desc, &ftoken) != FDS_SUCCESS) {
