@@ -54,6 +54,9 @@ again, the associated data (including the AES key) is restored from flash.
 - Live decryption: In passive enumeration mode, encrypted keyboard RF frames are automatically decrypted if the link
 Encryption key is known (could be added manually or obtained from sniffed pairing). This could be combined nicely with 
 USB pass-thorugh modes.
+- *experimental* covert channel for air-gap bridging with "keystroke injectable" client agent to deploy the channel
+for a Windows host with Logitech receiver (demo with receiver implanted into USB cable: https://youtu.be/79SogcYbpNA) 
+- usable for pure USB keystroke injection (RubberDucky fashion), programming features are still usable
 - USB pass-through: An USB serial based CLI is not the best choice, when it comes to processing of raw or decrypted RF
 data. To circumvent this, LOGITacker supports the following pass-through modes:
     - USB keyboard pass-through: If enabled, received RF keyboard frames are forwarded to LOGITacker's USB keyboard 

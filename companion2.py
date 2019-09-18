@@ -3,6 +3,13 @@ import sys
 import struct
 import time
 
+'''
+Important: This is a test script for LOGITacker's HID based programming interface.
+The script assumes the raw HID interface accessible on /dev/hidraw0 and writes data to
+this dev-file. There is no proper implementation to directly interface with LOGITacker on 
+the USB HID layer, neither is the protocol finalized.
+'''
+
 # report types
 REPORT_TYPE_COMMAND = 0x02
 

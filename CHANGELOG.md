@@ -15,7 +15,7 @@ see https://devzone.nordicsemi.com/f/nordic-q-a/52297/fds-read-order-fds_record_
     - example (not generic ... directly writing to `/dev/rawhid0`) in `companion2.py`
 - some changes to logging for Flash Data Storage operations
 - increased log buffers size, to account for dropped messages    
-- known issue: If storing a script to flash aborts in the middle, because there's no remaining space, partially
+- known issue: If storing a script to flash fails in the middle, because there's no remaining space, partially
 written data of the script isn't removed from flash.
 
 # LOGITacker v0.2.0-beta
