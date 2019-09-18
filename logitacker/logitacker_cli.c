@@ -363,78 +363,6 @@ static void cmd_testled(nrf_cli_t const *p_cli, size_t argc, char **argv) {
 
 static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
-/*
-    if (argc > 1)
-    {
-        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_DEFAULT, "parameter count %d\r\n", argc);
-
-        //parse arg 1 as address
-        uint8_t addr[5];
-        if (helper_hex_str_to_addr(addr, 5, argv[1]) != NRF_SUCCESS) {
-            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid address parameter, format has to be xx:xx:xx:xx:xx\r\n");
-            return;
-        }
-
-        char tmp_addr_str[16];
-        helper_addr_to_hex_str(tmp_addr_str, 5, addr);
-        nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_GREEN, "Trying to send keystrokes using address %s\r\n", tmp_addr_str);
-
-
-
-        //logitacker_keyboard_map_test();
-        logitacker_enter_mode_injection(addr);
-        logitacker_injection_string(LANGUAGE_LAYOUT_DE, "Hello World!");
-
-        return;
-    } else {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "device address needed, format has to be xx:xx:xx:xx:xx\r\n");
-        return;
-
-    }
-*/
-    logitacker_devices_log_stats();
-
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_rf_address_t)   : %d\r\n", sizeof(logitacker_devices_unifying_device_rf_address_t));
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_rf_addr_base_t) : %d\r\n", sizeof(logitacker_devices_unifying_device_rf_addr_base_t));
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_device_t)              : %d\r\n", sizeof(logitacker_devices_unifying_device_t));
-    nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "sizeof(logitacker_devices_unifying_dongle_t)              : %d\r\n", sizeof(logitacker_devices_unifying_dongle_t));
-
-    logitacker_devices_unifying_device_t * p_device1 = NULL;
-    logitacker_devices_unifying_device_t * p_device2 = NULL;
-    logitacker_devices_unifying_device_t * p_device3 = NULL;
-    logitacker_devices_unifying_device_rf_address_t addr1 = {0x00, 0x01, 0x02, 0x03, 0x04};
-    logitacker_devices_unifying_device_rf_address_t addr2 = {0x01, 0x02, 0x03, 0x04, 0x05};
-    logitacker_devices_unifying_device_rf_address_t addr3 = {0x01, 0x02, 0x03, 0x04, 0x02};
-
-
-    logitacker_devices_create_device(&p_device1, addr1);
-    logitacker_devices_create_device(&p_device2, addr2);
-    logitacker_devices_create_device(&p_device3, addr3);
-
-/*
-    logitacker_flash_store_device(p_device1);
-    logitacker_flash_store_device(p_device2);
-    logitacker_flash_store_device(p_device3);
-*/
-    logitacker_flash_list_stored_devices();
-
-/*
-    logitacker_flash_store_dongle(p_device1->p_dongle);
-    logitacker_flash_store_dongle(p_device2->p_dongle);
-    logitacker_flash_store_dongle(p_device3->p_dongle);
-*/
-    logitacker_flash_list_stored_dongles();
-
-
-
-    logitacker_flash_delete_device(p_device1->rf_address);
-    logitacker_flash_delete_device(p_device2->rf_address);
-    logitacker_flash_delete_device(p_device3->rf_address);
-    logitacker_flash_delete_dongle(p_device1->p_dongle->base_addr);
-    logitacker_flash_delete_dongle(p_device2->p_dongle->base_addr);
-    logitacker_flash_delete_dongle(p_device3->p_dongle->base_addr);
-
-    logitacker_devices_store_dongle_to_flash(p_device2->p_dongle->base_addr);
 
     fds_stat_t fds_stats;
     fds_stat(&fds_stats);
@@ -449,7 +377,7 @@ static void cmd_test_a(nrf_cli_t const * p_cli, size_t argc, char **argv)
     nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "freeable words : %d\r\n", fds_stats.freeable_words);
     nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "corruption     : %s\r\n", fds_stats.corruption ? "true" : "false");
 
-    fds_gc();
+    //fds_gc();
 }
 
 
@@ -460,16 +388,30 @@ static void cmd_test_b(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 }
 
 static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
-    if (argc > 1) {
-        int count;
-        if (sscanf(argv[1], "%d", &count) != 1) {
-            nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid argument, cc delay '%s' was given\r\n", argv[1]);
-        } else {
-            //g_logitacker_global_runtime_state.covert_channel_tx_delay = (uint8_t) count;
+    fds_find_token_t ft;
+    memset(&ft, 0x00, sizeof(fds_find_token_t));
+    fds_record_desc_t rd;
+
+
+    fds_flash_record_t flash_record;
+
+    char * tmp_str[256] = {0};
+
+    while (fds_record_iterate(&rd,&ft) == FDS_SUCCESS) {
+        uint32_t err;
+        err = fds_record_open(&rd, &flash_record);
+        if (err != FDS_SUCCESS) {
+            NRF_LOG_WARNING("Failed to open record %08x", err);
+            continue; // go on with next
         }
-    } else {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "invalid argument, cc delay has to be a integer number\r\n");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "cc tx delay: %d\r\n", g_logitacker_global_config.max_auto_injects_per_device);
+
+        sprintf((char *) tmp_str, "Record file_id %04x record_key %04x", flash_record.p_header->file_id, flash_record.p_header->record_key);
+        NRF_LOG_INFO("%s",nrf_log_push((char*) tmp_str));
+
+        if (fds_record_close(&rd) != FDS_SUCCESS) {
+            NRF_LOG_WARNING("Failed to close record");
+        }
+
     }
 }
 #endif
@@ -577,10 +519,10 @@ static void cmd_script_store(nrf_cli_t const *p_cli, size_t argc, char **argv)
     if (argc == 2)
     {
         if (logitacker_script_engine_store_current_script_to_flash(argv[1])) {
-            NRF_LOG_INFO("storing script succeeded");
+            //NRF_LOG_INFO("storing script succeeded");
             return;
         }
-        NRF_LOG_INFO("Storing script failed");
+        //NRF_LOG_INFO("Storing script failed");
         return;
     } else {
         nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "store needs a scriptname as first argument\r\n");

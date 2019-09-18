@@ -15,7 +15,7 @@
 
 typedef struct stored_script_fds_info {
     char script_name[LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN];
-    uint16_t script_tasks_record_id;
+    //uint16_t script_tasks_record_key;
     uint16_t script_tasks_file_id;
 } stored_script_fds_info_t;
 

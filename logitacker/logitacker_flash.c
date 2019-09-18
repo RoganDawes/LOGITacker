@@ -35,23 +35,23 @@ static void fds_callback(fds_evt_t const * p_evt)
 
         case FDS_EVT_WRITE:
         {
-            NRF_LOG_INFO("FDS_EVENT_WRITE");
+            NRF_LOG_DEBUG("FDS_EVENT_WRITE");
             if (p_evt->result == FDS_SUCCESS)
             {
-                NRF_LOG_INFO("Record ID:\t0x%04x",  p_evt->write.record_id);
-                NRF_LOG_INFO("File ID:\t0x%04x",    p_evt->write.file_id);
-                NRF_LOG_INFO("Record key:\t0x%04x", p_evt->write.record_key);
+                NRF_LOG_DEBUG("Record ID:\t0x%04x",  p_evt->write.record_id);
+                NRF_LOG_DEBUG("File ID:\t0x%04x",    p_evt->write.file_id);
+                NRF_LOG_DEBUG("Record key:\t0x%04x", p_evt->write.record_key);
             }
         } break;
 
         case FDS_EVT_DEL_RECORD:
         {
-            NRF_LOG_INFO("FDS_EVENT_DEL_RECORD");
+            NRF_LOG_DEBUG("FDS_EVENT_DEL_RECORD");
             if (p_evt->result == FDS_SUCCESS)
             {
-                NRF_LOG_INFO("Record ID:\t0x%04x",  p_evt->del.record_id);
-                NRF_LOG_INFO("File ID:\t0x%04x",    p_evt->del.file_id);
-                NRF_LOG_INFO("Record key:\t0x%04x", p_evt->del.record_key);
+                NRF_LOG_DEBUG("Record ID:\t0x%04x",  p_evt->del.record_id);
+                NRF_LOG_DEBUG("File ID:\t0x%04x",    p_evt->del.file_id);
+                NRF_LOG_DEBUG("Record key:\t0x%04x", p_evt->del.record_key);
             }
             //m_delete_all.pending = false;
         } break;

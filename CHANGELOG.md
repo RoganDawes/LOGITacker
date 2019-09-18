@@ -1,7 +1,11 @@
 # LOGITacker v0.2.1-beta
 
-- adjusted FDS virtual page size to account for library error, when records of same key and file ID are 
-spread across multiple virtual pages (needs more testing) --> new page size is 4096*4 (should allow 16KB scripts)
+**For updates from older LOGITacker versions the command `erase_flash` has to be ran once, to re-initialize
+the flash data storage for the changed data structures. Not doing so likely causes errors during LOGITacker 
+operation**
+
+- fix: critical issue with incomplete script storage on flash, due to unintended behavior of `fds_record_find`
+see https://devzone.nordicsemi.com/f/nordic-q-a/52297/fds-read-order-fds_record_find-doesn-t-reflect-write-order-fds_record_write-for-multiple-records-with-same-record_key-and-file_id-if-virtual-page-boundaries-are-crossed
 - started working on command interface via raw HID (work in progress)
     - COMMAND_SCRIPT_STRING = 0x10
     - COMMAND_SCRIPT_ALTSTRING = 0x11
@@ -9,6 +13,10 @@ spread across multiple virtual pages (needs more testing) --> new page size is 4
     - COMMAND_SCRIPT_DELAY = 0x13
     - COMMAND_SCRIPT_CLEAR = 0x14
     - example (not generic ... directly writing to `/dev/rawhid0`) in `companion2.py`
+- some changes to logging for Flash Data Storage operations
+- increased log buffers size, to account for dropped messages    
+- known issue: If storing a script to flash aborts in the middle, because there's no remaining space, partially
+written data of the script isn't removed from flash.
 
 # LOGITacker v0.2.0-beta
 
