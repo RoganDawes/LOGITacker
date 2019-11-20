@@ -308,17 +308,17 @@ void processor_inject_timer_handler_func_(logitacker_processor_inject_ctx_t *sel
             case INJECT_TASK_TYPE_PRESS_KEYS:
             case INJECT_TASK_TYPE_TYPE_STRING:
             case INJECT_TASK_TYPE_TYPE_ALTSTRING: {
-                // if timer is called, write (and auto transmit) current ESB payload
-                logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
-
+                // if timer is called, write (and auto transmit) current payload
                 if (self->usb_inject) {
                     //write USB HID report
                     if (logitacker_usb_write_keyboard_input_report(self->tmp_tx_payload.data) != NRF_SUCCESS) {
                         NRF_LOG_WARNING("Failed to write keyboard report, busy with old report");
                     } else {
-                        NRF_LOG_DEBUG("keyboard report sent to USB");
+                        NRF_LOG_INFO("keyboard report sent to USB");
                     }
                 } else {
+                    // fix: only append checksum to report if ESB is used
+                    logitacker_unifying_payload_update_checksum(self->tmp_tx_payload.data, self->tmp_tx_payload.length);
                     if (nrf_esb_write_payload(&self->tmp_tx_payload) != NRF_SUCCESS) {
                         NRF_LOG_INFO("Error writing payload");
                     } else {

@@ -204,6 +204,9 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
             case LANGUAGE_LAYOUT_US:
                 injection_lan_str = "us";
                 break;
+            case LANGUAGE_LAYOUT_DA:
+                injection_lan_str = "da";
+                break;
         }
 
         char * workmode_str = "unknown";

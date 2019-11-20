@@ -1,3 +1,14 @@
+# LOGITacker v0.2.2-beta
+
+**For updates from older LOGITacker versions the command `erase_flash` has to be ran once, to re-initialize
+the flash data storage for the changed data structures. Not doing so likely causes errors during LOGITacker 
+operation**
+
+- fix: malformed keyboard reports when USB injection is used, because Logitech checksum was injected
+- added Danish keyboard layout `da`
+- added python companion script to program, which creates a script with Danish unicode character on LOGITacker 
+(programming using USB HID interface)
+
 # LOGITacker v0.2.1-beta
 
 **For updates from older LOGITacker versions the command `erase_flash` has to be ran once, to re-initialize
