@@ -852,6 +852,10 @@ static void cmd_discover_run(nrf_cli_t const * p_cli, size_t argc, char **argv) 
     logitacker_enter_mode_discovery();
 }
 
+static void cmd_discover_stop(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+       logitacker_quit_mode_discovery();
+}
+
 static void cmd_discover(nrf_cli_t const * p_cli, size_t argc, char **argv)
 {
     if ((argc == 1) || nrf_cli_help_requested(p_cli))
@@ -1365,6 +1369,7 @@ NRF_CLI_CMD_REGISTER(testled, NULL, "Debug command to test code", cmd_testled);
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)
 {
     NRF_CLI_CMD(run,   NULL, "Enter discover mode.", cmd_discover_run),
+	NRF_CLI_CMD(stop,  NULL, "Quit discover mode.", cmd_discover_stop),
     NRF_CLI_SUBCMD_SET_END
 };
 NRF_CLI_CMD_REGISTER(discover, &m_sub_discover, "discover", cmd_discover);
