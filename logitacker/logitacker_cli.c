@@ -665,7 +665,7 @@ static void cmd_options_inject_lang(nrf_cli_t const *p_cli, size_t argc, char **
 
         return;
     } else {
-        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "need language layout name as first argument (f.e. us, de, da)\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_ERROR, "need language layout name as first argument (f.e. us, de, da, fr)\r\n");
 
         return;
 
