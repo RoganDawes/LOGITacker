@@ -4,10 +4,10 @@
 the flash data storage for the changed data structures. Not doing so likely causes errors during LOGITacker 
 operation**
 
-- fix: malformed keyboard reports when USB injection is used, because Logitech checksum was injected
+- fix: malformed keyboard reports when USB injection is used (caused by inclusion of Logitech checksum)
 - added Danish keyboard layout `da`
-- added python companion script to program, which creates a script with Danish unicode character on LOGITacker 
-(programming using USB HID interface)
+- added python companion script (uses USB HID programming interface to create a injection script with Danish Unicode 
+characters): `python_tests/create_utf8_script_DA.py`
 
 # LOGITacker v0.2.1-beta
 
