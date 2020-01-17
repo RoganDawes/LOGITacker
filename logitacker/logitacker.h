@@ -14,7 +14,7 @@ extern "C" {
 #include "logitacker_keyboard_map.h"
 #include "logitacker_processor_covert_channel.h"
 
-#define VERSION_STRING "v0.2.2-beta"
+#define VERSION_STRING "v0.2.3-beta"
 
 //#define PAIRING_REQ_MARKER_BYTE 0xee // byte used as device ID in pairing requests
 #define ACTIVE_ENUM_INNER_LOOP_MAX 20 //how many CAPS presses / key releases get send
