@@ -413,8 +413,8 @@ uint32_t logitacker_usb_read_hidraw_output_report() {
                 default:
                     NRF_LOG_WARNING("Unhandled raw report command %02x\n", command)
             }
-        }
             break;
+        }
         default:
             NRF_LOG_WARNING("Unhandled raw report type %02x\n", type)
     }
