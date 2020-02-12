@@ -3,7 +3,7 @@ FROM kalilinux/kali-rolling
 WORKDIR /root
 RUN apt-get update && apt-get -y install wget git gcc-arm-none-eabi unzip sed make
 # fetch nRF5 SDK 15.3.0
-RUN wget https://www.nordicsemi.com/-/media/Software-and-other-downloads/SDKs/nRF5/Binaries/nRF5SDK153059ac345.zip && unzip nRF5SDK153059ac345.zip && git clone https://github.com/RoganDawes/LOGITacker
+RUN wget https://www.nordicsemi.com/-/media/Software-and-other-downloads/SDKs/nRF5/Binaries/nRF5SDK153059ac345.zip && unzip nRF5SDK153059ac345.zip && git clone  -b 'feature_cli_makro' --single-branch --depth 1 https://github.com/RoganDawes/LOGITacker
 
 # install python3 and download uf2conv.py for AprBrother image conversion (Intel HEX to UF2)
 RUN wget https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py && apt-get -y install python3
