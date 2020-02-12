@@ -9,3 +9,4 @@ cmake-build-debug
 
 build/uf2conv.py
 build/convert.sh
+.DS_Store
