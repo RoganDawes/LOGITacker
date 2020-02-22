@@ -31,6 +31,8 @@ LOGITacker does currently not cover the following Logitech:
 
 *Note: KeyJack and CVE-2019-13053 are covered by mjackit*
 
+LOGITacker can also be used as Hardware Implant (see **USBsamurai**'s Tutorial https://medium.com/@LucaBongiorni/usbsamurai-for-dummies-4bd47abf8f87 )
+
 # 1 feature summary
 
 - Discovery of Logitech devices on air (optimized pseudo promiscuous mode)
