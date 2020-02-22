@@ -258,6 +258,17 @@ void logitacker_enter_mode_discovery() {
 
 }
 
+void logitacker_quit_mode_discovery() {
+// even tough this next line shouldn't be necessary...
+    if (p_processor != NULL && p_processor->p_deinit_func != NULL) (*p_processor->p_deinit_func)(p_processor);
+       NRF_LOG_INFO("Quitting discovery mode");
+
+       p_processor = NULL;
+       m_state_local.mainstate = LOGITACKER_MODE_IDLE;
+
+    sprintf(g_logitacker_cli_name, "LOGITacker $ ");
+}
+
 void logitacker_injection_start_execution(bool execute) {
     if (m_state_local.mainstate != LOGITACKER_MODE_INJECT) {
         NRF_LOG_ERROR("Can't inject while not in injection mode");

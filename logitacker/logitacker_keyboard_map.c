@@ -313,6 +313,7 @@ logitacker_keyboard_map_lang_t logitacker_keyboard_map_lang_from_str(char * lang
     if (strcmp(lang_str, "de") == 0 || strcmp(lang_str, "DE") == 0 ) return LANGUAGE_LAYOUT_DE;
     if (strcmp(lang_str, "us") == 0 || strcmp(lang_str, "US") == 0 ) return LANGUAGE_LAYOUT_US;
     if (strcmp(lang_str, "da") == 0 || strcmp(lang_str, "DA") == 0 ) return LANGUAGE_LAYOUT_DA;
+    if (strcmp(lang_str, "fr") == 0 || strcmp(lang_str, "FR") == 0 ) return LANGUAGE_LAYOUT_FR;
 
     lab_default:
     NRF_LOG_WARNING("unknown language layout '%s' ... using 'us' as default", nrf_log_push(lang_str));

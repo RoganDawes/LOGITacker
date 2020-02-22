@@ -53,6 +53,8 @@ uint32_t logitacker_init();
 
 void logitacker_enter_mode_discovery();
 
+void logitacker_quit_mode_discovery();
+
 
 void logitacker_enter_mode_prx(uint8_t *rf_address);
 
