@@ -24,6 +24,7 @@ typedef struct {
     hid_keyboard_report_t combo_hid_report;
     logitacker_keyboard_map_lang_t language_layout;
     logitacker_devices_unifying_device_t * p_device;
+    bool use_USB;
 
 } logitacker_tx_payload_provider_press_ctx_t;
 
@@ -53,8 +54,8 @@ static void convert_hid_report_to_rf_payload(logitacker_tx_payload_provider_pres
 
     logitacker_devices_generate_keyboard_frame(self->p_device, p_out_payload, p_hid_report);
 
-    NRF_LOG_INFO("Updated TX payload (%d):", rc++);
-    NRF_LOG_HEXDUMP_INFO(p_out_payload->data, p_out_payload->length);
+    NRF_LOG_DEBUG("Updated TX payload (%d):", rc++);
+    NRF_LOG_HEXDUMP_DEBUG(p_out_payload->data, p_out_payload->length);
 
 }
 
@@ -65,7 +66,11 @@ bool provider_press_inject_get_next(logitacker_tx_payload_provider_press_ctx_t *
                 return false; // job done
             } else {
                 // TX of release report needed
-                convert_hid_report_to_rf_payload(self, p_next_payload, &release_report);
+                if (self->use_USB) {
+                    logitacker_devices_generate_keyboard_frame_USB(p_next_payload, &release_report);
+                } else {
+                    convert_hid_report_to_rf_payload(self, p_next_payload, &release_report);
+                }
                 self->release_transmitted = true;
                 return true;
             }
@@ -75,7 +80,11 @@ bool provider_press_inject_get_next(logitacker_tx_payload_provider_press_ctx_t *
         }
     } else {
         // key combo report needed
-        convert_hid_report_to_rf_payload(self, p_next_payload, &self->combo_hid_report);
+        if (self->use_USB) {
+            logitacker_devices_generate_keyboard_frame_USB(p_next_payload, &self->combo_hid_report);
+        } else {
+            convert_hid_report_to_rf_payload(self, p_next_payload, &self->combo_hid_report);
+        }
         self->key_combo_transmitted = true;
         return true;
     }
@@ -88,8 +97,8 @@ void provider_press_inject_reset(logitacker_tx_payload_provider_press_ctx_t * se
     m_local_ctx.release_transmitted = false;
 }
 
-logitacker_tx_payload_provider_t * new_payload_provider_press(logitacker_devices_unifying_device_t * p_device, logitacker_keyboard_map_lang_t lang, char const * const str) {
-    if (p_device == NULL) {
+logitacker_tx_payload_provider_t * new_payload_provider_press(bool use_USB, logitacker_devices_unifying_device_t * p_device, logitacker_keyboard_map_lang_t lang, char const * const str) {
+    if (p_device == NULL && !use_USB) {
         NRF_LOG_WARNING("cannot create payload provider 'press', no device given");
     }
 
@@ -100,6 +109,7 @@ logitacker_tx_payload_provider_t * new_payload_provider_press(logitacker_devices
     // again no real instance
 
     m_local_ctx.p_device = p_device;
+    m_local_ctx.use_USB = use_USB;
     m_local_ctx.language_layout = lang;
     m_local_ctx.source_string = str;
 

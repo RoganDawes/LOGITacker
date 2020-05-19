@@ -216,7 +216,17 @@ void processor_pair_sniff_init_func_(logitacker_processor_pair_sniff_ctx_t *self
 
 
     // use special channel lookup table for pairing mode
-    nrf_esb_update_channel_frequency_table_unifying_pairing();
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed_pairing();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+            nrf_esb_update_channel_frequency_table_unifying_pairing();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying_pairing();
+            break;
+    }
 
     // write payload (autostart TX is enabled for PTX mode)
     nrf_esb_write_payload(&self->tmp_tx_payload);
@@ -232,7 +242,16 @@ void processor_pair_sniff_deinit_func_(logitacker_processor_pair_sniff_ctx_t *se
     nrf_esb_set_mode(NRF_ESB_MODE_PRX); //should disable and end up in idle state
 
     //restore channel table
-    nrf_esb_update_channel_frequency_table_unifying();
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying();
+            break;
+    }
+
 
     // disable all pipes
     nrf_esb_enable_pipes(0x00);
@@ -291,6 +310,7 @@ void processor_pair_sniff_esb_handler_func_(logitacker_processor_pair_sniff_ctx_
                         logitacker_pairing_info_t pi = self->device_pairing_info;
                         memcpy(p_device->serial, pi.device_serial, 4);
                         memcpy(p_device->device_name, pi.device_name, pi.device_name_len);
+                        p_device->device_name_len = pi.device_name_len;
                         memcpy(p_device->key, pi.device_key, 16);
                         memcpy(p_device->raw_key_data, pi.device_raw_key_material, 16);
                         memcpy(p_device->rf_address, pi.device_rf_address, 5);
@@ -305,9 +325,17 @@ void processor_pair_sniff_esb_handler_func_(logitacker_processor_pair_sniff_ctx_
                             logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
                             memcpy(p_dongle->wpid, pi.dongle_wpid, 2);
 
-                            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
+                            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING;
                             if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x02) p_dongle->is_nordic = true;
                             if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x08) p_dongle->is_texas_instruments = true;
+                            if (p_dongle->wpid[0] == 0x80 && p_dongle->wpid[1] == 0x0D) {
+                                p_dongle->is_texas_instruments = true;
+                                p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED;
+                            }
+                            if (p_dongle->wpid[0] == 0x80 && p_dongle->wpid[1] == 0x06) {
+                                p_dongle->is_nordic = true;
+                                p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_G700;
+                            }
 
                         }
                         p_device->key_known = pi.key_material_complete;

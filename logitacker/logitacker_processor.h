@@ -5,6 +5,8 @@
 #ifndef LOGITACKER_PROCESSOR_H
 #define LOGITACKER_PROCESSOR_H
 
+#include "app_usbd_types.h"
+#include "app_usbd_hid.h"
 #include "logitacker_radio.h"
 #include "nrf_esb_illegalmod.h"
 #include "bsp.h"
@@ -20,6 +22,7 @@ typedef void (*p_logitacker_processor_timer_handler)(logitacker_processor_t *p_p
 typedef void (*p_logitacker_processor_esb_handler)(logitacker_processor_t *p_processor, nrf_esb_evt_t *p_esb_event);
 typedef void (*p_logitacker_processor_radio_handler)(logitacker_processor_t *p_processor, radio_evt_t const *p_event);
 typedef void (*p_logitacker_processor_bsp_handler)(logitacker_processor_t *p_processor, bsp_event_t event);
+typedef void (*p_logitacker_processor_hid_keyboard_event_handler)(logitacker_processor_t *p_processor, app_usbd_class_inst_t const *p_inst, app_usbd_hid_user_event_t event);
 
 typedef struct logitacker_processor_struct{
     void *p_ctx;
@@ -30,6 +33,7 @@ typedef struct logitacker_processor_struct{
     p_logitacker_processor_esb_handler p_esb_handler;
     p_logitacker_processor_radio_handler p_radio_handler;
     p_logitacker_processor_bsp_handler p_bsp_handler;
+    p_logitacker_processor_hid_keyboard_event_handler p_usb_hid_keyboard_event_handler;
 } logitacker_processor_t;
 
 #endif //LOGITACKER_PROCESSOR_H

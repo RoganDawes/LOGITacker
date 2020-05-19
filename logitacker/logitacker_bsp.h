@@ -23,6 +23,12 @@
 #define LED_G       BSP_BOARD_LED_2
 #define LED_B       BSP_BOARD_LED_3
 
+#elif APRBROTHER_DONGLE
+// AprBrother nRF52840 USB dongle
+#define LED_R       BSP_BOARD_LED_1
+#define LED_G       BSP_BOARD_LED_2
+#define LED_B       BSP_BOARD_LED_3
+
 #else
 #error "No supported board found"
 #endif

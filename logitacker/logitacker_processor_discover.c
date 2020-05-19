@@ -85,7 +85,7 @@ void discovery_process_rx(logitacker_processor_discover_ctx_t *self) {
                 // classify device (determin if it is Logitech)
                 logitacker_devices_device_update_classification(p_device, *p_rx_payload);
                 if (p_device->p_dongle != NULL) {
-                    if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH) {
+                    if (p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING || p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_G700|| p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED) {
                         NRF_LOG_INFO("discovered device is Logitech")
                         switch (g_logitacker_global_config.discovery_on_new_address) {
                             case OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE:
@@ -164,7 +164,16 @@ void processor_discover_init_func_(logitacker_processor_discover_ctx_t *self) {
 
     //set radio to promiscuous mode and start RX
     nrf_esb_set_mode(NRF_ESB_MODE_PROMISCOUS); //use promiscuous mode
-    nrf_esb_update_channel_frequency_table_unifying_reduced();
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying_reduced();
+            break;
+    }
+
     nrf_esb_start_rx(); //start rx
     radio_enable_rx_timeout_event(LOGITACKER_DISCOVERY_STAY_ON_CHANNEL_AFTER_RX_MS); //set RX timeout, the eventhandler starts channel hopping once this timeout is reached
 

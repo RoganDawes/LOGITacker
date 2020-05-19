@@ -18,7 +18,7 @@ The firmware evolves as needed by myself (on-stage demos, experiments). **No fea
     1) [done] devices with sniffed pairing and encryption capability (chances are low to capture pairing in flight --> must have)
     2) [done] devices which respond to plain keystroke injection during active enum
     3) [done] devices for which plain key reports have been captured during passive enum (f.e. R400 doesn't reveal injection vuln during active enum, but send plain keyboard reports)
-- extensive testing of device flash storage, definition of upper limits (nobody needs 1000 devices on the dongle, as they could be barely handled interactively)
+- [done, fixed issue] extensive testing of device flash storage, definition of upper limits (nobody needs 1000 devices on the dongle, as they could be barely handled interactively)
 - maybe: Introduce user provided meta data, like "site name" for discover and custom device name, to make it easier to re-identify specific devices stored on flash
 (raw RF addresses require noting down additional info) - this is low prio, as it requires additional relationships for data stored on flash, which means runtime-reference-creation
 and thus brings all nice errors of pointer arithmetic (missing Golang here)
@@ -33,13 +33,20 @@ and thus brings all nice errors of pointer arithmetic (missing Golang here)
 - [done] command for flash erase
 - [done] remove test commands
 - emulation of dongle in pairing mode
-- utilizing scripts for "classical" USB injection instead of RF (bonus: trigger from RF, f.e. presentation clicker)
+- [done, without triggers] utilizing scripts for "classical" USB injection instead of RF (bonus: trigger from RF, f.e. presentation clicker)
 - check options to ship stored FDS data with hex image for firmware (pre-built scripts, down&exec demo as default)
 - remove either key or raw key data from device struct, to save space (one could be derived from the other, as "key generation" is no one-way function)
 - [done] rework `options show`
 - implement `options pair-sniff pass-through-raw`
 - [done] remove unneeded modules in root folder (refactoring)
 - [done] add GCC build scripts for MDK and MDK dongle
+- RF based control of USB injection mode with Logitech devices (f.e. presentation clicker to iterate over payloads and
+execute on-demand --> use PRX mode)
+
+# bugs / issues
+
+- if storing a script to flash fails in the middle, because there's no remaining space, partially written data of the 
+script isn't removed from flash. Logic has to be added, to delete already written flash recors in error case.
 
 # further analysis
 - capabilities to send in new HID++ messages (maybe re-write device capabilities)

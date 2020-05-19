@@ -1975,7 +1975,7 @@
 // <i> Note: This value is not editable in Configuration Wizard.
 // <i> Serial number that is defined the same way like in @ref APP_USBD_STRINGS_MANUFACTURER.
 #ifndef APP_USBD_STRING_SERIAL
-#define APP_USBD_STRING_SERIAL APP_USBD_STRING_DESC("v0.1.1-beta")
+#define APP_USBD_STRING_SERIAL APP_USBD_STRING_DESC("v0.2.3-beta")
 #endif
 
 // </e>
@@ -2099,7 +2099,7 @@
 // <i> The total amount of flash memory that is used by FDS amounts to @ref FDS_VIRTUAL_PAGES * @ref FDS_VIRTUAL_PAGE_SIZE * 4 bytes.
 
 #ifndef FDS_VIRTUAL_PAGES
-#define FDS_VIRTUAL_PAGES 8
+#define FDS_VIRTUAL_PAGES 16
 #endif
 
 // <o> FDS_VIRTUAL_PAGE_SIZE  - The size of a virtual flash page.
@@ -2815,7 +2815,7 @@
 // <16384=> 16384 
 
 #ifndef NRF_LOG_BUFSIZE
-#define NRF_LOG_BUFSIZE 1024
+#define NRF_LOG_BUFSIZE 16384
 #endif
 
 // <q> NRF_LOG_CLI_CMDS  - Enable CLI commands for the module.
@@ -2864,7 +2864,7 @@
 // <1024=> 1024 
 
 #ifndef NRF_LOG_STR_PUSH_BUFFER_SIZE
-#define NRF_LOG_STR_PUSH_BUFFER_SIZE 1024
+#define NRF_LOG_STR_PUSH_BUFFER_SIZE 8192
 #endif
 
 // <o> NRF_LOG_STR_PUSH_BUFFER_SIZE  - Size of the buffer dedicated for strings stored using @ref NRF_LOG_PUSH.

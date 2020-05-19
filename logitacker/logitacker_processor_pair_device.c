@@ -11,6 +11,9 @@
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_PROCESSOR_PAIR_DEVICE
 #include "nrf_log.h"
+#include "logitacker_options.h"
+#include "logitacker_flash.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 // ToDo: implement error conditions leading to failed pairing
@@ -174,6 +177,17 @@ void processor_pair_device_init_func_(logitacker_processor_pair_device_ctx_t *se
     nrf_esb_set_retransmit_delay(250);
     nrf_esb_set_tx_power(NRF_ESB_TX_POWER_8DBM);
 
+    // use special channel lookup table for pairing mode
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed_pairing();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying_pairing();
+            break;
+    }
+
 
     processor_pair_device_update_tx_payload_and_transmit(self);
 
@@ -186,7 +200,7 @@ void processor_pair_device_deinit_func(logitacker_processor_t *p_processor) {
 void processor_pair_device_deinit_func_(logitacker_processor_pair_device_ctx_t *self) {
     *self->p_logitacker_mainstate = LOGITACKER_MODE_IDLE;
 
-    NRF_LOG_INFO("DEINIT active enumeration for address %s", addr_str_buff);
+    NRF_LOG_INFO("DEINIT device pairing of address %s", addr_str_buff);
 
     radio_disable_rx_timeout_event(); // disable RX timeouts
     radio_stop_channel_hopping(); // disable channel hopping
@@ -280,6 +294,66 @@ void processor_pair_device_esb_handler_func_(logitacker_processor_pair_device_ct
 
 
     if (self->phase == PAIR_DEVICE_PHASE_SUCCEEDED) {
+
+        //retrieve device or add new and update data
+        logitacker_devices_unifying_device_t * p_device = NULL;
+        //couldn't fetch device, try to create (gets existing one in case it is already defined)
+        logitacker_devices_create_device(&p_device, self->device_pairing_info.device_rf_address);
+        if (p_device == NULL) {
+            NRF_LOG_ERROR("failed adding device entry for newly paired device");
+        } else {
+            // copy pairing info to device data
+            logitacker_pairing_info_t pi = self->device_pairing_info;
+            memcpy(p_device->serial, pi.device_serial, 4);
+            memcpy(p_device->device_name, pi.device_name, pi.device_name_len);
+            p_device->device_name_len = pi.device_name_len;
+            memcpy(p_device->key, pi.device_key, 16);
+            memcpy(p_device->raw_key_data, pi.device_raw_key_material, 16);
+            memcpy(p_device->rf_address, pi.device_rf_address, 5);
+            memcpy(p_device->wpid, pi.device_wpid, 2);
+            p_device->caps = pi.device_caps;
+            p_device->report_types = pi.device_report_types;
+
+
+            if (p_device->p_dongle == NULL) {
+                NRF_LOG_ERROR("device doesn't point to dongle");
+            } else {
+                logitacker_devices_unifying_dongle_t *p_dongle = p_device->p_dongle;
+                memcpy(p_dongle->wpid, pi.dongle_wpid, 2);
+
+                p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING;
+                if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x02) p_dongle->is_nordic = true;
+                if (p_dongle->wpid[0] == 0x88 && p_dongle->wpid[1] == 0x08) p_dongle->is_texas_instruments = true;
+                if (p_dongle->wpid[0] == 0x80 && p_dongle->wpid[1] == 0x0D) {
+                    p_dongle->is_texas_instruments = true;
+                    p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED;
+                }
+                if (p_dongle->wpid[0] == 0x80 && p_dongle->wpid[1] == 0x06) {
+                    p_dongle->is_nordic = true;
+                    p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_G700;
+                }
+
+
+            }
+            p_device->key_known = pi.key_material_complete;
+
+            // if auto store is enabled, store to flash
+            if (g_logitacker_global_config.auto_store_sniffed_pairing_devices) {
+                //check if already stored
+                logitacker_devices_unifying_device_t dummy_device;
+                if (logitacker_flash_get_device(&dummy_device, p_device->rf_address) != NRF_SUCCESS) {
+                    // not existing on flash create it
+                    if (logitacker_devices_store_ram_device_to_flash(p_device->rf_address) == NRF_SUCCESS) {
+                        NRF_LOG_INFO("device automatically stored to flash");
+                    } else {
+                        NRF_LOG_WARNING("failed to store device to flash");
+                    }
+                } else {
+                    NRF_LOG_INFO("device already exists on flash");
+                }
+            }
+        }
+
         NRF_LOG_WARNING("Device pairing succeeded, switching mode to discover");
         logitacker_enter_mode_discovery();
         return;
@@ -299,10 +373,38 @@ void processor_pair_device_create_req1_pay(logitacker_processor_pair_device_ctx_
     memcpy(&self->tmp_tx_payload.data[3], pseudo_device_address, 5); // 3..7 pseudo device's current RF address
     self->tmp_tx_payload.data[8] = 0x08; //likely default keep-alive interval
     memcpy(&self->tmp_tx_payload.data[9], self->device_pairing_info.device_wpid, 2); //WPID of device
-    self->tmp_tx_payload.data[11] = LOGITACKER_DEVICE_PROTOCOL_UNIFYING; //likely protocol (0x04 == Unifying ?)
-    self->tmp_tx_payload.data[12] = 0x00; //unknown 0x00 for some devices (mouse, keyboard), 0x02 for others (mouse Anywhere MX 2, presenter)
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            self->tmp_tx_payload.data[11] = LOGITACKER_DEVICE_PROTOCOL_UNIFYING; //likely protocol (0x04 == Unifying ?)
+            self->tmp_tx_payload.data[12] = 0x00; //unknown 0x00 for some devices (mouse, keyboard), 0x02 for others (mouse Anywhere MX 2, presenter)
+            break;
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            self->tmp_tx_payload.data[11] = LOGITACKER_DEVICE_PROTOCOL_LIGHTSPEED;
+            self->tmp_tx_payload.data[12] = 0x02; //unknown 0x00 for some devices (mouse, keyboard), 0x02 for others (mouse Anywhere MX 2, presenter)
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+            self->tmp_tx_payload.data[11] = LOGITACKER_DEVICE_PROTOCOL_G700;
+            self->tmp_tx_payload.data[12] = 0x01; //unknown 0x00 for some devices (mouse, keyboard), 0x02 for others (mouse Anywhere MX 2, presenter)
+            break;
+    }
+
+
     self->tmp_tx_payload.data[13] = self->device_pairing_info.device_type;
-    self->tmp_tx_payload.data[14] = self->device_pairing_info.device_caps; // should have LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE set and LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION unset
+
+
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            self->tmp_tx_payload.data[14] = self->device_pairing_info.device_caps; // should have LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE set and LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION unset
+            break;
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            self->tmp_tx_payload.data[14] = 0xB3; // should have LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE set and LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION set
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+            self->tmp_tx_payload.data[14] = 0x36; // should have LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE set and LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION unset
+            break;
+    }
+
+
     //15 is unknown
 
     self->tmp_tx_payload.pipe = 0; // first request is sent on pipe 0 (dongle pairing address)
@@ -410,6 +512,12 @@ bool processor_pair_device_parse_rsp2_pay(logitacker_processor_pair_device_ctx_t
     if (self->tmp_rx_payload.pipe != 1) return false; //wrong pipe
 
     memcpy(self->device_pairing_info.dongle_nonce, &self->tmp_rx_payload.data[3], 4); //nonce from dongle
+
+    if ((self->device_pairing_info.device_caps & LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION) > 0) {
+        logitacker_pairing_derive_key_material(&self->device_pairing_info);
+        logitacker_pairing_derive_key(&self->device_pairing_info);
+        self->device_pairing_info.key_material_complete = true;
+    }
 
     // byte 7 onwards should be copy of request phase 2 (ignored)
 

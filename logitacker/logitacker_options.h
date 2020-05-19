@@ -25,8 +25,24 @@ typedef enum {
     //OPTION_AFTER_INJECT_RETRY,
     OPTION_AFTER_INJECT_SWITCH_PASSIVE_ENUMERATION,
     OPTION_AFTER_INJECT_SWITCH_ACTIVE_ENUMERATION,
-    OPTION_AFTER_INJECT_SWITCH_DISCOVERY
+    OPTION_AFTER_INJECT_SWITCH_DISCOVERY,
 } option_after_inject_t;
+
+typedef enum {
+    OPTION_LOGITACKER_WORKMODE_UNIFYING,   // compatible to Unifying and (encrypted) presentation clickers
+    OPTION_LOGITACKER_WORKMODE_LIGHTSPEED,   // compatible to Logitech LIGHTSPEED
+    OPTION_LOGITACKER_WORKMODE_G700,   // compatible to Logitech LIGHTSPEED
+} option_logitacker_workmode_t;
+
+typedef enum {
+    OPTION_LOGITACKER_BOOTMODE_DISCOVER,
+    OPTION_LOGITACKER_BOOTMODE_USB_INJECT,
+} option_logitacker_bootmode_t;
+
+typedef enum {
+    OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_POWERUP,
+    OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_LEDUPDATE,
+} option_logitacker_usbinject_trigger_t;
 
 typedef struct {
     uint32_t boot_count;
@@ -54,7 +70,26 @@ typedef struct {
     char default_script[LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN];
 
     int max_auto_injects_per_device;
+
+    option_logitacker_workmode_t workmode;
+    option_logitacker_bootmode_t bootmode;
+    option_logitacker_usbinject_trigger_t usbinject_trigger;
 } logitacker_global_config_t;
+
+typedef struct {
+    bool usb_inject_script_triggered;
+    uint8_t usb_led_out_report_count;
+//    uint8_t covert_channel_tx_delay;
+//    uint8_t covert_channel_data_marker;
+} logitacker_global_state_t;
+
+const static logitacker_global_state_t LOGITACKER_STATE_DEFAULTS = {
+        .usb_led_out_report_count = false,
+        .usb_inject_script_triggered = false,
+//        .covert_channel_tx_delay = COVERT_CHANNEL_TX_DELAY_MS_UNIFYING,
+//        .covert_channel_data_marker = COVERT_CHANNEL_DATA_MARKER,
+};
+
 
 const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .discovery_on_new_address = OPTION_DISCOVERY_ON_NEW_ADDRESS_CONTINUE,
@@ -75,15 +110,18 @@ const static logitacker_global_config_t LOGITACKER_OPTIONS_DEFAULTS = {
     .stats = {
         .boot_count = 0,
     },
+    .workmode = OPTION_LOGITACKER_WORKMODE_UNIFYING,
+    .bootmode = OPTION_LOGITACKER_BOOTMODE_DISCOVER,
+    .usbinject_trigger = OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_POWERUP,
 };
 
 
 extern logitacker_global_config_t g_logitacker_global_config;
+extern logitacker_global_state_t g_logitacker_global_runtime_state;
 
 uint32_t logitacker_options_store_to_flash(void);
 uint32_t logitacker_options_restore_from_flash(void);
 void logitacker_options_print(nrf_cli_t const * p_cli);
-
-
+void logitacker_options_init_state();
 
 #endif //LOGITACKER_OPTIONS_H

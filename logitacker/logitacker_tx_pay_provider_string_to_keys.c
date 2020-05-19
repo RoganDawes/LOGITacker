@@ -21,6 +21,7 @@ typedef struct {
     logitacker_keyboard_map_lang_t language_layout;
     //uint32_t pos_in_seq; //position in current report sequence
     logitacker_devices_unifying_device_t * p_device;
+    bool use_USB;
 
 } logitacker_tx_payload_provider_string_ctx_t;
 
@@ -42,7 +43,7 @@ bool provider_string_get_next_hid_report_seq(logitacker_tx_payload_provider_stri
     uint32_t res = logitacker_keyboard_map_u8_str_to_hid_reports(&self->str_parser_ctx, self->source_string, &self->p_current_hid_report_seq, &report_seq_size, self->language_layout);
     if (res == NRF_SUCCESS) {
         self->remaining_reports_in_sequence = report_seq_size / SINGLE_HID_REPORT_SIZE;
-        NRF_LOG_INFO("Reports in next sequence %d", self->remaining_reports_in_sequence);
+        NRF_LOG_DEBUG("Reports in next sequence %d", self->remaining_reports_in_sequence);
     }
 
     NRF_LOG_DEBUG("reports for next rune:");
@@ -69,8 +70,8 @@ static void convert_hid_report_to_rf_payload(logitacker_tx_payload_provider_stri
 
     logitacker_devices_generate_keyboard_frame(self->p_device, p_next_payload, p_hid_report);
 
-    NRF_LOG_INFO("Updated TX payload (%d):", rc++);
-    NRF_LOG_HEXDUMP_INFO(p_next_payload->data, p_next_payload->length);
+    NRF_LOG_DEBUG("Updated TX payload (%d):", rc++);
+    NRF_LOG_HEXDUMP_DEBUG(p_next_payload->data, p_next_payload->length);
 
 }
 
@@ -88,7 +89,12 @@ bool provider_string_inject_get_next(logitacker_tx_payload_provider_string_ctx_t
     //return next position in current sequence
     hid_keyboard_report_t * p_cur_hid_report = self->p_current_hid_report_seq;
 
-    convert_hid_report_to_rf_payload(self, p_next_payload, p_cur_hid_report);
+    if (self->use_USB) {
+        logitacker_devices_generate_keyboard_frame_USB(p_next_payload, p_cur_hid_report);
+    } else {
+        convert_hid_report_to_rf_payload(self, p_next_payload, p_cur_hid_report);
+    }
+
 
 
     self->remaining_reports_in_sequence--;
@@ -108,8 +114,8 @@ void provider_string_inject_reset(logitacker_tx_payload_provider_string_ctx_t *s
 }
 
 
-logitacker_tx_payload_provider_t * new_payload_provider_string(logitacker_devices_unifying_device_t * p_device_caps, logitacker_keyboard_map_lang_t lang, char const * const str) {
-    if (p_device_caps == NULL) {
+logitacker_tx_payload_provider_t * new_payload_provider_string(bool use_USB, logitacker_devices_unifying_device_t * p_device_caps, logitacker_keyboard_map_lang_t lang, char const * const str) {
+    if (p_device_caps == NULL && !use_USB) {
         NRF_LOG_WARNING("cannot create payload provider string, no device capabilities given");
     }
 
@@ -120,6 +126,7 @@ logitacker_tx_payload_provider_t * new_payload_provider_string(logitacker_device
     // again no real instance
 
     m_local_ctx.p_device = p_device_caps;
+    m_local_ctx.use_USB = use_USB;
     m_local_ctx.language_layout = lang;
     m_local_ctx.p_current_hid_report_seq = NULL;
     m_local_ctx.remaining_reports_in_sequence = 0;

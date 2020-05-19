@@ -695,9 +695,11 @@ nrf_esb_mode_t nrf_esb_get_mode();
 
 // channel and frequency handling (works with translation tables)
 uint32_t nrf_esb_update_channel_frequency_table(uint8_t * values, uint8_t length);
+uint32_t nrf_esb_update_channel_frequency_table_lightspeed();
 uint32_t nrf_esb_update_channel_frequency_table_unifying();
 uint32_t nrf_esb_update_channel_frequency_table_unifying_reduced();
 uint32_t nrf_esb_update_channel_frequency_table_unifying_pairing();
+uint32_t nrf_esb_update_channel_frequency_table_lightspeed_pairing();
 uint32_t nrf_esb_update_channel_frequency_table_all();
 uint32_t nrf_esb_set_rf_channel_next();
 uint32_t nrf_esb_get_rf_frequency(uint32_t * p_frequency);

@@ -1,14 +1,17 @@
-#include <string.h> //memcpy, memset
-#include <stddef.h> //NULL
+#include "string.h" //memcpy, memset
+#include "stddef.h" //NULL
 
 #include "logitacker_radio.h"
 #include "nrf_error.h"
 #include "nrf_esb_illegalmod.h"
 
 #include "app_timer.h"
+#include "logitacker_options.h"
+
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_RADIO
 #include "nrf_log.h"
+
 NRF_LOG_MODULE_REGISTER();
 
 
@@ -140,7 +143,16 @@ uint32_t logitacker_radio_init(nrf_esb_event_handler_t event_handler, radio_even
     esb_config.event_handler = radio_esb_event_handler; // pass custom event handler with call through
     uint32_t err_code = nrf_esb_init(&esb_config);
 
-    nrf_esb_update_channel_frequency_table_unifying();
+    switch (g_logitacker_global_config.workmode) {
+        case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+            nrf_esb_update_channel_frequency_table_lightspeed();
+            break;
+        case OPTION_LOGITACKER_WORKMODE_G700:
+        case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+            nrf_esb_update_channel_frequency_table_unifying();
+            break;
+    }
+
 
     VERIFY_SUCCESS(err_code);
 

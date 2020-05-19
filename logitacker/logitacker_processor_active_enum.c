@@ -313,7 +313,7 @@ void processor_active_enum_esb_handler_func_(logitacker_processor_active_enum_ct
                             p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
                             p_device->caps &= ~LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION;
                             if (p_device->p_dongle != NULL) {
-                                p_device->p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
+                                p_device->p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING;
                             }
 
                             // if auto store is enabled, store to flash

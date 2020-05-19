@@ -1,8 +1,12 @@
-
+companion.py
 CMakeLists.txt
 .idea
 mdk/blank/armgcc/_build
 mdk-dongle/blank/armgcc/_build
 pca10059/blank/armgcc/_build
+apr-dongle/blank/armgcc/_build/
 cmake-build-debug
 
+build/uf2conv.py
+build/convert.sh
+.DS_Store

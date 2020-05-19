@@ -174,7 +174,7 @@ uint32_t logitacker_devices_restore_device_from_flash(logitacker_devices_unifyin
                 memcpy(p_dongle_ram, &tmp_dongle_flash, sizeof(logitacker_devices_unifying_dongle_t));
             } else {
                 // not able to restore dongle data from flash, we don't error out but log a warning
-                NRF_LOG_WARNING("couldn't restore dongle data from flash for restored device");
+                NRF_LOG_WARNING("couldn't restore dongle data from flash for restored device baseaddr %.02x:%.02x:%.02x:%.02x", p_dongle_ram->base_addr[3], p_dongle_ram->base_addr[2], p_dongle_ram->base_addr[1], p_dongle_ram->base_addr[0]);
             }
 
             p_device->executed_auto_inject_count = 0; // reset auto inject count
@@ -277,6 +277,7 @@ uint32_t logitacker_devices_store_ram_device_to_flash(logitacker_devices_unifyin
     logitacker_devices_unifying_dongle_t * p_dongle = p_device->p_dongle;
     if (p_dongle != NULL) {
         // try to store the dongle data, too
+        NRF_LOG_INFO("STORING DONGLE WITH BASE ADDR %0.2x:%0.2x:%0.2x:%0.2x", p_dongle->base_addr[0], p_dongle->base_addr[1], p_dongle->base_addr[2], p_dongle->base_addr[3])
         if (logitacker_flash_store_dongle(p_dongle) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to store dongle data along with device data")
         }
@@ -654,7 +655,7 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
         NRF_LOG_DEBUG("... valid Logitech CRC");
         //test if frame has valid logitech checksum
         if (p_dongle->classification == DONGLE_CLASSIFICATION_UNKNOWN) {
-            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH;
+            p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_UNIFYING;
         }
     } else {
         NRF_LOG_DEBUG("... INVALID Logitech CRC");
@@ -673,9 +674,17 @@ uint32_t logitacker_devices_device_update_classification(logitacker_devices_unif
             p_device->caps |= LOGITACKER_DEVICE_CAPS_LINK_ENCRYPTION;
             p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_KEYBOARD;
 
+            // LIGHTSPEED devices have additional encrypted data in bytes 14..17
+            if (frame.data[16] != 0x00) p_dongle->classification = DONGLE_CLASSIFICATION_IS_LOGITECH_LIGHTSPEED;
+
             logitacker_unifying_extract_counter_from_encrypted_keyboard_frame(frame, &p_device->last_used_aes_ctr);
             break;
 
+        case UNIFYING_RF_REPORT_ENCRYPTED_HIDPP_LONG:
+            if (len != 30) return NRF_ERROR_INVALID_DATA;
+            p_device->caps |= LOGITACKER_DEVICE_CAPS_UNIFYING_COMPATIBLE;
+            p_device->report_types |= LOGITACKER_DEVICE_REPORT_TYPES_LONG_HIDPP;
+            break;
         case UNIFYING_RF_REPORT_HIDPP_LONG:
             //ToDo: check if HID++ reports provide additional information (f.e. long version of device name is exchanged)
             if (len != 22) return NRF_ERROR_INVALID_DATA;
@@ -774,6 +783,21 @@ typedef enum {
 
 
 
+uint32_t logitacker_devices_generate_keyboard_frame_USB(nrf_esb_payload_t *p_result_payload, hid_keyboard_report_t const *const p_in_hid_report) {
+
+    p_result_payload->length = 8;
+    p_result_payload->data[0] = p_in_hid_report->mod;
+    p_result_payload->data[1] = 0x00;
+    p_result_payload->data[2] = p_in_hid_report->keys[0];
+    p_result_payload->data[3] = p_in_hid_report->keys[1];
+    p_result_payload->data[4] = p_in_hid_report->keys[2];
+    p_result_payload->data[5] = p_in_hid_report->keys[3];
+    p_result_payload->data[6] = p_in_hid_report->keys[4];
+    p_result_payload->data[7] = p_in_hid_report->keys[5];
+
+    return NRF_SUCCESS;
+}
+
 uint32_t logitacker_devices_generate_keyboard_frame_plain(nrf_esb_payload_t *p_result_payload,
                                                           hid_keyboard_report_t const *const p_in_hid_report) {
     /*
@@ -817,9 +841,19 @@ uint32_t logitacker_devices_generate_keyboard_frame_encrypted(logitacker_devices
     uint8_t key[16] = {0};
     memcpy(key, p_device->key, 16); // key is const, thus we need a copy
 
-    uint32_t res = logitacker_unifying_crypto_encrypt_keyboard_frame(p_result_payload, plain_payload, key,
-                                                             p_device->last_used_aes_ctr);
+    uint32_t res = logitacker_unifying_crypto_encrypt_keyboard_frame(p_result_payload, plain_payload, key, p_device->last_used_aes_ctr);
 
+/*
+    //FOR LIGHTSPEED
+    //inverted counter test
+    if (res == NRF_SUCCESS) {
+        uint32_t ctr = p_device->last_used_aes_ctr;
+        uint32_t inv_ctr = ((ctr >> 24) & 0x000000ff) | ((ctr >> 8) & 0x0000ff00) | ((ctr << 8) & 0x00ff0000) | ((ctr << 24) & 0xff000000);
+        inv_ctr++;
+        p_device->last_used_aes_ctr = ((inv_ctr >> 24) & 0x000000ff) | ((inv_ctr >> 8) & 0x0000ff00) | ((inv_ctr << 8) & 0x00ff0000) | ((inv_ctr << 24) & 0xff000000);
+    }
+    //END FOR LIGHTSPEED
+*/
     if (res == NRF_SUCCESS) p_device->last_used_aes_ctr++;
     return res;
 }
@@ -853,14 +887,16 @@ uint32_t logitacker_devices_generate_keyboard_frame(logitacker_devices_unifying_
         NRF_LOG_WARNING("Device with unknown devices, trying PLAIN injection");
     }
 
+    if (g_logitacker_global_config.workmode == OPTION_LOGITACKER_WORKMODE_G700) mode = KEYBOARD_REPORT_GEN_MODE_PLAIN; //G700 only works plain
+    if (p_device->p_dongle != NULL && p_device->p_dongle->classification == DONGLE_CLASSIFICATION_IS_LOGITECH_G700) mode = KEYBOARD_REPORT_GEN_MODE_PLAIN; //G700 only works plain
 
 
     switch (mode) {
         case KEYBOARD_REPORT_GEN_MODE_PLAIN:
-            NRF_LOG_INFO("GENERATING PLAIN KEYBOARD FRAME");
+            NRF_LOG_DEBUG("GENERATING PLAIN KEYBOARD FRAME");
             return logitacker_devices_generate_keyboard_frame_plain(p_result_payload, p_in_hid_report);
         case KEYBOARD_REPORT_GEN_MODE_ENCRYPTED:
-            NRF_LOG_INFO("GENERATING ENCRYPTED KEYBOARD FRAME");
+            NRF_LOG_DEBUG("GENERATING ENCRYPTED KEYBOARD FRAME");
             return logitacker_devices_generate_keyboard_frame_encrypted(p_device, p_result_payload, p_in_hid_report);
         default:
             return logitacker_devices_generate_keyboard_frame_plain(p_result_payload, p_in_hid_report);

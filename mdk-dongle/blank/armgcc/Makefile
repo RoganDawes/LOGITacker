@@ -42,9 +42,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/atomic_fifo/nrf_atfifo.c \
   $(SDK_ROOT)/components/libraries/atomic/nrf_atomic.c \
   $(SDK_ROOT)/components/libraries/balloc/nrf_balloc.c \
-  $(SDK_ROOT)/components/libraries/cli/nrf_cli.c \
-  $(SDK_ROOT)/components/libraries/cli/cdc_acm/nrf_cli_cdc_acm.c \
-  $(SDK_ROOT)/components/libraries/cli/uart/nrf_cli_uart.c \
   $(SDK_ROOT)/external/fprintf/nrf_fprintf.c \
   $(SDK_ROOT)/external/fprintf/nrf_fprintf_format.c \
   $(SDK_ROOT)/components/libraries/fstorage/nrf_fstorage.c \
@@ -87,6 +84,9 @@ SRC_FILES += \
   $(PROJ_DIR)/main.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/external/utf_converter/utf.c \
+  $(PROJ_DIR)/cli_mod/nrf_cli.c \
+  $(PROJ_DIR)/cli_mod/cdc_acm/nrf_cli_cdc_acm.c \
+  $(PROJ_DIR)/cli_mod/uart/nrf_cli_uart.c \
   $(PROJ_DIR)/esb_illegalmod/nrf_esb_illegalmod.c \
   $(PROJ_DIR)/ringbuf/ringbuf.c \
   $(PROJ_DIR)/logitacker/helper.c \
@@ -100,7 +100,9 @@ SRC_FILES += \
   $(PROJ_DIR)/logitacker/logitacker_processor_discover.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_pair_sniff.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_active_enum.c \
+  $(PROJ_DIR)/logitacker/logitacker_processor_covert_channel.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_passive_enum.c \
+  $(PROJ_DIR)/logitacker/logitacker_processor_prx.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_pair_device.c \
   $(PROJ_DIR)/logitacker/logitacker_processor_inject.c \
   $(PROJ_DIR)/logitacker/logitacker_tx_pay_provider_string_to_keys.c \
@@ -118,8 +120,6 @@ SRC_FILES += \
 INC_FOLDERS += \
   ../config \
   $(SDK_ROOT)/components \
-  $(SDK_ROOT)/components/libraries/cli \
-  $(SDK_ROOT)/components/libraries/cli/cdc_acm \
   $(SDK_ROOT)/modules/nrfx/mdk \
   $(SDK_ROOT)/components/libraries/scheduler \
   $(SDK_ROOT)/components/libraries/queue \
@@ -138,13 +138,15 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/generic \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/kbd \
   $(SDK_ROOT)/components/libraries/balloc \
+  $(PROJ_DIR)/cli_mod \
+  $(PROJ_DIR)/cli_mod/cdc_acm \
+  $(PROJ_DIR)/cli_mod/uart \
   $(PROJ_DIR)/esb_illegalmod \
   $(PROJ_DIR)/ringbuf \
   $(PROJ_DIR)/logitacker \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/components/libraries/usbd/class/hid \
   $(SDK_ROOT)/components/libraries/hardfault/nrf52 \
-  $(SDK_ROOT)/components/libraries/cli/uart \
   $(SDK_ROOT)/components/libraries/hardfault \
   $(SDK_ROOT)/components/libraries/uart \
   $(SDK_ROOT)/components/libraries/log \

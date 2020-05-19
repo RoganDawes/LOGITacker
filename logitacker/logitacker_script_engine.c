@@ -44,6 +44,7 @@ typedef enum {
 } fds_op_write_script_sub_state_t;
 
 
+static uint16_t m_current_script_task_record_key;
 static stored_script_fds_info_t m_current_fds_op_fds_script_info;
 static inject_task_t m_current_fds_op_task = {0};
 static uint8_t m_current_fds_op_task_data[LOGITACKER_SCRIPT_ENGINE_MAX_TASK_DATA_MAX_SIZE];
@@ -399,26 +400,31 @@ void logitacker_script_engine_print_current_tasks(nrf_cli_t const * p_cli) {
  */
 
 
+//ToDo: For error cases during script storage, already written records have to be deleted again
 void logitacker_script_engine_fds_event_handler(fds_evt_t const *p_evt) {
     if (m_script_engine_state == SCRIPT_ENGINE_STATE_IDLE) {
-        NRF_LOG_INFO("FDS event handler for scripting: IDLE ... ignoring event");
+        NRF_LOG_DEBUG("FDS event handler for scripting: IDLE ... ignoring event");
         return;
     }
 
 
     if (m_script_engine_state == SCRIPT_ENGINE_STATE_FDS_WRITE_RUNNING && p_evt->id == FDS_EVT_WRITE) {
-        NRF_LOG_INFO("FDS_EVENT_WRITE");
+        // increment record_key to account for storage order problem
+        // (https://devzone.nordicsemi.com/f/nordic-q-a/52297/fds-read-order-fds_record_find-doesn-t-reflect-write-order-fds_record_write-for-multiple-records-with-same-record_key-and-file_id-if-virtual-page-boundaries-are-crossed)
+        m_current_script_task_record_key++;
+
+        NRF_LOG_DEBUG("FDS_EVENT_WRITE");
         if (p_evt->result == FDS_SUCCESS)
         {
             switch (m_current_fds_op_write_script_sub_state) {
                 case FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER:
                 {
-                    NRF_LOG_INFO("Task header written successfully, writing next task data ...")
+                    NRF_LOG_DEBUG("Task header written successfully, writing next task data ...")
                     // start  writing task data
 
                     m_current_fds_op_write_script_sub_state = FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_DATA; //indicate that next write operation contained task data
                     m_current_fds_op_record.file_id = m_current_fds_op_fds_script_info.script_tasks_file_id;
-                    m_current_fds_op_record.key = m_current_fds_op_fds_script_info.script_tasks_record_id;
+                    m_current_fds_op_record.key = m_current_script_task_record_key;
                     m_current_fds_op_record.data.length_words = (m_current_fds_op_task.data_len + 3) / 4; // this will write one word, even if task data length is zero (tasks of type delay)
                     m_current_fds_op_record.data.p_data = &m_current_fds_op_task_data;
                     if (fds_record_write(NULL, &m_current_fds_op_record) != NRF_SUCCESS) {
@@ -430,7 +436,7 @@ void logitacker_script_engine_fds_event_handler(fds_evt_t const *p_evt) {
                 }
                 case FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_DATA:
                 {
-                    NRF_LOG_INFO("Task data written successfully, writing next task header ...");
+                    NRF_LOG_DEBUG("Task data written successfully, writing next task header ...");
                     // if here, next step would be to write the next task header, thus we try to fetch the next task
                     // load first task to tmp vars
                     if (!logitacker_script_engine_read_next_task(&m_current_fds_op_task, m_current_fds_op_task_data)) {
@@ -453,7 +459,7 @@ void logitacker_script_engine_fds_event_handler(fds_evt_t const *p_evt) {
                     // initiate storage of next task header
                     m_current_fds_op_write_script_sub_state = FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER;
                     m_current_fds_op_record.file_id = m_current_fds_op_fds_script_info.script_tasks_file_id;
-                    m_current_fds_op_record.key = m_current_fds_op_fds_script_info.script_tasks_record_id;
+                    m_current_fds_op_record.key = m_current_script_task_record_key;
                     m_current_fds_op_record.data.length_words = (sizeof(inject_task_t) + 3) / 4;
                     m_current_fds_op_record.data.p_data = &m_current_fds_op_task;
                     if (fds_record_write(NULL, &m_current_fds_op_record) != NRF_SUCCESS) {
@@ -479,41 +485,6 @@ void logitacker_script_engine_fds_event_handler(fds_evt_t const *p_evt) {
 
         }
     }
-
-    /*
-    // runs in thread mode
-    //helper_log_priority("fds_evt_handler");
-    switch (p_evt->id)
-    {
-        case FDS_EVT_WRITE:
-        {
-
-            NRF_LOG_INFO("FDS_EVENT_WRITE");
-            if (p_evt->result == FDS_SUCCESS)
-            {
-                NRF_LOG_INFO("Record ID:\t0x%04x",  p_evt->write.record_id);
-                NRF_LOG_INFO("File ID:\t0x%04x",    p_evt->write.file_id);
-                NRF_LOG_INFO("Record key:\t0x%04x", p_evt->write.record_key);
-            }
-        } break;
-
-        case FDS_EVT_DEL_RECORD:
-        {
-            NRF_LOG_INFO("FDS_EVENT_DEL_RECORD");
-            if (p_evt->result == FDS_SUCCESS)
-            {
-                NRF_LOG_INFO("Record ID:\t0x%04x",  p_evt->del.record_id);
-                NRF_LOG_INFO("File ID:\t0x%04x",    p_evt->del.file_id);
-                NRF_LOG_INFO("Record key:\t0x%04x", p_evt->del.record_key);
-            }
-            //m_delete_all.pending = false;
-        } break;
-
-        default:
-            break;
-    }
-
-    */
 }
 
 uint32_t find_stored_script_info_by_name(const char *script_name, stored_script_fds_info_t *p_stored_script_info) {
@@ -577,7 +548,7 @@ bool logitacker_script_engine_store_current_script_to_flash(const char *script_n
     fds_find_token_t ftoken;
     memset(&ftoken, 0x00, sizeof(fds_find_token_t));
     uint16_t last_used_id = LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS-1;
-    for (uint16_t test_id = LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS; (fds_record_find(test_id, LOGITACKER_FLASH_RECORD_ID_STORED_SCRIPT_TASKS, &fds_record_desc, &ftoken) == FDS_SUCCESS) && (test_id < LOGITACKER_FLASH_MAXIMUM_FILE_ID_STORED_SCRIPT_TASKS); test_id++) {
+    for (uint16_t test_id = LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS; (fds_record_find(test_id, LOGITACKER_FLASH_RECORD_KEY_FIRST_STORED_SCRIPT_TASKS, &fds_record_desc, &ftoken) == FDS_SUCCESS) && (test_id < LOGITACKER_FLASH_MAXIMUM_FILE_ID_STORED_SCRIPT_TASKS); test_id++) {
         last_used_id = test_id; //update last used ID, as test ID is in use
     }
     uint16_t next_usable_id = last_used_id+1;
@@ -591,9 +562,10 @@ bool logitacker_script_engine_store_current_script_to_flash(const char *script_n
 
     // fill stored_script_fds_info_t data struct (don't store yet)
     m_current_fds_op_fds_script_info.script_tasks_file_id = next_usable_id;
-    m_current_fds_op_fds_script_info.script_tasks_record_id = LOGITACKER_FLASH_RECORD_ID_STORED_SCRIPT_TASKS;
+    m_current_script_task_record_key = LOGITACKER_FLASH_RECORD_KEY_FIRST_STORED_SCRIPT_TASKS;
     size_t slen = strlen(script_name);
     slen = slen > LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN ? LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN : slen;
+    memset(m_current_fds_op_fds_script_info.script_name, 0, LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN);
     memcpy(m_current_fds_op_fds_script_info.script_name, script_name, slen);
 
 
@@ -611,7 +583,7 @@ bool logitacker_script_engine_store_current_script_to_flash(const char *script_n
     // start first write operation
     m_current_fds_op_write_script_sub_state = FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER;
     m_current_fds_op_record.file_id = m_current_fds_op_fds_script_info.script_tasks_file_id;
-    m_current_fds_op_record.key = m_current_fds_op_fds_script_info.script_tasks_record_id;
+    m_current_fds_op_record.key = m_current_script_task_record_key;
     m_current_fds_op_record.data.length_words = (sizeof(inject_task_t) + 3) / 4;
     m_current_fds_op_record.data.p_data = &m_current_fds_op_task;
     if (fds_record_write(NULL, &m_current_fds_op_record) != NRF_SUCCESS) {
@@ -622,6 +594,47 @@ bool logitacker_script_engine_store_current_script_to_flash(const char *script_n
 
     return true;
 }
+
+/*
+ * The assumption that `fds_record_find` returns records for NOT CHANGING file_id and record_key in the same
+ * order they have been written IS WRONG.
+ *
+ * The documentation sub-section "storage format" of FDS states the following:
+ *
+ * ```
+ * Record layout
+ *
+ * Records consist of a header (the record metadata) and the actual content. They are stored contiguously in flash in
+ * the order they are written.
+ * ```
+ *
+ * It turns out that this rule doesn't apply if virtual page boundaries are crossed.
+ * The behavior seems to be the following:
+ *
+ * If a record should be written but a virtual page couldn't take it (because the virtual page has too few space left)
+ * it is written to the next virtual page with enough remaining space. If a successive operation tries to write a
+ * smaller record, which still fits into the virtual page which couldn't be used for the first write (the last record
+ * was too large, but this one * fits) this record is written to the virtual page preceding the one used for the first
+ * fds_record_write call. From fsstorage perspective, this means that these two records aren't layed out in write order,
+ * because they are swapped.
+ *
+ * Now the `fds_record_find` method follows a simple logic, if multiple records with same file_id and record_id should
+ * be returned. It steps through each virtual page (in order) and for each virtual page it steps through all records and
+ * returns the next record (according to the find_token), which matches the filter criteria (file_id and record_key).
+ * For the example above, the iteration would hit the record which was written in the second call to `fds_record_write`
+ * FIRST, because it was stored in the virtual page preceding the virtual page of the first call to fds_record_write.
+ *
+ * This means if order of data is critical, different record_key (e.g. incrementing) or file_ids have to be used.
+ * Records with same file_id and record_key have to be seen as "set" where read order (fds_record_find) isn't guaranteed
+ * to reflect write order (successive calls to fds_record_write).
+ *
+ * Note 1: Increasing virtual page size for FDS could mitigate the problem, but it still occurs if page boundaries are
+ * crossed for records with same file_id and record_key.
+ *
+ * Note 2: Not waiting for write operations to finish isn't part of the problem described here, as it was assured that
+ * no successive `fds_record_write` calls have been enqueued, before the respective FDS_EVT_WRITE occurred.
+ *
+ */
 
 bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
     if (m_script_engine_state != SCRIPT_ENGINE_STATE_IDLE) {
@@ -643,7 +656,7 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
         return false;
     }
 
-    NRF_LOG_INFO("script %s file_id %04x record id %04x", script_name, m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_fds_op_fds_script_info.script_tasks_record_id);
+    NRF_LOG_INFO("script %s file_id %04x", script_name, m_current_fds_op_fds_script_info.script_tasks_file_id);
 
     // flush current tasks
     //flush_tasks();
@@ -654,7 +667,19 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
     memset(&ftoken, 0x00, sizeof(fds_find_token_t));
     fds_record_desc_t fds_record_desc;
     fds_flash_record_t fds_flash_record;
-    while (fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_fds_op_fds_script_info.script_tasks_record_id, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
+    m_current_script_task_record_key = LOGITACKER_FLASH_RECORD_KEY_FIRST_STORED_SCRIPT_TASKS;
+    while (true) {
+        uint32_t err = fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_script_task_record_key, &fds_record_desc, &ftoken);
+        if (err != FDS_SUCCESS) {
+            // should only fail with "RECORD_NOT_FOUND"
+            NRF_LOG_DEBUG("error loading file_id %04x record_key %04x: %08x", err);
+            break;
+        }
+
+        //NRF_LOG_INFO("HIT for record ID %04x", m_current_script_task_record_key);
+        memset(&ftoken, 0x00, sizeof(fds_find_token_t)); // reset find token, next lookup is for different record_key
+        m_current_script_task_record_key++;
+
         // open task header
         if (fds_record_open(&fds_record_desc, &fds_flash_record) != FDS_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to read task header");
@@ -670,23 +695,24 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
             return false;
         }
 
-        NRF_LOG_INFO("task type: %d", m_current_fds_op_task.type);
-
+        NRF_LOG_DEBUG("task type: %d", m_current_fds_op_task.type);
         // try to load next record, which should be the task data
-        if (fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_fds_op_fds_script_info.script_tasks_record_id, &fds_record_desc, &ftoken) != FDS_SUCCESS) {
+        if (fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_script_task_record_key, &fds_record_desc, &ftoken) != FDS_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to read task data");
             script_engine_transfer_state(SCRIPT_ENGINE_STATE_FDS_READ_FAILED);
             return false;
         }
+        m_current_script_task_record_key++;
 
         // open task data
+        memset(&ftoken, 0x00, sizeof(fds_find_token_t)); // reset find token, next lookup is for different record_key
         if (fds_record_open(&fds_record_desc, &fds_flash_record) != FDS_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to open task data");
             script_engine_transfer_state(SCRIPT_ENGINE_STATE_FDS_READ_FAILED);
             return false;
         }
 
-        memcpy(&m_current_fds_op_task_data, fds_flash_record.p_data, m_current_fds_op_task.data_len);
+        if (m_current_fds_op_task.data_len > 0) memcpy(&m_current_fds_op_task_data, fds_flash_record.p_data, m_current_fds_op_task.data_len);
 
         if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to close task data record");
@@ -737,12 +763,12 @@ void logitacker_script_engine_list_scripts_from_flash(nrf_cli_t const *p_cli) {
 
 }
 
-void delete_taskdata_from_flash(uint16_t file_id, uint16_t record_id) {
+void delete_taskdata_from_flash(uint16_t file_id) {
     fds_find_token_t ftoken;
     memset(&ftoken, 0x00, sizeof(fds_find_token_t));
     fds_record_desc_t fds_record_desc;
 
-    while(fds_record_find(file_id, record_id, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
+    while(fds_record_find_in_file(file_id, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
         if (fds_record_delete(&fds_record_desc) != FDS_SUCCESS) {
             NRF_LOG_WARNING("failed to delete record");
             continue; // go on with next
@@ -771,7 +797,7 @@ bool logitacker_script_engine_delete_script_from_flash(const char *script_name) 
         return false;
     }
 
-    delete_taskdata_from_flash(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_fds_op_fds_script_info.script_tasks_record_id);
+    delete_taskdata_from_flash(m_current_fds_op_fds_script_info.script_tasks_file_id);
 
 
     // delete script info

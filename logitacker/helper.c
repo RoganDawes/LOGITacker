@@ -1,3 +1,5 @@
+#include "fds.h"
+#include "fds_internal_defs.h"
 #include "helper.h"
 #include "crc16.h"
 #include "app_util_platform.h"
@@ -151,4 +153,23 @@ char *helper_strsep (char **stringp, const char *delim) {
         // No more delimiters; this is the last token.
         *stringp = NULL;
     return token_start;
+}
+
+uint32_t helper_flash_end_addr(void)
+{
+    uint32_t const bootloader_addr = BOOTLOADER_ADDRESS;
+    uint32_t const page_sz         = NRF_FICR->CODEPAGESIZE;
+
+#if defined(NRF52810_XXAA) || defined(NRF52811_XXAA)
+    // Hardcode the number of flash pages, necessary for SoC emulation.
+    // nRF52810 on nRF52832 and
+    // nRF52811 on nRF52840
+    uint32_t const code_sz = 48;
+#else
+    uint32_t const code_sz = NRF_FICR->CODESIZE;
+#endif
+
+    uint32_t end_addr = (bootloader_addr != 0xFFFFFFFF) ? bootloader_addr : (code_sz * page_sz);
+
+    return end_addr - (FDS_PHY_PAGES_RESERVED * FDS_PHY_PAGE_SIZE * sizeof(uint32_t));
 }

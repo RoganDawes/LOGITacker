@@ -9,7 +9,11 @@
 NRF_LOG_MODULE_REGISTER();
 
 logitacker_global_config_t g_logitacker_global_config = {0};
+logitacker_global_state_t g_logitacker_global_runtime_state = {0};
 
+void logitacker_options_init_state() {
+    g_logitacker_global_runtime_state = LOGITACKER_STATE_DEFAULTS;
+}
 
 uint32_t logitacker_options_update_flash(void) {
     fds_record_t record;
@@ -200,6 +204,42 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
             case LANGUAGE_LAYOUT_US:
                 injection_lan_str = "us";
                 break;
+            case LANGUAGE_LAYOUT_DA:
+                injection_lan_str = "da";
+                break;
+        }
+
+        char * workmode_str = "unknown";
+        switch (g_logitacker_global_config.workmode) {
+            case OPTION_LOGITACKER_WORKMODE_UNIFYING:
+                workmode_str = "Unifying compatible";
+                break;
+            case OPTION_LOGITACKER_WORKMODE_LIGHTSPEED:
+                workmode_str = "Logitech Lightspeed";
+                break;
+            case OPTION_LOGITACKER_WORKMODE_G700:
+                workmode_str = "Logitech G700/G700s compatible";
+                break;
+        }
+
+        char * bootmode_str = "unknown";
+        switch (g_logitacker_global_config.bootmode) {
+            case OPTION_LOGITACKER_BOOTMODE_USB_INJECT:
+                bootmode_str = "USB keystroke injection";
+                break;
+            case OPTION_LOGITACKER_BOOTMODE_DISCOVER:
+                bootmode_str = "Discover";
+                break;
+        }
+
+        char * usbinjecttrigger_str = "unknown";
+        switch (g_logitacker_global_config.usbinject_trigger) {
+            case OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_LEDUPDATE:
+                usbinjecttrigger_str = "Start USB injection once keyboard LED state received (indicates driver ready, not on all OS)";
+                break;
+            case OPTION_LOGITACKER_USBINJECT_TRIGGER_ON_POWERUP:
+                usbinjecttrigger_str = "Start USB injection once powered up (less accurate, works on all OS)";
+                break;
         }
 
 
@@ -208,8 +248,14 @@ void logitacker_options_print(nrf_cli_t const * p_cli)
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot count                              : %d\r\n", g_logitacker_global_config.stats.boot_count);
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "global options\r\n");
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tboot mode                               : %s\r\n", bootmode_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tworking mode                            : %s\r\n", workmode_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tUSB injection mode (trigger)            : %s\r\n", usbinjecttrigger_str);
+
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\r\n");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "discover mode options\r\n");
-        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after RF address dicovery        : %s\r\n", discover_on_hit_str);
+        nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\taction after RF address discovered      : %s\r\n", discover_on_hit_str);
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tpass RF frames to USB raw HID           : %s\r\n", g_logitacker_global_config.discover_pass_through_hidraw ? "on" : "off");
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "\tauto store plain injectable devices     : %s\r\n", g_logitacker_global_config.auto_store_plain_injectable ? "on" : "off");
 
