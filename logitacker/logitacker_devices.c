@@ -297,7 +297,7 @@ uint32_t logitacker_devices_remove_device_from_flash(logitacker_devices_unifying
     logitacker_devices_unifying_device_t device_dummy;
     logitacker_devices_unifying_dongle_t dongle_flash;
     // fill dongle's base address
-    for (int i=0; i <4; i--) dongle_flash.base_addr[i] = rf_addr[3-i];
+    for (uint8_t i=0; i<4; i--) dongle_flash.base_addr[i] = rf_addr[3-i];
     fds_find_token_t ftok;
     memset(&ftok, 0x00, sizeof(fds_find_token_t));
 
