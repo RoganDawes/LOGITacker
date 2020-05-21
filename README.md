@@ -215,6 +215,11 @@ changes to options NEVER ARE PERSISTENT, unless the `options store` command is r
 is to reduce flash write&erase cycles (flash could not be written endlessly). Keep this in mind: options always have to
 be stored manually, in order to persist a reboot of LOGITacker.
 
+In case, saving of scripts or options to flash fails with
+`LOGITACKER_SCRIPT_ENGINE: failed to write first task for script storage` or `<warning> LOGITACKER_OPTIONS: failed to find Flash Data Storage record for global options: 2` 
+the flash store is corrupted and has to be rewritten. 
+Issue `erase_flash` and reconnect the dongle afterwards. 
+
 ## 3.3 Scripting
 
 Entering `script` to the CLI shows the sub-commands of the script command group. There are two kinds of commands:
