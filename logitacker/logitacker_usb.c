@@ -507,6 +507,7 @@ char * logitacker_usb_print_host_fingerprint_guess_os() {
     // Ref: https://twitter.com/mame82/status/1272826102663335936
     // First request for "device descriptor" has length == 8 (instead of 0x40), first "configuration descriptor" request
     // still has length == 9
+    // - additional note: Kali was run in a Parallels VM
 
     LAB_HOST_OS_UNKNOWN:
     return "unknown OS";

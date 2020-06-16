@@ -45,7 +45,7 @@ https://github.com/RoganDawes/LOGITacker/tree/USB_host_enum/build
 
 *Note: The detection logic currently does not allow to change keystroke injection scripts, based on detected OS.
 The current goal is to collect fingerprints of different OS's to obtain more information which could help to 
-distinguish same as reliable and fine-grained as possible. The logic currently used to make a guess on the OS is
+distinguish them as reliable and fine-grained as possible. The logic currently used to make a guess on the OS is
 here: https://github.com/RoganDawes/LOGITacker/blob/USB_host_enum/logitacker/logitacker_usb.c#L479*
 
 # 1 feature summary
