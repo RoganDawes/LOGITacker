@@ -8,7 +8,7 @@ apr-dongle/blank/armgcc/_build/
 cmake-build-debug
 cmake-build-debug-arm-none-eabi
 cmake-build-release
-
+logitacker_aprdongle.hex
 build/uf2conv.py
 build/convert.sh
 .DS_Store

@@ -116,18 +116,25 @@ static void usbd_device_event_handler(app_usbd_event_type_t event) {
         case APP_USBD_EVT_DRV_SOF:
             break;
         case APP_USBD_EVT_DRV_RESET:
+            NRF_LOG_INFO("USB RESET");
+
             break;
         case APP_USBD_EVT_DRV_SUSPEND:
             app_usbd_suspend_req(); // Allow the library to put the peripheral into sleep mode
             bsp_board_led_off(LED_R);
             break;
         case APP_USBD_EVT_DRV_RESUME:
+            NRF_LOG_INFO("USB RESUME");
             bsp_board_led_on(LED_R);
             break;
         case APP_USBD_EVT_STARTED:
+            NRF_LOG_INFO("USB STARTED");
+
             bsp_board_led_on(LED_R);
             break;
         case APP_USBD_EVT_STOPPED:
+            NRF_LOG_INFO("USB STOPPED");
+
             app_usbd_disable();
             bsp_board_led_off(LED_R);
             break;
@@ -496,8 +503,8 @@ char * logitacker_usb_print_host_fingerprint_guess_os() {
 
     if (first_dev_desc_req_len == 0x12) return "MacOS"; // only read 18 bytes of device descriptor (default length per spec)
     if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0xff) return "Windows"; // try to read as many configuration descriptors as possible at once
-    if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0x09) return "Linux (likely <5.4.0)"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
-    if (first_dev_desc_req_len == 0x08 && first_conf_desc_req_len == 0x09) return "Linux (likely >=5.4.0)"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
+    if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0x09) return "Linux"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
+    if (first_dev_desc_req_len == 0x08 && first_conf_desc_req_len == 0x09) return "likely Parallels"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
 
     // Note: Android 10 and Linux fingerprints look basically the same, with one small difference:
     //  On Android there is an additional string descriptor request for string index 0x00 and language id 0x00
@@ -509,6 +516,19 @@ char * logitacker_usb_print_host_fingerprint_guess_os() {
     // still has length == 9
     // - additional note: Kali was run in a Parallels VM
 
+    // Interesting notes on first device descriptor read, followed by a reset (http://www.usbmadesimple.co.uk/ums_4.htm)
+    //
+    // It is probable that this request (with the descriptor type set to Device) will be the first that will be received
+    // after USB reset. The host needs to know the max packet length in use by the control endpoint and this information
+    // is available in the 8th byte of the device descriptor.
+    //
+    // Typically when the host is Windows, the device will receive the request with the required length wLength set to
+    // 64. The host will then input 1 packet, and then reset the device again. Whatever the value of the max packet
+    // length, the host now has the value of the 8th byte and knows what the packet size is for all future control transfers.
+    //
+    // The second reset is probably to guarantee that the device does not get confused after not being allowed to
+    // complete the transmission of all 18 bytes of the device descriptor.
+
     LAB_HOST_OS_UNKNOWN:
     return "unknown OS";
 }
@@ -517,6 +537,7 @@ void logitacker_usb_print_host_fingerprint() {
     NRF_LOG_INFO("USB fingerprint");
     NRF_LOG_INFO(" Each GET DESCRIPTOR request is represented with 4 byte [type, idx, lang_id low byte, length low byte]");
     NRF_LOG_INFO(" Relevant types: 0x01 device, 0x02 config, 0x03 string, 0x06 dev qualifier (high speed only)");
+    NRF_LOG_INFO(" 'FF FF FF FF' marks a device reset after the initial request for the device descriptor");
 
 
     NRF_LOG_HEXDUMP_INFO(g_logitacker_usb_host_fingerprint, LOGITACKER_USB_HOST_FINGERPRINT_SIZE);

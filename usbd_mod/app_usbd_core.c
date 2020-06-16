@@ -52,14 +52,17 @@
 #include "app_usbd_mod.h"
 
 #define NRF_LOG_MODULE_NAME LOGITACKER_APP_USBD_MOD
-
+#define NRF_LOG_LEVEL 3
+/*
 #if APP_USBD_CONFIG_LOG_ENABLED
 #define NRF_LOG_LEVEL       APP_USBD_CONFIG_LOG_LEVEL
 #define NRF_LOG_INFO_COLOR  APP_USBD_CONFIG_INFO_COLOR
 #define NRF_LOG_DEBUG_COLOR APP_USBD_CONFIG_DEBUG_COLOR
 #else //APP_USBD_CONFIG_LOG_ENABLED
-#define NRF_LOG_LEVEL       0
+#define NRF_LOG_LEVEL       1
 #endif //APP_USBD_CONFIG_LOG_ENABLED
+
+*/
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
@@ -887,6 +890,8 @@ static ret_code_t setup_device_req_std_handler(app_usbd_class_inst_t const * con
                     g_logitacker_usb_host_fingerprint[g_logitacker_usb_host_fingerprint_pos++] = p_setup_ev->setup.wIndex.lb; // Language ID (only low byte, so 0x0409 gets 0x09)
                     //g_logitacker_usb_host_fingerprint[g_logitacker_usb_host_fingerprint_pos++] = p_setup_ev->setup.wLength.hb; // Desc len high (not needed for GET_DESCRIPTOR)
                     g_logitacker_usb_host_fingerprint[g_logitacker_usb_host_fingerprint_pos++] = p_setup_ev->setup.wLength.lb; // Desc len low
+
+                    NRF_LOG_INFO("Setup request GET_DESCRIPTOR desc_type 0x%02x desc_idx 0x%02x lang 0x%04x length 0x%04x", p_setup_ev->setup.wValue.hb, p_setup_ev->setup.wValue.lb, p_setup_ev->setup.wIndex.w, p_setup_ev->setup.wLength.w);
                 }
                 return setup_device_req_get_descriptor(p_inst, p_setup_ev);
             }
@@ -1073,6 +1078,19 @@ static ret_code_t app_usbd_core_event_handler(app_usbd_class_inst_t const * cons
     {
         case APP_USBD_EVT_DRV_RESET:
         {
+            // reset event is not a good place to reset the fingerprint array, which tracks GET_DESCRIPTOR setup
+            // requests (device level only, no interfaces/endpoints). As it is common to send a request for the
+            // device descriptor, followed by a reset again (to fetch bMaxPacketSize), the fingerprint is not cleared
+            // if ONLY ONE REQUEST FOR THE DEVICE DESCRIPTOR OCCURRED SINCE THE LAST RESET.
+            if (g_logitacker_usb_host_fingerprint_pos == 4 && g_logitacker_usb_host_fingerprint[0] == 0x01) {
+                // only one device descriptor request since last reset, do not clear the fingerprint but
+                // mark the reset with 0xff ff ff ff
+                memset(&g_logitacker_usb_host_fingerprint[4], 0xff, 4);
+                g_logitacker_usb_host_fingerprint_pos += 4;
+            } else {
+                // clear the fingerprint
+                memset(g_logitacker_usb_host_fingerprint, 0x00, LOGITACKER_USB_HOST_FINGERPRINT_SIZE);
+            }
             usbd_core_state_set(APP_USBD_STATE_Default);
             break;
         }
