@@ -7,12 +7,13 @@
 #include "nrf_cli_cdc_acm.h"
 #include "logitacker_radio.h"
 #include "ringbuf.h"
-
-#define NRF_LOG_MODULE_NAME LOGITACKER_USB
-
-#include "nrf_log.h"
 #include "logitacker_script_engine.h"
 #include "logitacker_options.h"
+#include "app_usbd_mod.h"
+
+#define NRF_LOG_MODULE_NAME LOGITACKER_USB
+#include "nrf_log.h"
+
 
 
 NRF_LOG_MODULE_REGISTER();
@@ -198,6 +199,12 @@ static void usbd_hid_keyboard_event_handler(app_usbd_class_inst_t const *p_inst,
             NRF_LOG_INFO("hid kbd evt: APP_USBD_HID_USER_EVT_OUT_REPORT_READY");
             NRF_LOG_HEXDUMP_INFO(out_rep, out_rep_size);
 
+            // THIS MAKES NO SENSE AND IS ONLY FOR TESTING: print out USB fingerprint when a keyboard LED report arrives (assures delay after USB initialization)
+            //NRF_LOG_INFO("USB fingerprint");
+            //NRF_LOG_HEXDUMP_INFO(g_logitacker_usb_host_fingerprint, LOGITACKER_USB_HOST_FINGERPRINT_SIZE);
+            //logitacker_usb_print_host_fingerprint();
+
+
             g_logitacker_global_runtime_state.usb_led_out_report_count++; //indicate that the initial USB report was received
             g_logitacker_global_runtime_state.usb_led_out_report_count &= 0x7f; //avoid overrun of counter
 
@@ -337,7 +344,6 @@ uint32_t logitacker_usb_init() {
         app_usbd_start();
     }
 
-
     return NRF_SUCCESS;
 }
 
@@ -468,4 +474,37 @@ uint32_t logitacker_usb_write_hidraw_input_report_rf_frame(logitacker_mode_t log
     return logitacker_usb_write_hidraw_input_report(logitacker_mode, LOGITACKER_USB_HIDRAW_REPORT_TYPE_RF_FRAME,
                                                     sizeof(logitacker_usb_hidraw_rf_frame_representation_t),
                                                     &frame_hid_pay);
+}
+
+char * logitacker_usb_print_host_fingerprint_guess_os() {
+    // first descriptor request is for device desc with length 64
+    if (g_logitacker_usb_host_fingerprint[0] == 0x01 && g_logitacker_usb_host_fingerprint[3] == 0x40) {
+        return "LIKELY LINUX";
+    }
+
+    // find offset of first request for configuration descriptor
+    uint8_t * first_conf_req;
+    for (first_conf_req = g_logitacker_usb_host_fingerprint; first_conf_req <= g_logitacker_usb_host_fingerprint+LOGITACKER_USB_HOST_FINGERPRINT_SIZE; first_conf_req += 4) {
+        if (*first_conf_req == 0x02) break; // first configuration descriptor request found
+    }
+    if (first_conf_req >= g_logitacker_usb_host_fingerprint+LOGITACKER_USB_HOST_FINGERPRINT_SIZE) goto LAB_HOST_OS_UNKNOWN; // no configuration descriptor request
+
+    // if first configuration descriptor request has a length of 255, this is likely Windows
+    if (first_conf_req[3] == 0xff) return "LIKELY WINDOWS";
+
+    // if first configuration descriptor request has a length of 9 (only first config descriptor), this is likely MacOS
+    if (first_conf_req[3] == 0xff) return "LIKELY MacOS";
+
+    LAB_HOST_OS_UNKNOWN:
+    return "UNKNOWN";
+}
+
+void logitacker_usb_print_host_fingerprint() {
+    NRF_LOG_INFO("USB fingerprint");
+    NRF_LOG_INFO(" Each GET DESCRIPTOR request is represented with 4 byte [type, idx, lang_id low byte, length low byte]");
+    NRF_LOG_INFO(" Relevant types: 0x01 device, 0x02 config, 0x03 string, 0x06 dev qualifier (high speed only)");
+
+
+    NRF_LOG_HEXDUMP_INFO(g_logitacker_usb_host_fingerprint, LOGITACKER_USB_HOST_FINGERPRINT_SIZE);
+    NRF_LOG_INFO("Guessed OS: %s", logitacker_usb_print_host_fingerprint_guess_os());
 }

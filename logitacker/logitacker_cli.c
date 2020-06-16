@@ -19,6 +19,7 @@
 #include "logitacker_processor_inject.h"
 #include "logitacker_script_engine.h"
 #include "logitacker_processor_covert_channel.h"
+#include "logitacker_usb.h"
 
 //#define CLI_TEST_COMMANDS
 
@@ -473,6 +474,10 @@ static void cmd_erase_flash(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     if (nfs_initiated) nrf_fstorage_erase(&m_nfs, start_addr, FDS_PHY_PAGES, NULL);
 
     nrf_cli_fprintf(p_cli, NRF_CLI_VT100_COLOR_RED, "... page erase issued, wait some seconds and re-plug the dongle\n");
+}
+
+static void cmd_fingerusb(nrf_cli_t const * p_cli, size_t argc, char **argv) {
+    logitacker_usb_print_host_fingerprint();
 }
 
 static void cmd_inject(nrf_cli_t const * p_cli, size_t argc, char **argv) {
@@ -1360,6 +1365,7 @@ NRF_CLI_CMD_REGISTER(test, &m_sub_test, "Debug command to test code", NULL);
 NRF_CLI_CMD_REGISTER(testled, NULL, "Debug command to test code", cmd_testled);
 #endif
 
+NRF_CLI_CMD_REGISTER(finger_usb, NULL, "Fingerprint USB host OS based on descriptor requests", cmd_fingerusb);
 
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_discover)

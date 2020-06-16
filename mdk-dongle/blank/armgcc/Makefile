@@ -28,7 +28,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/uart/app_uart_fifo.c \
   $(SDK_ROOT)/components/libraries/usbd/app_usbd.c \
   $(SDK_ROOT)/components/libraries/usbd/class/cdc/acm/app_usbd_cdc_acm.c \
-  $(SDK_ROOT)/components/libraries/usbd/app_usbd_core.c \
+  $(PROJ_DIR)/usbd_mod/app_usbd_core.c \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/app_usbd_hid.c \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/generic/app_usbd_hid_generic.c \
   $(SDK_ROOT)/components/libraries/usbd/class/hid/kbd/app_usbd_hid_kbd.c \
@@ -143,6 +143,7 @@ INC_FOLDERS += \
   $(PROJ_DIR)/cli_mod/uart \
   $(PROJ_DIR)/esb_illegalmod \
   $(PROJ_DIR)/ringbuf \
+  $(PROJ_DIR)/usbd_mod \
   $(PROJ_DIR)/logitacker \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/components/libraries/usbd/class/hid \

@@ -181,4 +181,6 @@ uint32_t logitacker_usb_write_mouse_input_report(const void * p_buf);
 uint32_t logitacker_usb_write_hidraw_input_report(logitacker_mode_t logitacker_mode, logitacker_usb_hidraw_report_type_t type, size_t length, const void * data);
 uint32_t logitacker_usb_write_hidraw_input_report_rf_frame(logitacker_mode_t logitacker_mode, logitacker_devices_unifying_device_rf_address_t rf_address, const nrf_esb_payload_t * p_frame);
 
+void logitacker_usb_print_host_fingerprint();
+
 #endif //LOGITACKER_USB_H

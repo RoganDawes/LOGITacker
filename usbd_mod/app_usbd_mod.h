@@ -1,0 +1,8 @@
+#ifndef USBD_HID_GENERIC_PCA10056_APP_USBD_MOD_H
+#define USBD_HID_GENERIC_PCA10056_APP_USBD_MOD_H
+
+#define LOGITACKER_USB_HOST_FINGERPRINT_SIZE  64
+extern uint8_t g_logitacker_usb_host_fingerprint[LOGITACKER_USB_HOST_FINGERPRINT_SIZE];
+extern uint16_t g_logitacker_usb_host_fingerprint_pos;
+
+#endif //USBD_HID_GENERIC_PCA10056_APP_USBD_MOD_H

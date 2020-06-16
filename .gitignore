@@ -6,6 +6,8 @@ mdk-dongle/blank/armgcc/_build
 pca10059/blank/armgcc/_build
 apr-dongle/blank/armgcc/_build/
 cmake-build-debug
+cmake-build-debug-arm-none-eabi
+cmake-build-release
 
 build/uf2conv.py
 build/convert.sh
