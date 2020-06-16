@@ -496,11 +496,17 @@ char * logitacker_usb_print_host_fingerprint_guess_os() {
 
     if (first_dev_desc_req_len == 0x12) return "MacOS"; // only read 18 bytes of device descriptor (default length per spec)
     if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0xff) return "Windows"; // try to read as many configuration descriptors as possible at once
-    if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0x09) return "Linux"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
+    if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0x09) return "Linux (likely <5.4.0)"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
+    if (first_dev_desc_req_len == 0x08 && first_conf_desc_req_len == 0x09) return "Linux (likely >=5.4.0)"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
 
     // Note: Android 10 and Linux fingerprints look basically the same, with one small difference:
     //  On Android there is an additional string descriptor request for string index 0x00 and language id 0x00
     //  with a length of 0xFE (in contrast on linux, all get_descriptor requests for string descriptors have length set to 0xff)
+
+    // Kali, kernel 5.4.0 amd64
+    // Ref: https://twitter.com/mame82/status/1272826102663335936
+    // First request for "device descriptor" has length == 8 (instead of 0x40), first "configuration descriptor" request
+    // still has length == 9
 
     LAB_HOST_OS_UNKNOWN:
     return "unknown OS";
