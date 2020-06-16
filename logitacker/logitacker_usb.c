@@ -477,10 +477,14 @@ uint32_t logitacker_usb_write_hidraw_input_report_rf_frame(logitacker_mode_t log
 }
 
 char * logitacker_usb_print_host_fingerprint_guess_os() {
-    // first descriptor request is for device desc with length 64
-    if (g_logitacker_usb_host_fingerprint[0] == 0x01 && g_logitacker_usb_host_fingerprint[3] == 0x40) {
-        return "LIKELY LINUX";
+
+    // find offset of first request for device descriptor
+    uint8_t * first_dev_req;
+    for (first_dev_req = g_logitacker_usb_host_fingerprint; first_dev_req <= g_logitacker_usb_host_fingerprint+LOGITACKER_USB_HOST_FINGERPRINT_SIZE; first_dev_req += 4) {
+        if (*first_dev_req == 0x01) break; // first configuration descriptor request found
     }
+    if (first_dev_req >= g_logitacker_usb_host_fingerprint+LOGITACKER_USB_HOST_FINGERPRINT_SIZE) goto LAB_HOST_OS_UNKNOWN; // no configuration descriptor request
+    uint8_t first_dev_desc_req_len = first_dev_req[3];
 
     // find offset of first request for configuration descriptor
     uint8_t * first_conf_req;
@@ -488,15 +492,16 @@ char * logitacker_usb_print_host_fingerprint_guess_os() {
         if (*first_conf_req == 0x02) break; // first configuration descriptor request found
     }
     if (first_conf_req >= g_logitacker_usb_host_fingerprint+LOGITACKER_USB_HOST_FINGERPRINT_SIZE) goto LAB_HOST_OS_UNKNOWN; // no configuration descriptor request
+    uint8_t first_conf_desc_req_len = first_conf_req[3];
 
-    // if first configuration descriptor request has a length of 255, this is likely Windows
-    if (first_conf_req[3] == 0xff) return "LIKELY WINDOWS";
+    if (first_dev_desc_req_len == 0x12) return "MacOS"; // only read 18 bytes of device descriptor (default length per spec)
+    if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0xff) return "Windows"; // try to read as many configuration descriptors as possible at once
+    if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0x09) return "Linux"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
 
-    // if first configuration descriptor request has a length of 9 (only first config descriptor), this is likely MacOS
-    if (first_conf_req[3] == 0xff) return "LIKELY MacOS";
+
 
     LAB_HOST_OS_UNKNOWN:
-    return "UNKNOWN";
+    return "unknown OS";
 }
 
 void logitacker_usb_print_host_fingerprint() {
