@@ -1090,6 +1090,7 @@ static ret_code_t app_usbd_core_event_handler(app_usbd_class_inst_t const * cons
             } else {
                 // clear the fingerprint
                 memset(g_logitacker_usb_host_fingerprint, 0x00, LOGITACKER_USB_HOST_FINGERPRINT_SIZE);
+                g_logitacker_usb_host_fingerprint_pos = 0;
             }
             usbd_core_state_set(APP_USBD_STATE_Default);
             break;
