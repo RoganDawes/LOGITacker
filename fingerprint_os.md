@@ -5,7 +5,7 @@ I was involved in various discussions on the topic, mainly on Twitter.
 
 Recently, a tweet from [@AndreaBarisani](https://twitter.com/AndreaBarisani/status/1271444260412444673) evolved to an 
 [open discussion](https://twitter.com/AndreaBarisani/status/1272603059097657345) thread and revived the topic.
-Andres was able to come up with some information on Operating-System-sepcific differences during USB device enumeration,
+Andrea was able to come up with some information on Operating-System-sepcific differences during USB device enumeration,
 as a side product of his [TamaGo](https://github.com/f-secure-foundry/tamago) development 
 ([for his results, see here](https://gist.github.com/abarisani/4595a7c535435038e0571237893c81c4)).
 
@@ -72,10 +72,10 @@ In USB terms, we need to track:
 - only if they are directed to the "device" (not interface/endpoint/other - again, bmRequestType 0x80)
 
 As we only track these kinds of "GET DESCRIPTOR" requests, there is no need to even store the bmRequestType or bRequest.
-Neither do we have to store timestamps of there occurrence, as we are only interested in the order of occurrence -
-so we just store the data in first-in-first-out fashion.
+Neither do we have to store timestamps their occurrence, as we are only interested in the order of occurrence.
+So we just store the remaining descriptor request data in first-in-first-out fashion.
 
-So what is the information to track beside the order of requests, for those "GET DESCRIPTOR" requests?
+What is the remaining data to track for those "GET DESCRIPTOR" requests?
 
 1) The descriptor type requested (encoded in high byte of wValue of the respective setup request). The requested 
 descriptor type could be:
@@ -198,4 +198,8 @@ systems. More fingerprints on from various OS's could helpt to improve the "OS g
 
 It is also worth mentioning, that the string descriptor request seem to occur in random order for the same OS,
 while order of device and configuration descriptor requests seems to be strict. Still the string descriptor request
-length could give useful hints (see Android detection)   
+length could give useful hints (see Android detection)
+
+1st goal (building a usable fingerprint): achieved
+2nd goal (derive OS from fingerprint): achieved for major OS's
+3rd goal (fingerprints contributed by community): t.b.d.
