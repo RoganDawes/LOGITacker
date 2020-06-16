@@ -200,6 +200,6 @@ It is also worth mentioning, that the string descriptor request seem to occur in
 while order of device and configuration descriptor requests seems to be strict. Still the string descriptor request
 length could give useful hints (see Android detection)
 
-1st goal (building a usable fingerprint): achieved
-2nd goal (derive OS from fingerprint): achieved for major OS's
-3rd goal (fingerprints contributed by community): t.b.d.
+- 1st goal (building a usable fingerprint): achieved
+- 2nd goal (derive OS from fingerprint): achieved for major OS's
+- 3rd goal (fingerprints contributed by community): t.b.d.
