@@ -33,6 +33,21 @@ LOGITacker does currently not cover the following Logitech:
 
 LOGITacker can also be used as Hardware Implant (see **USBsamurai**'s Tutorial https://medium.com/@LucaBongiorni/usbsamurai-for-dummies-4bd47abf8f87 )
 
+## Note on branch with passive USB host OS enumeration
+
+Credits for initial info on USB host enumeration based on spotted setup requests to **Andrea Barisani**
+
+- Reference Twitter thread: https://twitter.com/AndreaBarisani/status/1272553164810719237
+- Summary of Andrea's observations: https://gist.github.com/abarisani/4595a7c535435038e0571237893c81c4
+
+LOGITAcker builds which include the respective CLI command for host OS enumeration (`finger_usb`) are here:
+https://github.com/RoganDawes/LOGITacker/tree/USB_host_enum/build
+
+*Note: The detection logic currently does not allow to change keystroke injection scripts, based on detected OS.
+The current goal is to collect fingerprints of different OS's to obtain more information which could help to 
+distinguish same as reliable and fine-grained as possible. The logic currently used to make a guess on the OS is
+here: https://github.com/RoganDawes/LOGITacker/blob/78055f7f8741a4451b2dc55bed790f4fdc5318ed/logitacker/logitacker_usb.c#L479*
+
 # 1 feature summary
 
 - Discovery of Logitech devices on air (optimized pseudo promiscuous mode)

@@ -498,7 +498,9 @@ char * logitacker_usb_print_host_fingerprint_guess_os() {
     if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0xff) return "Windows"; // try to read as many configuration descriptors as possible at once
     if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0x09) return "Linux"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
 
-
+    // Note: Android 10 and Linux fingerprints look basically the same, with one small difference:
+    //  On Android there is an additional string descriptor request for string index 0x00 and language id 0x00
+    //  with a length of 0xFE (in contrast on linux, all get_descriptor requests for string descriptors have length set to 0xff)
 
     LAB_HOST_OS_UNKNOWN:
     return "unknown OS";
