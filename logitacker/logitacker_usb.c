@@ -503,7 +503,16 @@ char * logitacker_usb_print_host_fingerprint_guess_os() {
 
     if (first_dev_desc_req_len == 0x12) return "MacOS"; // only read 18 bytes of device descriptor (default length per spec)
     if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0xff) return "Windows"; // try to read as many configuration descriptors as possible at once
-    if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0x09) return "Linux"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
+    if (first_dev_desc_req_len == 0x40 && first_conf_desc_req_len == 0x09) { // first attempt to read config descriptor only covers first config (9 byte descriptor length)
+        // Android 10 basically looks like linux, both read all STRING_DESCRIPTOR (type 0x03) with length 0xFF
+        // For my personal tests, only android does additional string descriptor requests on string index 0x00, with
+        // language ID 0x00 and length 0xFE (instead of 0xFF). Thus, if the fingerprint array contains [03 00 00 FE], this
+        // is considered to represent android
+        for (uint8_t * offs = g_logitacker_usb_host_fingerprint; offs < g_logitacker_usb_host_fingerprint+LOGITACKER_USB_HOST_FINGERPRINT_SIZE; offs += 4) {
+            if (offs[0] == 0x03 && offs[1] == 0x00 && offs[2] == 0x00 && offs[3] == 0xFE) return "Linux (likely Android)";
+        }
+        return "Linux";
+    }
     if (first_dev_desc_req_len == 0x08 && first_conf_desc_req_len == 0x09) return "likely Parallels"; // first attempt to read config descriptor only covers first config (9 byte descriptor length)
 
     // Note: Android 10 and Linux fingerprints look basically the same, with one small difference:
