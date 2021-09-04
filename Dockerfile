@@ -7,6 +7,7 @@ RUN wget https://www.nordicsemi.com/-/media/Software-and-other-downloads/SDKs/nR
 
 # install python3 and download uf2conv.py for AprBrother image conversion (Intel HEX to UF2)
 RUN wget https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py && apt-get -y install python3
+RUN wget https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2families.json
 
 # patch SDK to use Kali's arm-none-eabi toolchain (SED's delimiter changed to allow inline path)
 RUN sed -i "s#^GNU_INSTALL_ROOT.*#GNU_INSTALL_ROOT \?= /usr/bin/#g" nRF5_SDK_15.3.0_59ac345/components/toolchain/gcc/Makefile.posix
