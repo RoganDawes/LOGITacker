@@ -1456,7 +1456,7 @@ NRF_CLI_CREATE_DYNAMIC_CMD(m_sub_enum_device_list, dynamic_device_addr_list_ram)
 
 NRF_CLI_CREATE_STATIC_SUBCMD_SET(m_sub_covertchannel)
 {
-        NRF_CLI_CMD(connnect, &m_sub_enum_device_list, "connect to device with deployed covert channel", cmd_covert_channel_connect),
+        NRF_CLI_CMD(connect, &m_sub_enum_device_list, "connect to device with deployed covert channel", cmd_covert_channel_connect),
         NRF_CLI_CMD(deploy, &m_sub_enum_device_list, "deploy covert channel agent for given device", cmd_covert_channel_deploy),
         NRF_CLI_SUBCMD_SET_END
 };
