@@ -414,7 +414,7 @@ void logitacker_script_engine_fds_event_handler(fds_evt_t const *p_evt) {
         m_current_script_task_record_key++;
 
         NRF_LOG_DEBUG("FDS_EVENT_WRITE");
-        if (p_evt->result == FDS_SUCCESS)
+        if (p_evt->result == NRF_SUCCESS)
         {
             switch (m_current_fds_op_write_script_sub_state) {
                 case FDS_OP_WRITE_SCRIPT_SUB_STATE_WRITE_TASK_HEADER:
@@ -496,8 +496,8 @@ uint32_t find_stored_script_info_by_name(const char *script_name, stored_script_
     fds_flash_record_t flash_record;
     fds_record_desc_t fds_record_desc;
 
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
-        if (fds_record_open(&fds_record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == NRF_SUCCESS) {
+        if (fds_record_open(&fds_record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -511,7 +511,7 @@ uint32_t find_stored_script_info_by_name(const char *script_name, stored_script_
             return NRF_SUCCESS;
         }
 
-        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&fds_record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
     }
@@ -548,7 +548,7 @@ bool logitacker_script_engine_store_current_script_to_flash(const char *script_n
     fds_find_token_t ftoken;
     memset(&ftoken, 0x00, sizeof(fds_find_token_t));
     uint16_t last_used_id = LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS-1;
-    for (uint16_t test_id = LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS; (fds_record_find(test_id, LOGITACKER_FLASH_RECORD_KEY_FIRST_STORED_SCRIPT_TASKS, &fds_record_desc, &ftoken) == FDS_SUCCESS) && (test_id < LOGITACKER_FLASH_MAXIMUM_FILE_ID_STORED_SCRIPT_TASKS); test_id++) {
+    for (uint16_t test_id = LOGITACKER_FLASH_FIRST_FILE_ID_STORED_SCRIPT_TASKS; (fds_record_find(test_id, LOGITACKER_FLASH_RECORD_KEY_FIRST_STORED_SCRIPT_TASKS, &fds_record_desc, &ftoken) == NRF_SUCCESS) && (test_id < LOGITACKER_FLASH_MAXIMUM_FILE_ID_STORED_SCRIPT_TASKS); test_id++) {
         last_used_id = test_id; //update last used ID, as test ID is in use
     }
     uint16_t next_usable_id = last_used_id+1;
@@ -670,7 +670,7 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
     m_current_script_task_record_key = LOGITACKER_FLASH_RECORD_KEY_FIRST_STORED_SCRIPT_TASKS;
     while (true) {
         uint32_t err = fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_script_task_record_key, &fds_record_desc, &ftoken);
-        if (err != FDS_SUCCESS) {
+        if (err != NRF_SUCCESS) {
             // should only fail with "RECORD_NOT_FOUND"
             NRF_LOG_DEBUG("error loading file_id %04x record_key %04x: %08x", err);
             break;
@@ -681,7 +681,7 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
         m_current_script_task_record_key++;
 
         // open task header
-        if (fds_record_open(&fds_record_desc, &fds_flash_record) != FDS_SUCCESS) {
+        if (fds_record_open(&fds_record_desc, &fds_flash_record) != NRF_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to read task header");
             script_engine_transfer_state(SCRIPT_ENGINE_STATE_FDS_READ_FAILED);
             return false;
@@ -689,7 +689,7 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
 
         memcpy(&m_current_fds_op_task, fds_flash_record.p_data, sizeof(inject_task_t));
 
-        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&fds_record_desc) != NRF_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to close task header record");
             script_engine_transfer_state(SCRIPT_ENGINE_STATE_FDS_READ_FAILED);
             return false;
@@ -697,7 +697,7 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
 
         NRF_LOG_DEBUG("task type: %d", m_current_fds_op_task.type);
         // try to load next record, which should be the task data
-        if (fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_script_task_record_key, &fds_record_desc, &ftoken) != FDS_SUCCESS) {
+        if (fds_record_find(m_current_fds_op_fds_script_info.script_tasks_file_id, m_current_script_task_record_key, &fds_record_desc, &ftoken) != NRF_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to read task data");
             script_engine_transfer_state(SCRIPT_ENGINE_STATE_FDS_READ_FAILED);
             return false;
@@ -706,7 +706,7 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
 
         // open task data
         memset(&ftoken, 0x00, sizeof(fds_find_token_t)); // reset find token, next lookup is for different record_key
-        if (fds_record_open(&fds_record_desc, &fds_flash_record) != FDS_SUCCESS) {
+        if (fds_record_open(&fds_record_desc, &fds_flash_record) != NRF_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to open task data");
             script_engine_transfer_state(SCRIPT_ENGINE_STATE_FDS_READ_FAILED);
             return false;
@@ -714,7 +714,7 @@ bool logitacker_script_engine_load_script_from_flash(const char *script_name) {
 
         if (m_current_fds_op_task.data_len > 0) memcpy(&m_current_fds_op_task_data, fds_flash_record.p_data, m_current_fds_op_task.data_len);
 
-        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&fds_record_desc) != NRF_SUCCESS) {
             NRF_LOG_ERROR("logitacker_script_engine_load_script_from_flash: failed to close task data record");
             script_engine_transfer_state(SCRIPT_ENGINE_STATE_FDS_READ_FAILED);
             return false;
@@ -742,8 +742,8 @@ void logitacker_script_engine_list_scripts_from_flash(nrf_cli_t const *p_cli) {
     fds_record_desc_t fds_record_desc;
 
     uint32_t task_num = 1;
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
-        if (fds_record_open(&fds_record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == NRF_SUCCESS) {
+        if (fds_record_open(&fds_record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("failed to open record");
             continue; // go on with next
         }
@@ -753,7 +753,7 @@ void logitacker_script_engine_list_scripts_from_flash(nrf_cli_t const *p_cli) {
 
         nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "%04d script '%s'\r\n", task_num, p_stored_tasks_fds_info_tmp->script_name);
 
-        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&fds_record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("failed to close record");
         }
 
@@ -768,8 +768,8 @@ void delete_taskdata_from_flash(uint16_t file_id) {
     memset(&ftoken, 0x00, sizeof(fds_find_token_t));
     fds_record_desc_t fds_record_desc;
 
-    while(fds_record_find_in_file(file_id, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
-        if (fds_record_delete(&fds_record_desc) != FDS_SUCCESS) {
+    while(fds_record_find_in_file(file_id, &fds_record_desc, &ftoken) == NRF_SUCCESS) {
+        if (fds_record_delete(&fds_record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("failed to delete record");
             continue; // go on with next
         }
@@ -806,8 +806,8 @@ bool logitacker_script_engine_delete_script_from_flash(const char *script_name) 
     fds_flash_record_t flash_record;
     fds_record_desc_t fds_record_desc;
 
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
-        if (fds_record_open(&fds_record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == NRF_SUCCESS) {
+        if (fds_record_open(&fds_record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -822,7 +822,7 @@ bool logitacker_script_engine_delete_script_from_flash(const char *script_name) 
             break;
         }
 
-        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&fds_record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
     }

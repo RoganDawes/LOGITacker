@@ -23,7 +23,7 @@ uint32_t logitacker_options_update_flash(void) {
 
     // only search for file_id-key-combination once (not account for multiple entries)
     ret_code_t res = fds_record_find(LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS, LOGITACKER_FLASH_KEY_GLOBAL_OPTIONS_LOGITACKER, &record_desc, &find_token);
-    if (res != FDS_SUCCESS) {
+    if (res != NRF_SUCCESS) {
         NRF_LOG_WARNING("failed to find Flash Data Storage record for global options: %d", res);
         return res;
     }
@@ -35,14 +35,14 @@ uint32_t logitacker_options_update_flash(void) {
 
 
     res = fds_record_update(&record_desc, &record);
-    if (res != FDS_SUCCESS) {
+    if (res != NRF_SUCCESS) {
         NRF_LOG_WARNING("update: failed to update Flash Data Storage record for global options: %d", res);
         return res;
     }
 
 
 
-    return res == FDS_SUCCESS ? NRF_SUCCESS : res;
+    return res == NRF_SUCCESS ? NRF_SUCCESS : res;
 
 }
 
@@ -80,14 +80,14 @@ uint32_t logitacker_options_restore_from_flash(void) {
     bool restore_failed = false;
     // only search for file_id-key-combination once (not account for multiple entries)
     ret_code_t res = fds_record_find(LOGITACKER_FLASH_FILE_ID_GLOBAL_OPTIONS, LOGITACKER_FLASH_KEY_GLOBAL_OPTIONS_LOGITACKER, &record_desc, &find_token);
-    if (res != FDS_SUCCESS) {
+    if (res != NRF_SUCCESS) {
         NRF_LOG_WARNING("restore: failed to find Flash Data Storage record for global options: %d", res);
         restore_failed = true;
         goto finish;
     }
 
     res = fds_record_open(&record_desc, &flash_record);
-    if (res != FDS_SUCCESS) {
+    if (res != NRF_SUCCESS) {
         NRF_LOG_WARNING("restore: failed to open Flash Data Storage record for global options: %d", res);
         restore_failed = true;
         goto finish;
@@ -96,7 +96,7 @@ uint32_t logitacker_options_restore_from_flash(void) {
     memcpy(&g_logitacker_global_config, flash_record.p_data, sizeof(g_logitacker_global_config));
 
     res = fds_record_close(&record_desc);
-    if (res != FDS_SUCCESS) {
+    if (res != NRF_SUCCESS) {
         NRF_LOG_WARNING("restore: failed to close Flash Data Storage record for global options: %d", res);
     }
 

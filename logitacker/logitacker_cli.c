@@ -74,9 +74,9 @@ static void stored_devices_str_list_update() {
     fds_flash_record_t flash_record;
     memset(&ftok, 0x00, sizeof(fds_find_token_t));
 
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, &ftok) == FDS_SUCCESS &&
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, &ftok) == NRF_SUCCESS &&
     m_stored_device_addr_str_list_len <= STORED_DEVICES_AUTOCOMPLETE_LIST_MAX_ENTRIES) {
-        if (fds_record_open(&record_desc, &flash_record) != FDS_SUCCESS) {
+        if (fds_record_open(&record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -86,7 +86,7 @@ static void stored_devices_str_list_update() {
         m_stored_device_addr_str_list_len++;
 
 
-        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
     }
@@ -100,8 +100,8 @@ static void stored_script_names_str_list_update() {
     fds_record_desc_t fds_record_desc;
 
     m_stored_script_names_str_list_len = 0;
-    while(m_stored_script_names_str_list_len < STORED_SCRIPTS_AUTOCOMPLETE_LIST_MAX_ENTRIES && fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == FDS_SUCCESS) {
-        if (fds_record_open(&fds_record_desc, &flash_record) != FDS_SUCCESS) {
+    while(m_stored_script_names_str_list_len < STORED_SCRIPTS_AUTOCOMPLETE_LIST_MAX_ENTRIES && fds_record_find(LOGITACKER_FLASH_FILE_ID_STORED_SCRIPTS_INFO, LOGITACKER_FLASH_RECORD_KEY_STORED_SCRIPTS_INFO, &fds_record_desc, &ftoken) == NRF_SUCCESS) {
+        if (fds_record_open(&fds_record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("failed to open record");
             continue; // go on with next
         }
@@ -112,7 +112,7 @@ static void stored_script_names_str_list_update() {
         slen = slen >= LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN ? LOGITACKER_SCRIPT_ENGINE_SCRIPT_NAME_MAX_LEN-1 : slen;
         memcpy(m_stored_script_names_str_list[m_stored_script_names_str_list_len], p_stored_tasks_fds_info_tmp->script_name, slen);
 
-        if (fds_record_close(&fds_record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&fds_record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("failed to close record");
         }
 
@@ -397,10 +397,10 @@ static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
 
     char * tmp_str[256] = {0};
 
-    while (fds_record_iterate(&rd,&ft) == FDS_SUCCESS) {
+    while (fds_record_iterate(&rd,&ft) == NRF_SUCCESS) {
         uint32_t err;
         err = fds_record_open(&rd, &flash_record);
-        if (err != FDS_SUCCESS) {
+        if (err != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record %08x", err);
             continue; // go on with next
         }
@@ -408,7 +408,7 @@ static void cmd_test_c(nrf_cli_t const * p_cli, size_t argc, char **argv) {
         sprintf((char *) tmp_str, "Record file_id %04x record_key %04x", flash_record.p_header->file_id, flash_record.p_header->record_key);
         NRF_LOG_INFO("%s",nrf_log_push((char*) tmp_str));
 
-        if (fds_record_close(&rd) != FDS_SUCCESS) {
+        if (fds_record_close(&rd) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
 
@@ -436,7 +436,7 @@ static void cmd_erase_flash(nrf_cli_t const * p_cli, size_t argc, char **argv) {
     fds_find_token_t ft;
     memset(&ft, 0x00, sizeof(fds_find_token_t));
     fds_record_desc_t rd;
-    while (fds_record_iterate(&rd,&ft) == FDS_SUCCESS) {
+    while (fds_record_iterate(&rd,&ft) == NRF_SUCCESS) {
         NRF_LOG_INFO("Deleting record...")
         fds_record_delete(&rd);
     }
@@ -1020,8 +1020,8 @@ static void cmd_devices_storage_list(nrf_cli_t const *p_cli, size_t argc, char *
 
     nrf_cli_fprintf(p_cli, NRF_CLI_DEFAULT, "list of devices stored on flash:\r\n");
     NRF_LOG_INFO("Devices on flash");
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, &ftok) == FDS_SUCCESS) {
-        if (fds_record_open(&record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, &ftok) == NRF_SUCCESS) {
+        if (fds_record_open(&record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -1033,7 +1033,7 @@ static void cmd_devices_storage_list(nrf_cli_t const *p_cli, size_t argc, char *
 
 
 
-        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record")
         }
 

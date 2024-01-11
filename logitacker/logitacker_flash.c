@@ -27,7 +27,7 @@ static void fds_callback(fds_evt_t const * p_evt)
     {
         case FDS_EVT_INIT:
             NRF_LOG_INFO("FDS_EVENT_INIT");
-            if (p_evt->result == FDS_SUCCESS)
+            if (p_evt->result == NRF_SUCCESS)
             {
                 m_fds_initialized = true;
             }
@@ -36,7 +36,7 @@ static void fds_callback(fds_evt_t const * p_evt)
         case FDS_EVT_WRITE:
         {
             NRF_LOG_DEBUG("FDS_EVENT_WRITE");
-            if (p_evt->result == FDS_SUCCESS)
+            if (p_evt->result == NRF_SUCCESS)
             {
                 NRF_LOG_DEBUG("Record ID:\t0x%04x",  p_evt->write.record_id);
                 NRF_LOG_DEBUG("File ID:\t0x%04x",    p_evt->write.file_id);
@@ -47,7 +47,7 @@ static void fds_callback(fds_evt_t const * p_evt)
         case FDS_EVT_DEL_RECORD:
         {
             NRF_LOG_DEBUG("FDS_EVENT_DEL_RECORD");
-            if (p_evt->result == FDS_SUCCESS)
+            if (p_evt->result == NRF_SUCCESS)
             {
                 NRF_LOG_DEBUG("Record ID:\t0x%04x",  p_evt->del.record_id);
                 NRF_LOG_DEBUG("File ID:\t0x%04x",    p_evt->del.file_id);
@@ -86,7 +86,7 @@ uint32_t logitacker_flash_init() {
     wait_for_fds_ready();
     NRF_LOG_INFO("flash-storage initialized");
 
-    if (fds_gc() == FDS_SUCCESS) NRF_LOG_INFO("garbage collection done");
+    if (fds_gc() == NRF_SUCCESS) NRF_LOG_INFO("garbage collection done");
     return NRF_SUCCESS;
 }
 
@@ -120,8 +120,8 @@ uint32_t logitacker_flash_list_stored_devices() {
 
     char addr_str[LOGITACKER_DEVICE_ADDR_STR_LEN];
     NRF_LOG_INFO("Devices on flash");
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, &ftok) == FDS_SUCCESS) {
-        if (fds_record_open(&record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, &ftok) == NRF_SUCCESS) {
+        if (fds_record_open(&record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -130,7 +130,7 @@ uint32_t logitacker_flash_list_stored_devices() {
         helper_addr_to_hex_str(addr_str, LOGITACKER_DEVICE_ADDR_LEN, p_device->rf_address);
         NRF_LOG_INFO("Stored device %s", nrf_log_push(addr_str));
 
-        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
     }
@@ -161,7 +161,7 @@ uint32_t logitacker_flash_get_device(logitacker_devices_unifying_device_t * p_de
     if (logitacker_flash_get_record_desc_for_device(&record_desc, rf_address) == NRF_SUCCESS) {
         char addr_str[LOGITACKER_DEVICE_ADDR_STR_LEN];
         uint32_t res = fds_record_open(&record_desc, &flash_record);
-        if (res != FDS_SUCCESS) {
+        if (res != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             return res;
         }
@@ -171,7 +171,7 @@ uint32_t logitacker_flash_get_device(logitacker_devices_unifying_device_t * p_de
         helper_addr_to_hex_str(addr_str, LOGITACKER_DEVICE_ADDR_LEN, rf_address);
         NRF_LOG_INFO("Found %s ...", nrf_log_push(addr_str));
 
-        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
 
@@ -189,8 +189,8 @@ uint32_t logitacker_flash_get_record_desc_for_device(fds_record_desc_t * p_recor
     bool found = false;
 
     char addr_str[LOGITACKER_DEVICE_ADDR_STR_LEN];
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, p_record_desc, &ftok) == FDS_SUCCESS) {
-        if (fds_record_open(p_record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, p_record_desc, &ftok) == NRF_SUCCESS) {
+        if (fds_record_open(p_record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -203,7 +203,7 @@ uint32_t logitacker_flash_get_record_desc_for_device(fds_record_desc_t * p_recor
         }
 
 
-        if (fds_record_close(p_record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(p_record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
 
@@ -224,8 +224,8 @@ uint32_t logitacker_flash_get_next_device_for_dongle(logitacker_devices_unifying
     helper_base_and_prefix_to_addr(tmp_addr, p_dongle->base_addr, 0x00, 5);
 
     char addr_str[LOGITACKER_DEVICE_ADDR_STR_LEN];
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, p_find_token) == FDS_SUCCESS) {
-        if (fds_record_open(&record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DEVICES, LOGITACKER_FLASH_RECORD_KEY_DEVICES, &record_desc, p_find_token) == NRF_SUCCESS) {
+        if (fds_record_open(&record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -239,7 +239,7 @@ uint32_t logitacker_flash_get_next_device_for_dongle(logitacker_devices_unifying
         }
 
 
-        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
 
@@ -293,7 +293,7 @@ uint32_t logitacker_flash_get_dongle(logitacker_devices_unifying_dongle_t * p_do
     helper_addr_to_hex_str(base_addr_str, 4, base_addr);
     if (logitacker_flash_get_record_desc_for_dongle(&record_desc, base_addr) == NRF_SUCCESS) {
         uint32_t res = fds_record_open(&record_desc, &flash_record);
-        if (res != FDS_SUCCESS) {
+        if (res != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             return res;
         }
@@ -305,7 +305,7 @@ uint32_t logitacker_flash_get_dongle(logitacker_devices_unifying_dongle_t * p_do
 
         NRF_LOG_INFO("Found dongle %s ...", nrf_log_push(base_addr_str));
 
-        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
 
@@ -326,8 +326,8 @@ uint32_t logitacker_flash_list_stored_dongles() {
 
     char base_addr_str[LOGITACKER_DEVICE_ADDR_STR_LEN];
     NRF_LOG_INFO("Dongles on flash:");
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DONGLES, LOGITACKER_FLASH_RECORD_KEY_DONGLES, &record_desc, &ftok) == FDS_SUCCESS) {
-        if (fds_record_open(&record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DONGLES, LOGITACKER_FLASH_RECORD_KEY_DONGLES, &record_desc, &ftok) == NRF_SUCCESS) {
+        if (fds_record_open(&record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -336,7 +336,7 @@ uint32_t logitacker_flash_list_stored_dongles() {
         helper_addr_to_hex_str(base_addr_str, 4, p_device->base_addr);
         NRF_LOG_INFO("Stored dongle %s", nrf_log_push(base_addr_str));
 
-        if (fds_record_close(&record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(&record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
     }
@@ -360,8 +360,8 @@ uint32_t logitacker_flash_get_record_desc_for_dongle(fds_record_desc_t * p_recor
     bool found = false;
 
 
-    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DONGLES, LOGITACKER_FLASH_RECORD_KEY_DONGLES, p_record_desc, &ftok) == FDS_SUCCESS) {
-        if (fds_record_open(p_record_desc, &flash_record) != FDS_SUCCESS) {
+    while(fds_record_find(LOGITACKER_FLASH_FILE_ID_DONGLES, LOGITACKER_FLASH_RECORD_KEY_DONGLES, p_record_desc, &ftok) == NRF_SUCCESS) {
+        if (fds_record_open(p_record_desc, &flash_record) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to open record");
             continue; // go on with next
         }
@@ -372,7 +372,7 @@ uint32_t logitacker_flash_get_record_desc_for_dongle(fds_record_desc_t * p_recor
         }
 
 
-        if (fds_record_close(p_record_desc) != FDS_SUCCESS) {
+        if (fds_record_close(p_record_desc) != NRF_SUCCESS) {
             NRF_LOG_WARNING("Failed to close record");
         }
 

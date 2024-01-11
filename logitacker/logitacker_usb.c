@@ -53,6 +53,7 @@ APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_generic,
                                 hid_report_descriptors_raw_device,
                                 LOGITACKER_USB_HID_GENERIC_REPORT_IN_QUEUE_SIZE,
                                 LOGITACKER_USB_HID_GENERIC_OUT_REPORT_MAXSIZE,
+                                LOGITACKER_USB_HID_GENERIC_REPORT_FEATURE_MAXSIZE,
                                 APP_USBD_HID_SUBCLASS_BOOT,
                                 APP_USBD_HID_PROTO_GENERIC);
 
@@ -65,6 +66,7 @@ APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_keyboard,
                                 hid_report_descriptors_keyboard_device,
                                 LOGITACKER_USB_HID_KEYBOARD_REPORT_IN_QUEUE_SIZE,
                                 LOGITACKER_USB_HID_KEYBOARD_OUT_REPORT_MAXSIZE,
+                                LOGITACKER_USB_HID_GENERIC_REPORT_FEATURE_MAXSIZE,
                                 APP_USBD_HID_SUBCLASS_BOOT,
                                 APP_USBD_HID_PROTO_KEYBOARD);
 
@@ -85,6 +87,7 @@ APP_USBD_HID_GENERIC_GLOBAL_DEF(m_app_hid_mouse,
                                 hid_report_descriptors_mouse_device,
                                 LOGITACKER_USB_HID_MOUSE_REPORT_IN_QUEUE_SIZE,
                                 1,
+                                LOGITACKER_USB_HID_GENERIC_REPORT_FEATURE_MAXSIZE,
                                 APP_USBD_HID_SUBCLASS_BOOT,
                                 APP_USBD_HID_PROTO_MOUSE);
 
